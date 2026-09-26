@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // `types` does not merge with the base config — it replaces it, so the
+    // base list is repeated here. "node" is test-only on purpose: the
+    // production sources must not reach for node APIs, so the base
+    // tsconfig deliberately leaves it out. Needed since Vitest 4, which no
+    // longer pulls @types/node in transitively via `vitest/globals`.
+    "types": [
+      "vite/client",
+      "vitest/globals",
+      "@testing-library/jest-dom",
+      "node"
+    ]
+  },
+  "include": ["src"],
+  "exclude": []
+}

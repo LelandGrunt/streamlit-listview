@@ -1,0 +1,12 @@
+# Ship a minimal metadata file that can be picked up by Streamlit at runtime.
+# `name` must canonically match the distribution name in the repo-root
+# pyproject.toml ("streamlit-listview") so the component scanner accepts this
+# manifest; it also forms the prefix of the component key
+# ("streamlit_listview.listview") declared in __init__.py.
+[project]
+name = "streamlit_listview"
+version = "1.0.0"
+
+[[tool.streamlit.component.components]]
+name = "listview"
+asset_dir = "frontend/build"

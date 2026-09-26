@@ -1,0 +1,157 @@
+name: Release
+
+# Publish to PyPI when a version tag (e.g. v1.2.3) is pushed, using PyPI
+# Trusted Publishing (OIDC) — no API tokens are stored in the repo.
+#
+# One-time setup on PyPI (https://pypi.org/manage/account/publishing/):
+#   add a "Trusted Publisher" for this GitHub repo with
+#   workflow = "release.yml" and environment = "pypi".
+# See CLAUDE.md ("Releasing to PyPI") for the full checklist.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+# Least privilege by default; each job elevates only what it needs.
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build & verify distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Fail fast if the pushed tag disagrees with [project].version — otherwise
+      # the wheel filename (and the PyPI release) would not match the git tag.
+      - name: Check tag matches package version
+        shell: bash
+        run: |
+          version=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::Tag '$tag' does not match pyproject version '$version'"
+            exit 1
+          fi
+          echo "Tag matches package version $version"
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: streamlit_listview/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: streamlit_listview/frontend
+        run: npm ci
+
+      # Must precede `npm test`: the vitest suite includes
+      # src/__tests__/single-file-build.test.ts, which asserts on the gitignored
+      # build/ directory (exactly one index-*.js / index-*.css). On a fresh
+      # checkout build/ does not exist yet, so testing first fails with ENOENT
+      # and no tag could ever be published.
+      - name: Build frontend bundle
+        working-directory: streamlit_listview/frontend
+        run: npm run build
+
+      - name: Frontend tests (vitest + coverage gate + typecheck)
+        working-directory: streamlit_listview/frontend
+        run: npm test
+
+      - name: Set up uv + Python
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Create venv and install (editable, dev extras)
+        env:
+          LISTVIEW_SKIP_NPM_BUILD: "1" # bundle already built above; don't rebuild on install
+        run: |
+          uv venv
+          uv pip install -e ".[devel]"
+
+      # Re-run the unit suite at the tagged commit so a release can never ship
+      # code that did not pass the 100% coverage gate.
+      - name: Python unit tests (100% coverage gate)
+        run: .venv/bin/python -m pytest tests/ --cov --cov-report=term-missing
+
+      - name: Build sdist + wheel
+        env:
+          LISTVIEW_SKIP_NPM_BUILD: "1" # publish exactly the bundle that passed tests
+        run: uv build
+
+      - name: Verify the wheel ships the frontend bundle
+        run: .venv/bin/python scripts/verify_wheel.py
+
+      - name: Check distribution metadata renders on PyPI
+        run: uvx twine check --strict dist/*
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish-to-pypi:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/streamlit-listview
+    permissions:
+      id-token: write # mint the OIDC token for Trusted Publishing
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+
+      # Trusted Publishing: no username / password / API token. PEP 740 build
+      # attestations are generated and uploaded by default.
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    name: Sign & create GitHub Release
+    needs: publish-to-pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release and upload its assets
+      id-token: write # Sigstore signing via OIDC
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+
+      - name: Sign the distributions with Sigstore
+        uses: sigstore/gh-action-sigstore-python@v3.5.0
+        with:
+          inputs: ./dist/*.tar.gz ./dist/*.whl
+
+      - name: Create the GitHub Release with signed assets
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          # PEP 440 pre-releases (v1.2.3a1, v1.2.3b1, v1.2.3rc1) are flagged as
+          # such, so GitHub's "Latest" badge stays on the last final release.
+          prerelease=()
+          if [[ "$GITHUB_REF_NAME" =~ (a|b|rc)[0-9]+$ ]]; then
+            prerelease=(--prerelease)
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            "${prerelease[@]}" \
+            ./dist/*

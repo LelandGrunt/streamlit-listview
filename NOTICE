@@ -1,0 +1,64 @@
+Streamlit Listview
+Copyright 2026 Leland Grunt
+
+This product includes software developed by third parties, attributed below.
+
+===============================================================================
+Streamlit — Apache License, Version 2.0
+===============================================================================
+
+The remark/rehype Markdown directive plugins in
+streamlit_listview/frontend/src/markdown/streamlitPlugins.ts — colored text
+(:color[…]), colored background (:color-background[…]), badges
+(:color-badge[…]), small text (:small[…]), shimmer (:shimmer[…]),
+Material icons (:material/icon:), the :streamlit: logo, typographical-symbol
+replacement, the LABEL_DISALLOWED_ELEMENTS blocklist, and escapeLabelSource —
+are ported from Streamlit's StreamlitMarkdown component.
+
+Source: frontend/lib/src/components/shared/StreamlitMarkdown/StreamlitMarkdown.tsx
+        (and its co-located utils.ts / styled-components.ts)
+Project: https://github.com/streamlit/streamlit
+
+Copyright (c) Snowflake Inc. and the Streamlit authors.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not
+use these files except in compliance with the License. You may obtain a copy
+of the License at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+License for the specific language governing permissions and limitations under
+the License.
+
+===============================================================================
+react-feather — MIT License
+===============================================================================
+
+The HelpCircle icon SVG path data reproduced inline in
+streamlit_listview/frontend/src/components/HelpTooltip.tsx is the "help-circle" glyph
+from react-feather (a React port of the Feather icon set).
+
+Project: https://github.com/feathericons/react-feather
+
+Copyright (c) 2017 Cole Bemis (Feather icons) and the react-feather authors.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

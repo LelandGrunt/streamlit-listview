@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test-build-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: streamlit_listview/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: streamlit_listview/frontend
+        run: npm ci
+
+      # Must precede `npm test`: the vitest suite includes
+      # src/__tests__/single-file-build.test.ts, which asserts on the gitignored
+      # build/ directory (exactly one index-*.js / index-*.css). On a fresh
+      # checkout build/ does not exist yet, so testing first fails with ENOENT.
+      # `npm run build` starts with a rimraf clean, so the assertion always
+      # describes the bundle compiled from *these* sources.
+      - name: Build frontend bundle
+        working-directory: streamlit_listview/frontend
+        run: npm run build
+
+      - name: Frontend tests (vitest + coverage gate + typecheck)
+        working-directory: streamlit_listview/frontend
+        run: npm test
+
+      - name: Set up uv + Python
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Create venv and install (editable, dev extras)
+        env:
+          LISTVIEW_SKIP_NPM_BUILD: "1" # bundle already built above; don't rebuild on install
+        run: |
+          uv venv
+          uv pip install -e ".[devel]"
+
+      # Unit suite only (enforces the 100% coverage gate). The Playwright e2e/
+      # suite is intentionally not run here (browser-install cost / flakiness);
+      # run it locally with `playwright install` + `pytest e2e/`.
+      - name: Python unit tests (100% coverage gate)
+        run: .venv/bin/python -m pytest tests/ --cov --cov-report=term-missing
+
+      - name: Build wheel (exercises the npm build hook from a clean bundle)
+        run: |
+          rm -rf streamlit_listview/frontend/build
+          uv build --wheel
+
+      - name: Verify the wheel ships the frontend bundle
+        run: .venv/bin/python scripts/verify_wheel.py
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: streamlit-listview-wheel
+          path: dist/*.whl
+          if-no-files-found: error

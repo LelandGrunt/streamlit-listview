@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+.pytest_cache/
+
+# Coverage output
+.coverage
+coverage.xml
+htmlcov/
+streamlit_listview/frontend/coverage/
+
+# Node
+node_modules/
+
+# Frontend build output (bundled into the wheel, not tracked)
+streamlit_listview/frontend/build/
+
+# Dropped by any uv command that runs with streamlit_listview/ as its working
+# directory: uv walks up, finds the nested pyproject.toml — which is the
+# Streamlit component manifest, not a project definition — and locks it as a
+# virtual project. The result has no dependencies and an unrelated
+# requires-python, so it must never be committed.
+streamlit_listview/uv.lock
+
+# Playwright MCP debug artifacts (browser snapshots/screenshots)
+.playwright-mcp/
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# Claude Code (local settings + worktrees)
+.claude/
+
+# Superpowers brainstorming companion artifacts
+.superpowers/

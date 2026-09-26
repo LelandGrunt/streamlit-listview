@@ -1,0 +1,1027 @@
+/*
+ * listview base stylesheet — all colors/fonts via Streamlit --st-* custom
+ * properties (with fallbacks). Rendered inside the component's Shadow DOM, so
+ * page-level CSS does not reach in; every rule the widget needs lives here.
+ *
+ * Layout dimensions come from three instance-scoped custom properties set
+ * inline by Listview.tsx on the container root ([data-testid="stListview"])
+ * from the Python `data` payload:
+ *   --listview-height       (px; default 300)
+ *   --listview-item-height  (auto | px; when item_height is null in Python the
+ *                            container omits the inline var and this "auto"
+ *                            default applies)
+ *   --listview-width        (100% for "stretch" | px)
+ *
+ * The defaults below live on [data-testid="stListview"] — the SAME element the
+ * real container emits and sets the inline vars on — so .listview-body (a
+ * descendant) inherits the custom properties it consumes.
+ */
+
+[data-testid="stListview"] {
+  --listview-height: 300px;
+  --listview-item-height: auto;
+  --listview-width: 100%;
+  /* Streamlit's faded text/border shades (no --st-* token for them). Each mix is
+     defined ONCE here and inherited by every descendant that needs it, because
+     each was previously spelled out in full at up to six sites — placeholder
+     copy, the help icon, the search/add glyphs, the clear button (60%); the
+     disabled label, group headers and the empty state (70%, 40%); the group
+     item count (text 50%); every hairline separator (border 50%) — so a change
+     to one shade meant finding all of them. Add a token here rather than
+     another copy of a recipe. */
+  --listview-faded-text-60: color-mix(
+    in srgb,
+    var(--st-text-color, #31333f) 60%,
+    transparent
+  );
+  --listview-faded-text-70: color-mix(
+    in srgb,
+    var(--st-text-color, #31333f) 70%,
+    transparent
+  );
+  --listview-faded-text-40: color-mix(
+    in srgb,
+    var(--st-text-color, #31333f) 40%,
+    transparent
+  );
+  --listview-faded-text-50: color-mix(
+    in srgb,
+    var(--st-text-color, #31333f) 50%,
+    transparent
+  );
+  --listview-faded-border-50: color-mix(
+    in srgb,
+    var(--st-border-color, rgba(49, 51, 63, 0.2)) 50%,
+    transparent
+  );
+
+  /* The surfaces the widget paints, named once so the sidebar can redefine them
+     in a single place (see the [data-in-sidebar] block below). Streamlit's
+     sidebar theme swaps --st-background-color with
+     --st-secondary-background-color and changes no other color, so a rule that
+     reaches for either token raw renders inverted there. Spelled out per rule,
+     un-swapping would take an override per rule, and copies of a rule drift
+     apart the way the faded shades above already did. The list is an
+     always-open st.selectbox menu, so every value mirrors that menu or the
+     native widget whose part it plays:
+     --listview-surface        the scroll frame, its rows and the pinned header:
+                               the open menu's surface.
+     --listview-inset-surface  the search and add-option fields, an INSET on the
+                               list surface, filled like st.text_input. Declared
+                               with its ground as a pair and swapped with it in
+                               the sidebar, so the two can never resolve to one
+                               colour (the same rule as the popover pair below).
+     --listview-group-surface  the sticky group header band: the st.dataframe
+                               header, Streamlit's bgMix. */
+  --listview-surface: var(--st-background-color, #fff);
+  --listview-inset-surface: var(--st-secondary-background-color, #f0f2f6);
+  /* bgMix: Streamlit's 50/50 mix of its two background tokens, from which its
+     theme derives the dataframe header and the menu highlight. Symmetric in the
+     two, so the sidebar's swap resolves it to the same colour and the band needs
+     no sidebar override, exactly like Streamlit's own widgets. */
+  --listview-bg-mix: color-mix(
+    in srgb,
+    var(--st-background-color, #fff) 50%,
+    var(--st-secondary-background-color, #f0f2f6)
+  );
+  --listview-group-surface: var(--listview-bg-mix);
+  /* Row highlight: the selectbox menu's darkenedBgMix15, reproduced from
+     Streamlit's theme source — bgMix with its HSL lightness 30 points lower
+     (60 points higher in a dark theme, see the [data-color-scheme] block
+     below), at 15% alpha. Relative colour syntax is the only way to take an
+     HSL step off a var(); see the @supports fallback below for engines that
+     cannot parse it. */
+  --listview-hover-base: hsl(from var(--listview-bg-mix) h s calc(l - 30));
+  --listview-hover-surface: color-mix(
+    in srgb,
+    var(--listview-hover-base) 15%,
+    transparent
+  );
+  /* Selected row: an active st.pills / st.segmented_control (primary at 10%,
+     primary text — the same tint st.dataframe gives a selected row). */
+  --listview-selected-surface: color-mix(
+    in srgb,
+    var(--st-primary-color, #ff4b4b) 10%,
+    transparent
+  );
+  --listview-selected-hover-surface: color-mix(
+    in srgb,
+    var(--st-primary-color, #ff4b4b) 16%,
+    transparent
+  );
+  /* Streamlit's focusRing: the primary color at 50%. */
+  --listview-focus-ring: color-mix(
+    in srgb,
+    var(--st-primary-color, #ff4b4b) 50%,
+    transparent
+  );
+
+  box-sizing: border-box;
+  width: var(--listview-width);
+  font-family: var(--st-font, sans-serif);
+  font-size: var(--st-base-font-size, 1rem);
+  font-weight: var(--st-base-font-weight, 400);
+  color: var(--st-text-color, inherit);
+}
+
+/*
+ * Sidebar-mounted instance (data-in-sidebar set by Listview.tsx from the
+ * container lookup in utils/container.ts). Streamlit's sidebar ThemeProvider
+ * trades the two background tokens — light #ffffff/#f0f2f6 become
+ * #f0f2f6/#ffffff, dark #0e1117/#262730 become #262730/#0e1117 — so undoing the
+ * swap here keeps the list on the open selectbox menu's surface, which is the
+ * app-level background in BOTH containers. The inset is the other half of the
+ * pair and is swapped with it, so the search field still contrasts with the list
+ * it sits in. The group band (bgMix) and the row highlight are symmetric in the
+ * two tokens and need no override.
+ */
+[data-testid="stListview"][data-in-sidebar="true"] {
+  --listview-surface: var(--st-secondary-background-color, #fff);
+  --listview-inset-surface: var(--st-background-color, #f0f2f6);
+}
+
+/*
+ * Dark Streamlit theme (data-color-scheme from useColorScheme, i.e. the active
+ * theme, not the OS): Streamlit LIGHTENS bgMix by 60 HSL points for the menu
+ * highlight where a light theme darkens it by 30 — darkening a dark surface
+ * would leave the pill darker than the list it sits on.
+ */
+[data-testid="stListview"][data-color-scheme="dark"] {
+  --listview-hover-base: hsl(from var(--listview-bg-mix) h s calc(l + 60));
+}
+
+/*
+ * Engines without relative colour syntax — or with the pre-2024 form, where the
+ * channel keywords are percentages and `calc(l - 30)` is invalid (Safari before
+ * 18) — cannot resolve --listview-hover-base. The whole custom property then
+ * goes invalid at computed-value time, which no var() fallback catches, and the
+ * hover highlight would vanish. A faint text-color mix stands in for the pill.
+ */
+@supports not (color: hsl(from red h s calc(l - 30))) {
+  [data-testid="stListview"] {
+    --listview-hover-surface: color-mix(
+      in srgb,
+      var(--st-text-color, #31333f) 8%,
+      transparent
+    );
+  }
+}
+
+[data-testid="stListview"] *,
+[data-testid="stListview"] *::before,
+[data-testid="stListview"] *::after {
+  box-sizing: border-box;
+}
+
+/* Scrollable list body: surface + border + radius from theme tokens. */
+.listview-body {
+  height: var(--listview-height);
+  overflow-y: auto;
+  background: var(--listview-surface);
+  border: 1px solid var(--st-border-color, rgba(49, 51, 63, 0.2));
+  border-radius: var(--st-base-radius, 0.5rem);
+  transition: border-color 0.15s ease;
+}
+
+/*
+ * Active-widget border: focusing the option list, the search field, or the
+ * add-option input turns the control's border the primary color — matching the
+ * focused border of st.selectbox / st.multiselect. :has() cross-links the
+ * (optionally pinned) header with the body so both edges of the single control
+ * outline switch together; the label's help trigger sits outside header/body,
+ * so interacting with it never lights the border.
+ */
+.listview:has(.listview-header:focus-within, .listview-body:focus-within) .listview-header,
+.listview:has(.listview-header:focus-within, .listview-body:focus-within) .listview-body {
+  border-color: var(--st-primary-color, #ff4b4b);
+}
+
+/* Empty-state placeholder text. */
+.listview-placeholder {
+  padding: 0.75rem 0.75rem;
+  color: var(--listview-faded-text-60);
+  font-size: calc(var(--st-base-font-size, 1rem) * 0.875);
+}
+
+/* Static group header (collapse chevron added in a later milestone). */
+.listview-group-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0.375rem 0.75rem;
+  background: var(--listview-group-surface);
+  color: var(--listview-faded-text-70);
+  font-size: var(
+    --listview-content-font-size,
+    calc(var(--st-base-font-size, 1rem) * 0.875)
+  );
+  font-weight: 600;
+  /* With collapsible_groups the header is a <button>: without the reset the
+     browser's own button border framed the top, left and right of the band.
+     Must precede border-bottom, which it would otherwise erase. */
+  border: 0;
+  border-bottom: 1px solid var(--st-border-color, rgba(49, 51, 63, 0.2));
+}
+
+/* One option row. Positioned and isolated so its highlight pill (::before,
+   z-index -1) paints behind the label but inside the row — without the
+   isolation it would drop behind the list surface and never show. */
+.listview-item {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  /* Match st.selectbox + the widget's own chrome (fontSizes.sm); items would
+     otherwise inherit the full base size and read larger than Streamlit. */
+  font-size: var(
+    --listview-content-font-size,
+    calc(var(--st-base-font-size, 1rem) * 0.875)
+  );
+  min-height: var(--listview-item-height);
+  padding: 0.375rem 0.75rem;
+  cursor: pointer;
+  color: var(--st-text-color, inherit);
+  border-bottom: 1px solid var(--listview-faded-border-50);
+}
+
+/* show_grid_lines=False → drop the inter-row dividers. Group headers keep their
+   own structural separator. Toggled by the listview--no-grid root class. */
+.listview--no-grid .listview-item {
+  border-bottom: none;
+}
+
+/* The row highlight: an inset pill behind the label, in the geometry of the
+   selectbox menu's own option highlight (5px side inset = its
+   sizes.tagMarginInsideBorder, 0.375rem radius = its radii.md2 — replicates
+   Streamlit, no --st-* token for either). The row box itself is never tinted,
+   so a highlight cannot bleed into the grid line or under a sticky header. */
+.listview-item::before {
+  content: "";
+  position: absolute;
+  inset: 3px 5px;
+  z-index: -1;
+  border-radius: 0.375rem;
+  pointer-events: none;
+}
+
+/* Hover: only rows that take a click, like the menu, which never highlights a
+   disabled option. Specificity (0,3,1) — the selected-hover rule below must
+   out-rank it. */
+.listview-item:not([aria-disabled="true"], .listview-item--muted):hover::before {
+  background: var(--listview-hover-surface);
+}
+
+/* Selected row: an active st.pills — primary text on the primary 10% pill. */
+.listview-item[aria-selected="true"] {
+  color: var(--st-primary-color, #ff4b4b);
+}
+.listview-item[aria-selected="true"]::before {
+  background: var(--listview-selected-surface);
+}
+/* (0,4,1): a hovered selected row stays on the selection's hue. */
+.listview-item[aria-selected="true"]:not([aria-disabled="true"]):hover::before {
+  background: var(--listview-selected-hover-surface);
+}
+
+/* Keyboard focus: Streamlit's focusRing around the pill; an unselected row also
+   takes the menu's highlight. Keyboard only — a click moves the active
+   descendant too, and no native menu leaves a ring on the row it was clicked
+   on; :focus-visible on the listbox is what tells the two apart. */
+.listview-listbox:focus-visible .listview-item--focused::before {
+  box-shadow: 0 0 0 2px var(--listview-focus-ring);
+}
+.listview-listbox:focus-visible
+  .listview-item--focused:not([aria-selected="true"])::before {
+  background: var(--listview-hover-surface);
+}
+
+/* The listbox's own UA focus outline (auto 1px) drew a dark hairline under the
+   search field and down the right edge. The frame already turns primary on
+   focus-within (see the active-widget border above) and the focused row carries
+   the ring, so the outline was a second, unthemed indicator. */
+.listview-listbox:focus-visible {
+  outline: none;
+}
+
+/* Disabled item: visible but muted and non-interactive. */
+.listview-item[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Whole-widget disabled state (container root carries .listview--disabled).
+   Covers the pinned header as well as the scroll frame: with pin_search /
+   select_all the header holds live-looking controls (the search input sets its
+   own color/background/border, overriding the browser's disabled styling), so
+   fading only the body left a crisp, apparently-enabled strip that silently
+   ignored input above a faded list — the disabled affordance must not depend on
+   pin_search. The unpinned search sits inside .listview-body and fades with it. */
+.listview--disabled .listview-header,
+.listview--disabled .listview-body {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* A disabled widget fades its body ONCE, above. Its rows carry aria-disabled too
+   (the container ORs the widget flag into every row's prop, so assistive tech
+   announces each option as unavailable), and opacity multiplies through
+   nesting — so without this the per-item fade stacked onto the body fade and
+   every row of a disabled widget rendered at 0.16, a second, deeper fade below
+   the header. The cursor is moot under the body's pointer-events: none. */
+.listview--disabled .listview-item[aria-disabled="true"] {
+  opacity: 1;
+}
+
+/* At-cap unselected item (max_selections reached): visibly muted, not clickable. */
+.listview-item.listview-item--muted {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/*
+ * Widget label row (Streamlit WidgetLabel parity): small text + a trailing
+ * right-pushed help slot. The container's display/visibility is driven inline
+ * by label_visibility; these rules add the typographic + layout treatment.
+ */
+.listview-widget-label {
+  align-items: center;
+  gap: 0.25rem; /* replicates Streamlit spacing.twoXS — no --st-* token */
+  margin-bottom: 0.25rem; /* replicates Streamlit spacing.twoXS — no --st-* token */
+  min-height: 1.25rem;
+  font-size: calc(var(--st-base-font-size, 1rem) * 0.875); /* replicates fontSizes.sm — no --st-* token */
+  font-weight: var(--st-base-font-weight, 400); /* labels are NOT bold */
+  color: var(--st-text-color, inherit);
+}
+
+/* Disabled label: reduced-opacity text (replicates Streamlit fadedText40 — no --st-* token). */
+.listview-widget-label--disabled {
+  color: var(--listview-faded-text-40);
+}
+
+/*
+ * Screen-reader-only copy of the widget label (WidgetLabel.tsx). It is the target
+ * of the listbox's aria-labelledby, i.e. the widget's accessible name, so it must
+ * NOT be hidden: display:none removes the node and visibility:hidden inherits into
+ * it, and a hidden subtree contributes nothing to a computed name. The standard
+ * clip idiom takes it out of the visual layout while leaving it nameable.
+ */
+.listview-widget-label__a11y-name {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.listview-widget-label__help-slot {
+  position: relative; /* positioning context for .listview-help-popover */
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* Borderless help trigger; faded icon color + theme-driven focus ring. */
+.listview-help-trigger {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: help;
+  /* the SVG uses stroke:currentColor */
+  color: var(--listview-faded-text-60);
+}
+
+.listview-help-trigger:focus-visible {
+  outline: none;
+  border-radius: var(--st-base-radius, 0.5rem);
+  box-shadow: 0 0 0 2px var(--st-primary-color, #ff4b4b);
+}
+
+.listview-help-icon {
+  display: block;
+}
+
+/*
+ * ── Markdown rendering ─────────────────────────────────────────────────────
+ * react-markdown output (Markdown.tsx, owned by the math-emoji area) is
+ * wrapped in a .listview-markdown span/div. The label tier emits ONLY inline
+ * elements (block-level Markdown is suppressed via disallowedElements); the
+ * help tier additionally emits the block elements styled further below. All
+ * colors bind to --st-* tokens so the Shadow-root output tracks the active
+ * Streamlit theme.
+ */
+
+/* The wrapper is inline so the markdown label flows on the label row. */
+.listview-markdown {
+  display: inline;
+}
+
+/* react-markdown wraps top-level text in <p>; collapse its block margins so a
+   single-paragraph label/help line does not gain vertical space. */
+.listview-markdown p {
+  margin: 0;
+}
+
+/* Bold / italic / strikethrough inherit weight, style and color from context. */
+.listview-markdown strong {
+  font-weight: 600;
+}
+.listview-markdown em {
+  font-style: italic;
+}
+.listview-markdown del {
+  text-decoration: line-through;
+}
+
+/* Inline code: themed chip on the secondary surface.
+   Scoped to :not(pre) > code so fenced/indented code blocks (<pre><code>)
+   in the help tier do not inherit the chip background/padding/radius. */
+.listview-markdown :not(pre) > code {
+  padding: 0.1em 0.25em;
+  background: var(--st-secondary-background-color, #f0f2f6);
+  border-radius: var(--st-base-radius, 0.5rem);
+  font-family: var(--st-code-font, monospace);
+  font-size: 0.875em;
+  word-wrap: break-word;
+}
+
+/* Block code inside <pre> must NOT inherit the chip styling above. */
+.listview-markdown pre code {
+  padding: 0;
+  background: none;
+  border-radius: 0;
+  font-size: inherit;
+  word-wrap: normal;
+}
+
+/* Links: theme link color, underlined, open in a new tab (rel set in TS). */
+.listview-markdown a,
+.listview-markdown a:visited {
+  color: var(--st-link-color, #0068c9);
+  text-decoration: underline;
+}
+.listview-markdown a:hover {
+  text-decoration: underline;
+}
+
+/* Inline images: capped to the font height so they read as inline icons. */
+.listview-markdown img {
+  max-height: 1em;
+  width: auto;
+  vertical-align: text-bottom;
+}
+
+/*
+ * Help-tier (full GFM) block elements. These only render inside the help
+ * tooltip popover, so they are scoped under .listview-help-popover to avoid
+ * leaking block spacing into the inline label tier. The help tier also
+ * switches the wrapper itself to display:block (see DB8 contract).
+ */
+
+.listview-help-popover .listview-markdown {
+  display: block;
+}
+
+/* Restore paragraph spacing inside the help body (inline tier collapsed it). */
+.listview-help-popover .listview-markdown p {
+  margin: 0 0 0.5rem;
+}
+.listview-help-popover .listview-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+/* Headings: smaller, weighted, theme text color. */
+.listview-help-popover .listview-markdown h1,
+.listview-help-popover .listview-markdown h2,
+.listview-help-popover .listview-markdown h3,
+.listview-help-popover .listview-markdown h4,
+.listview-help-popover .listview-markdown h5,
+.listview-help-popover .listview-markdown h6 {
+  margin: 0.5rem 0 0.25rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--st-text-color, inherit);
+}
+.listview-help-popover .listview-markdown h1 { font-size: 1.25em; }
+.listview-help-popover .listview-markdown h2 { font-size: 1.15em; }
+.listview-help-popover .listview-markdown h3 { font-size: 1.05em; }
+.listview-help-popover .listview-markdown h4,
+.listview-help-popover .listview-markdown h5,
+.listview-help-popover .listview-markdown h6 { font-size: 1em; }
+
+/* Lists + task lists. */
+.listview-help-popover .listview-markdown ul,
+.listview-help-popover .listview-markdown ol {
+  margin: 0 0 0.5rem;
+  padding-left: 1.5rem;
+}
+.listview-help-popover .listview-markdown li {
+  margin: 0.125rem 0;
+}
+.listview-help-popover .listview-markdown li > input[type="checkbox"] {
+  margin-right: 0.375rem;
+}
+
+/* GFM tables: collapsed borders from the theme border color. */
+.listview-help-popover .listview-markdown table {
+  border-collapse: collapse;
+  margin: 0 0 0.5rem;
+  border: 1px solid var(--st-border-color, rgba(49, 51, 63, 0.2));
+}
+.listview-help-popover .listview-markdown th,
+.listview-help-popover .listview-markdown td {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--st-border-color, rgba(49, 51, 63, 0.2));
+  text-align: left;
+}
+.listview-help-popover .listview-markdown th {
+  background: var(--listview-popover-inset-surface);
+  font-weight: 600;
+}
+
+/* Inline-code chip inside the popover. The base chip rule above is unscoped
+   because the inline LABEL tier needs it too, and that tier sits on the list
+   surface, which does not swap by scheme — so it correctly keeps
+   --st-secondary-background-color. Here the chip sits on the popover, whose
+   ground does swap, so it takes the inset half of the pair instead. */
+.listview-help-popover .listview-markdown :not(pre) > code {
+  background: var(--listview-popover-inset-surface);
+}
+/* ...except inside a table HEADER, which is itself an inset: a chip there would
+   be painted the exact colour of the cell under it (the bug above, one level
+   down — a help table whose header names a field in code). It takes the ground
+   half instead, which the pair guarantees is the other colour. Body cells need
+   no rule: td is transparent, so a chip in one already sits on the ground.
+   Equal specificity to the rule above, so this MUST stay after it — the same
+   source-order tie the base chip rule and the `pre code` reset already rely on. */
+.listview-help-popover .listview-markdown th code {
+  background: var(--listview-popover-surface);
+}
+
+/* Blockquote: left rule + faded text, like Streamlit. */
+.listview-help-popover .listview-markdown blockquote {
+  margin: 0 0 0.5rem;
+  padding: 0 0 0 0.75rem;
+  border-left: 3px solid var(--st-border-color, rgba(49, 51, 63, 0.2));
+  color: var(--listview-faded-text-70);
+}
+
+/* Horizontal rule. */
+.listview-help-popover .listview-markdown hr {
+  margin: 0.75rem 0;
+  border: none;
+  border-top: 1px solid var(--st-border-color, rgba(49, 51, 63, 0.2));
+}
+
+/* Fenced code block: themed surface, monospace, horizontal scroll.
+   (No syntax highlighter — strict-parity deviation recorded in the spec.) */
+.listview-help-popover .listview-markdown pre {
+  margin: 0 0 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--listview-popover-inset-surface);
+  border-radius: var(--st-base-radius, 0.5rem);
+  overflow-x: auto;
+}
+/* Inside <pre>, the inline-code chip styling is reset back to a flat block. */
+.listview-help-popover .listview-markdown pre code {
+  padding: 0;
+  background: none;
+  border-radius: 0;
+  font-size: 0.875em;
+  white-space: pre;
+  word-wrap: normal;
+}
+
+/*
+ * ── Streamlit directive extras (ported plugins, markdown/streamlitPlugins.ts) ─
+ * Producer == consumer (DB7): the coloring plugin emits OUR class scheme, not
+ * Streamlit's internal stMarkdown* names. Colored text/background/badge each
+ * carry a base class plus a per-color modifier:
+ *   text:  .listview-md-color  +  .listview-md-color--<name>
+ *   bg:    .listview-md-bg      +  .listview-md-bg--<name>
+ *   badge: .listview-md-badge   +  .listview-md-badge--<name>
+ * Named colors bind --st-<name>-(text-|background-)color tokens so they track
+ * the theme from the Shadow root. The seven names are red/orange/yellow/green/
+ * blue/violet/gray; the plugin normalizes the grey alias to gray before
+ * emitting, so no separate grey modifier is needed here.
+ * Arbitrary "#rrggbb" colors are emitted by the plugin as an inline style
+ * attribute on the span (e.g. style="color:#0f0"), which overrides the base
+ * rule below — no custom-property plumbing required in the CSS.
+ */
+
+/* Foreground (colored text): base rule inherits so an inline color override
+   (arbitrary #hex from the plugin) wins; named modifiers set the token color. */
+.listview-markdown .listview-md-color {
+  color: inherit;
+}
+.listview-markdown .listview-md-color--red    { color: var(--st-red-text-color, var(--st-red-color, #ff2b2b)); }
+.listview-markdown .listview-md-color--orange { color: var(--st-orange-text-color, var(--st-orange-color, #ff8700)); }
+.listview-markdown .listview-md-color--yellow { color: var(--st-yellow-text-color, var(--st-yellow-color, #faca2b)); }
+.listview-markdown .listview-md-color--green  { color: var(--st-green-text-color, var(--st-green-color, #21c354)); }
+.listview-markdown .listview-md-color--blue   { color: var(--st-blue-text-color, var(--st-blue-color, #0068c9)); }
+.listview-markdown .listview-md-color--violet { color: var(--st-violet-text-color, var(--st-violet-color, #803df5)); }
+.listview-markdown .listview-md-color--gray   { color: var(--st-gray-text-color, var(--st-gray-color, #808495)); }
+
+/* Colored background: light padding so the highlight reads; named modifiers
+   set the background token. Inline style (arbitrary #hex) overrides the base. */
+.listview-markdown .listview-md-bg {
+  padding: 0 0.1em;
+  border-radius: var(--st-base-radius, 0.5rem);
+  background: transparent;
+}
+.listview-markdown .listview-md-bg--red    { background: var(--st-red-background-color, #ffecec); }
+.listview-markdown .listview-md-bg--orange { background: var(--st-orange-background-color, #fff0e0); }
+.listview-markdown .listview-md-bg--yellow { background: var(--st-yellow-background-color, #fffae0); }
+.listview-markdown .listview-md-bg--green  { background: var(--st-green-background-color, #dffde9); }
+.listview-markdown .listview-md-bg--blue   { background: var(--st-blue-background-color, #e4f5ff); }
+.listview-markdown .listview-md-bg--violet { background: var(--st-violet-background-color, #f5ebff); }
+.listview-markdown .listview-md-bg--gray   { background: var(--st-gray-background-color, #f0f2f6); }
+
+/* Badge: rounded pill = per-color text token on its background token
+   (Streamlit: radii.sm + padding 0 twoXS). */
+.listview-markdown .listview-md-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.25rem; /* replicates Streamlit spacing.twoXS — no --st-* token */
+  border-radius: var(--st-base-radius, 0.5rem);
+  font-size: 0.875em;
+}
+.listview-markdown .listview-md-badge--red {
+  color: var(--st-red-text-color, var(--st-red-color, #ff2b2b));
+  background: var(--st-red-background-color, #ffecec);
+}
+.listview-markdown .listview-md-badge--orange {
+  color: var(--st-orange-text-color, var(--st-orange-color, #ff8700));
+  background: var(--st-orange-background-color, #fff0e0);
+}
+.listview-markdown .listview-md-badge--yellow {
+  color: var(--st-yellow-text-color, var(--st-yellow-color, #faca2b));
+  background: var(--st-yellow-background-color, #fffae0);
+}
+.listview-markdown .listview-md-badge--green {
+  color: var(--st-green-text-color, var(--st-green-color, #21c354));
+  background: var(--st-green-background-color, #dffde9);
+}
+.listview-markdown .listview-md-badge--blue {
+  color: var(--st-blue-text-color, var(--st-blue-color, #0068c9));
+  background: var(--st-blue-background-color, #e4f5ff);
+}
+.listview-markdown .listview-md-badge--violet {
+  color: var(--st-violet-text-color, var(--st-violet-color, #803df5));
+  background: var(--st-violet-background-color, #f5ebff);
+}
+.listview-markdown .listview-md-badge--gray {
+  color: var(--st-gray-text-color, var(--st-gray-color, #808495));
+  background: var(--st-gray-background-color, #f0f2f6);
+}
+
+/* :small[] text. */
+.listview-markdown .listview-md-small {
+  font-size: 0.875em; /* replicates Streamlit fontSizes.sm — no --st-* token */
+}
+
+/* :shimmer[] — Streamlit drives this with an animated luminance mask over
+   fadedText60 (no background-clip:text). */
+@keyframes listview-shimmer {
+  0% {
+    -webkit-mask-position: 600% center;
+    mask-position: 600% center;
+  }
+  100% {
+    -webkit-mask-position: -600% center;
+    mask-position: -600% center;
+  }
+}
+.listview-markdown .listview-md-shimmer {
+  color: var(--listview-faded-text-60);
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.4) 0%,
+    rgba(0, 0, 0, 0.4) 40%,
+    rgba(0, 0, 0, 1) 50%,
+    rgba(0, 0, 0, 0.4) 60%,
+    rgba(0, 0, 0, 0.4) 100%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.4) 0%,
+    rgba(0, 0, 0, 0.4) 40%,
+    rgba(0, 0, 0, 1) 50%,
+    rgba(0, 0, 0, 0.4) 60%,
+    rgba(0, 0, 0, 0.4) 100%
+  );
+  -webkit-mask-size: 200% 100%;
+  mask-size: 200% 100%;
+  animation: listview-shimmer 8s linear infinite;
+}
+
+/*
+ * ── Help tooltip popover (HelpTooltip.tsx) ──────────────────────────────────
+ * Hand-rolled (no BaseWeb) hover/focus popover. Mirrors Streamlit's TooltipIcon
+ * surface: a borderless box floating on a soft drop shadow (BaseWeb
+ * lighting.shadow400 == 0 1px 4px rgba(0,0,0,0.16)), themed via --st-* tokens.
+ * The surface swap follows Streamlit (light -> background-color, dark ->
+ * secondaryBackground) and is keyed off the ACTIVE STREAMLIT THEME — not the OS
+ * prefers-color-scheme — via the [data-color-scheme] attribute Listview.tsx
+ * sets from the inherited color-scheme (see useColorScheme). So a dark Streamlit
+ * theme under a light OS (or vice-versa) still matches the native tooltip.
+ * (CSS light-dark() would be the natural fit but the production bundler rewrites
+ * it into a prefers-color-scheme polyfill that breaks inside the shadow tree.)
+ * Placement is anchored top-right of the trigger — a
+ * collision-safe simplification of Streamlit's centered BaseWeb popover, since
+ * the help icon sits at the label's right edge. The padding/font-size/
+ * line-height values have no --st-* token and are hardcoded Streamlit replicas,
+ * annotated inline. Block-level help markdown is styled under this selector
+ * elsewhere (see the .listview-help-popover .listview-markdown rules above).
+ */
+.listview-help-popover {
+  position: absolute;
+  bottom: calc(100% + 0.25rem); /* above the trigger; replicates spacing.twoXS — no --st-* token */
+  right: 0; /* top-right placement like Streamlit */
+  z-index: 1000;
+  max-width: 20rem;
+  padding: 0.375rem 0.75rem; /* replicates Streamlit's 6px/12px tooltip padding — no --st-* token */
+  font-family: var(--st-font, sans-serif);
+  font-size: calc(var(--st-base-font-size, 1rem) * 0.875); /* replicates fontSizes.sm — no --st-* token */
+  line-height: 1.6; /* Streamlit base body line-height — no --st-* token */
+  color: var(--st-text-color, #31333f);
+  /* Surface = Streamlit's tooltip surface for the active theme. Light is the
+     default (bgColor); the dark override below swaps to secondaryBackground,
+     keyed on the theme-derived [data-color-scheme] attribute.
+     The ground and the surfaces painted ON it are declared as a PAIR, because
+     one token serving both roles is invisible: the dark popover moved to
+     secondaryBackground while the inline-code chip, the GFM table header and
+     the fenced code block stayed on that same token, so each inset rendered in
+     the exact colour of the thing it sat on. (Light escaped only by accident —
+     the popover happens to sit on bgColor there.) The insets therefore take
+     whichever of the theme's two surfaces the ground did not: the pair is that
+     surface pair, swapped per scheme, so the two can never collapse onto one
+     colour and an edit to either half is written beside the other. Declared
+     here rather than at the use sites because a use site cannot see which
+     ground the popover resolved to in the current scheme. */
+  --listview-popover-surface: var(--st-background-color, #fff);
+  --listview-popover-inset-surface: var(
+    --st-secondary-background-color,
+    #f0f2f6
+  );
+  background: var(--listview-popover-surface);
+  border-radius: var(--st-base-radius, 0.5rem);
+  /* Borderless surface on a soft drop shadow — BaseWeb lighting.shadow400, the
+     exact shadow Streamlit's tooltip uses (no --st-* token for it). */
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.16);
+  white-space: normal;
+  overflow-wrap: break-word;
+  text-align: left;
+}
+
+/* Hover bridge. The 0.25rem gap under the popover (its `bottom` offset above)
+   belonged to no element: a pointer travelling from the trigger up into the
+   popover crossed empty space, fired the wrapper's mouseleave, and the popover
+   unmounted before it could be reached — so a link in `help` was unclickable
+   and long help could not be scrolled or selected. A transparent pseudo-element
+   owned by the popover fills exactly that gap; pseudo-elements hit-test as their
+   originating element, so the pointer never leaves the wrapper's subtree. No
+   background: this must not become another painted surface. */
+.listview-help-popover::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 0.25rem; /* exactly the bottom: calc(100% + 0.25rem) offset above */
+}
+
+/* Dark Streamlit theme: match the native tooltip's secondary surface. Driven by
+   the theme (data-color-scheme), NOT the OS — so it's correct even when the OS
+   color scheme disagrees with the chosen Streamlit theme. Both halves move
+   together — this is the swap, not a re-point of the ground alone; taking the
+   ground to secondaryBackground and leaving the insets there is precisely the
+   collision the pair exists to prevent. */
+.listview[data-color-scheme="dark"] .listview-help-popover {
+  --listview-popover-surface: var(--st-secondary-background-color, #262730);
+  --listview-popover-inset-surface: var(--st-background-color, #0e1117);
+}
+
+/*
+ * ── Milestone C: search, pinned header, collapse chevron, new-option row ─────
+ * The body DOM is: optional .listview-header (pinned, non-scrolling) above
+ * .listview-body (the scroll frame), which wraps an in-flow .listview-search
+ * (when not pinned) + the .listview-listbox + an optional .listview-new-option.
+ * .listview-listbox carries role=listbox and adds NO border of its own — the
+ * single bordered scroll frame is .listview-body.
+ */
+
+/* Pinned header strip: sits above the scroll frame, always visible. Shares the
+   frame's border so the two read as one control. Positioned for the seam below. */
+.listview-header {
+  position: relative;
+  padding: 0.375rem 0.5rem;
+  background: var(--listview-surface);
+  border: 1px solid var(--st-border-color, rgba(49, 51, 63, 0.2));
+  border-bottom: none;
+  border-top-left-radius: var(--st-base-radius, 0.5rem);
+  border-top-right-radius: var(--st-base-radius, 0.5rem);
+  transition: border-color 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+/* Search grows to fill; the toggle shrinks to fit and sits at the right edge. */
+.listview-header > .listview-search {
+  flex: 1;
+}
+/* The seam between header and body is a divider INSIDE the one control, not
+   part of its outline, so it must not light up when focus paints the outline
+   primary (the active-widget border above). It used to be the body's top
+   border, and a border is exactly what that rule recolours. Resetting only that
+   border's colour would still notch the outline: where a primary side border
+   meets a differently coloured top border, the corner joins cut into it. So the
+   body drops its top border under a header — its side borders then run straight
+   on from the header's — and the header paints the seam as a background along
+   its own bottom edge, where no border-color rule reaches. */
+.listview-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--st-border-color, rgba(49, 51, 63, 0.2));
+  pointer-events: none;
+}
+/* When pinned, the body below loses its top rounding so the seam is flat, and
+   its top border, which the seam above replaces. */
+.listview-header + .listview-body {
+  border-top-width: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+/* Search field: a themed input + an inline clear button. */
+.listview-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0.375rem 0.5rem;
+}
+/* In-flow (unpinned) search scrolls with the list; a divider separates it. */
+.listview-body > .listview-search {
+  border-bottom: 1px solid var(--listview-faded-border-50);
+}
+
+/*
+ * ── Themed-input recipe (search box + accept_new_options add row) ────────────
+ * Both fields are the same control: a filled input inside the single scroll
+ * frame with a decorative glyph overlaid at its left edge. They are styled
+ * together so they cannot drift — they were two copies of these declarations
+ * and had already diverged (the add row's placeholder kept the browser default
+ * while the search box's was faded), which reads as a rendering bug when the two
+ * sit inside one bordered frame. The ONLY difference is horizontal padding, so
+ * that is the single per-field override below.
+ */
+
+/* Left-edge glyph: magnifying glass for search, plus for the add row. */
+.listview-search__icon,
+.listview-new-option__icon {
+  position: absolute;
+  left: 0.75rem;
+  display: inline-flex;
+  pointer-events: none; /* clicks fall through to focus the input */
+  color: var(--listview-faded-text-60);
+}
+
+.listview-search__input,
+.listview-new-option__input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.25rem 0.5rem 0.25rem 1.75rem; /* left pad leaves room for the glyph */
+  font: inherit;
+  font-size: calc(var(--st-base-font-size, 1rem) * 0.875); /* replicates fontSizes.sm — no --st-* token */
+  color: var(--st-text-color, inherit);
+  /* st.text_input: a filled field whose 1px border is its own fill colour, so it
+     reads as one shape; focus turns that border primary (below). */
+  background: var(--listview-inset-surface);
+  border: 1px solid var(--listview-inset-surface);
+  border-radius: var(--st-base-radius, 0.5rem);
+}
+/* Only the search box overlays a clear (×) button on its right edge, so only it
+   reserves room there — making its horizontal padding symmetric. */
+.listview-search__input {
+  padding-right: 1.75rem;
+}
+.listview-search__input::placeholder,
+.listview-new-option__input::placeholder {
+  color: var(--listview-faded-text-60);
+}
+.listview-search__input:focus-visible,
+.listview-new-option__input:focus-visible {
+  outline: none;
+  border-color: var(--st-primary-color, #ff4b4b);
+}
+
+/* Clear (×) button overlaid at the input's right edge. */
+.listview-search__clear {
+  position: absolute;
+  right: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--listview-faded-text-60);
+}
+.listview-search__clear:focus-visible {
+  outline: none;
+  border-radius: var(--st-base-radius, 0.5rem);
+  box-shadow: 0 0 0 2px var(--st-primary-color, #ff4b4b);
+}
+
+.listview-select-all {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.5rem;
+  font: inherit;
+  font-size: calc(var(--st-base-font-size, 1rem) * 0.875);
+  color: var(--st-primary-color, #ff4b4b);
+  background: none;
+  border: none;
+  border-radius: var(--st-base-radius, 0.5rem);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.listview-select-all:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--st-primary-color, #ff4b4b) 12%, transparent);
+}
+.listview-select-all:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--st-primary-color, #ff4b4b);
+}
+.listview-select-all:disabled {
+  color: var(--listview-faded-text-40);
+  cursor: default;
+}
+
+/* Collapsible group header: same look as the static header but interactive. */
+.listview-group-header--collapsible {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  /* button reset; inherit the static header's box from .listview-group-header */
+  font: inherit;
+  font-size: var(
+    --listview-content-font-size,
+    calc(var(--st-base-font-size, 1rem) * 0.875)
+  );
+  font-weight: 600;
+  color: var(--listview-faded-text-70);
+}
+.listview-group-header--collapsible:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--st-primary-color, #ff4b4b);
+}
+.listview-group-header__chevron {
+  flex: none;
+  /* 16px — matches st.expander's toggle icon. The inline SVG carries width/
+     height="1em", which would render ~14px at the group header's small font
+     size; this fixed 1rem brings it to Streamlit's icon size. */
+  width: var(--listview-content-font-size, 1rem);
+  height: var(--listview-content-font-size, 1rem);
+  transition: transform 0.15s ease;
+}
+/* Collapsed → rotate the down-chevron to point right. */
+.listview-group-header__chevron[data-collapsed="true"] {
+  transform: rotate(-90deg);
+}
+/* Item count shown after the group name, e.g. "Fruits (5)". Muted and
+   normal-weight so the bold name stays the emphasis; font-size is inherited so
+   it tracks --listview-content-font-size like the rest of the header. */
+.listview-group-header__count {
+  margin-inline-start: 0.375rem;
+  font-weight: 400;
+  color: var(--listview-faded-text-50);
+}
+/* The collapsible header is flex with gap: 0.375rem, which already separates
+   the count; drop the margin there so the spacing is not doubled. */
+.listview-group-header--collapsible .listview-group-header__count {
+  margin-inline-start: 0;
+}
+
+/* accept_new_options entry row: input at the bottom of the body. Enter adds. */
+.listview-new-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  border-top: 1px solid var(--listview-faded-border-50);
+}
+/* Its input + plus glyph are styled by the shared themed-input recipe above
+   (.listview-new-option__input / __icon), so nothing field-specific is left. */

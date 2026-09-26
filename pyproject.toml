@@ -1,0 +1,79 @@
+[build-system]
+requires = ["setuptools>=77.0.3", "wheel"]
+build-backend = "_build_backend"
+backend-path = ["."]
+
+[project]
+name = "streamlit-listview"
+version = "1.0.0"
+description = "Streamlit Components V2 selectable list widget with search, groups, and theming"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+requires-python = ">=3.10"
+authors = [{ name = "Leland Grunt", email = "33732585+LelandGrunt@users.noreply.github.com" }]
+keywords = [
+  "streamlit",
+  "streamlit-component",
+  "components-v2",
+  "listview",
+  "list",
+  "widget",
+  "selection",
+  "ui",
+]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: Software Development :: User Interfaces",
+  "Typing :: Typed",
+]
+dependencies = ["streamlit >= 1.51"]
+
+[project.urls]
+Homepage = "https://github.com/LelandGrunt/streamlit-listview"
+Repository = "https://github.com/LelandGrunt/streamlit-listview"
+Issues = "https://github.com/LelandGrunt/streamlit-listview/issues"
+"Release Notes" = "https://github.com/LelandGrunt/streamlit-listview/releases"
+
+[project.optional-dependencies]
+devel = [
+  "wheel",
+  "pytest",
+  "pytest-cov",
+  "playwright",
+  "pytest-playwright",
+  "requests",
+  "pytest-rerunfailures",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["streamlit_listview", "demo"]
+omit = [
+  # Streamlit entry point: rendered in a subprocess and exercised by the
+  # Playwright e2e suite (+ a compile smoke test), not measurable in-process.
+  "demo/app.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+# The unit-testable surface (the listview package + the demo's pure helpers)
+# is exhaustively covered; keep it that way.
+fail_under = 100
+
+[tool.setuptools.packages.find]
+include = ["streamlit_listview*"]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+streamlit_listview = ["frontend/build/**/*", "pyproject.toml", "py.typed"]

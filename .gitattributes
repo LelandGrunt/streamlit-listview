@@ -1,0 +1,8 @@
+# Store all text files with LF in the repository, whatever the working tree
+# uses. A Windows checkout keeps CRLF on disk; git normalizes on the way in, so
+# the working tree no longer reports every file as modified. Nothing on disk is
+# rewritten by adding this — see `git add --renormalize`.
+* text=auto
+
+# Binary assets: never apply line-ending conversion.
+*.gif binary

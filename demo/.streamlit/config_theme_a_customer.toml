@@ -1,0 +1,30 @@
+[theme]
+primaryColor = "#f18243"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#e6ebec"
+textColor = "#333942"
+font = "'Albert Sans':https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400&display=swap"
+baseFontSize = 16
+baseFontWeight = 400
+headingFontSizes = [
+  "2.75rem",
+  "2.25rem",
+  "1.75rem",
+  "1.5rem",
+  "1.25rem",
+  "1rem",
+]
+headingFontWeights = [
+  700,
+  600,
+  600,
+  600,
+  600,
+  600,
+]
+baseRadius = "medium"
+buttonRadius = "medium"
+borderColor = "#8e9192"
+dataframeBorderColor = "#c5cacb"
+dataframeHeaderBackgroundColor = "#e6ebec"
+showWidgetBorder = true

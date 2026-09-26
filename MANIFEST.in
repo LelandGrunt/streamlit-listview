@@ -1,0 +1,3 @@
+recursive-include streamlit_listview/frontend/build *
+include pyproject.toml
+include _build_backend.py

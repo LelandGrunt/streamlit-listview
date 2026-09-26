@@ -1,0 +1,10 @@
+# Dependencies for deploying the demo on Streamlit Community Cloud.
+#
+# Community Cloud looks for a dependency file next to the entrypoint
+# (demo/app.py) before the repo root, so this file takes precedence over the
+# root uv.lock. That matters: the root lock installs the repo itself, whose
+# build backend needs Node.js/npm (absent on Community Cloud) and a frontend
+# bundle that is gitignored. Installing the published wheel instead ships the
+# prebuilt bundle. Bump the pin with each release.
+streamlit>=1.51
+streamlit-listview==1.0.0
