@@ -776,7 +776,16 @@ def render_demo():
     demo_col, config_col = st.columns([2, 1], gap="large")
 
     # Render configuration first so the demo column knows the option ids/groups.
-    with config_col:
+    #
+    # The inner st.container() is load-bearing. Since Streamlit 1.63, st.pills
+    # and st.segmented_control placed *directly* in a column default to
+    # wrap=False: one row that scrolls horizontally with its scrollbar hidden,
+    # so on a narrow screen the trailing section pills are simply cut off with
+    # nothing hinting that they exist. Nested one container deeper they wrap
+    # again — every control in the panel at once, and unlike passing wrap=True
+    # (a 1.63+ parameter) it keeps the demo running on the Streamlit >= 1.51
+    # floor.
+    with config_col, st.container():
         st.subheader(":material/tune: Configuration")
         section = st.pills(
             "Configuration section",
