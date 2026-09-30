@@ -72,7 +72,7 @@ def _servers():
     """Session-scoped cache of running harness servers.
 
     Keyed by (script, extra args): modules that drive the same script with the
-    same flags share one boot — the five demo modules all serve demo/app.py —
+    same flags share one boot — the demo modules all serve demo/app.py —
     while a module with its own flags (test_core's theme) gets a distinct
     server automatically. Test isolation is unharmed: Streamlit session state
     lives per browser session and every test opens a fresh page. ExitStack

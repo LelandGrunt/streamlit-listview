@@ -45,8 +45,6 @@ class DataSource:
       example buttons.
     - ``sized``: render_data shows the item-count slider.
     - ``timed``: render_demo times the (cached) server-side build and reports it.
-    - ``labels_explicit``: every option carries an explicit ``label`` (which wins
-      over format_func), so render_formatting explains an inert preset.
     - ``empty_caption``: render_demo points at the placeholder text.
     - ``snippet_comprehension``: codegen emits the generating comprehension
       instead of option literals.
@@ -57,7 +55,6 @@ class DataSource:
     options_editor: bool = False
     sized: bool = False
     timed: bool = False
-    labels_explicit: bool = False
     empty_caption: bool = False
     snippet_comprehension: bool = False
 
@@ -71,7 +68,6 @@ DATA_SOURCES = {
     "Built-in cities": DataSource(
         resolve=lambda cfg: _derived(data.CITIES),
         builtin=True,
-        labels_explicit=True,
     ),
     "Custom": DataSource(
         resolve=lambda cfg: _derived(parse_options_text(cfg["options_text"])),
@@ -87,7 +83,6 @@ DATA_SOURCES = {
         resolve=lambda cfg: _large_dataset(cfg["large_size"]),
         sized=True,
         timed=True,
-        labels_explicit=True,
         snippet_comprehension=True,
     ),
 }

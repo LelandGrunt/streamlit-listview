@@ -5,12 +5,12 @@ Every module in this package drives the demo playground (demo/app.py), so what
 this conftest overrides from e2e/conftest.py is deliberately narrow:
 
 * ``app_file`` — up there each module names its own harness via ``APP_FILE``,
-  whereas all five here share one, so the path belongs in this conftest rather
-  than in five modules. The StreamlitRunner launch itself is NOT repeated: the
-  parent's ``app`` fixture consumes this path, so anything added to the launch
-  (a timeout knob, a retry, a warm-up) lands in one place — and since its
-  session cache keys servers by (script, flags), the five modules share ONE
-  demo server boot.
+  whereas all of them here share one, so the path belongs in this conftest
+  rather than in every module. The StreamlitRunner launch itself is NOT
+  repeated: the parent's ``app`` fixture consumes this path, so anything added
+  to the launch (a timeout knob, a retry, a warm-up) lands in one place — and
+  since its session cache keys servers by (script, flags), the demo modules
+  share ONE demo server boot.
 * ``go_to_app`` — the readiness gate genuinely differs. The harness apps render a
   fixed, asserted number of listviews; the demo renders a configurable one, so it
   waits for the first to be visible instead of counting.

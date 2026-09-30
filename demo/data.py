@@ -1,4 +1,4 @@
-"""Built-in demo dataset + format_func presets + on_change callback factory."""
+"""Built-in demo dataset + format_func presets/probe + on_change callback factory."""
 from parsing import group_names
 
 CITIES = [
@@ -125,6 +125,25 @@ FORMAT_PRESETS = {
     "Truncate (10)": fmt_truncate,
     "Type badge (custom field)": fmt_type_badge,
 }
+
+
+class FormatProbe:
+    """A format_func preset that counts how often listview actually calls it.
+
+    listview consults format_func only for options without a usable `label`, so
+    a preset can be accepted and still change nothing on screen. Zero calls over
+    a non-empty option list is how the demo detects that — by asking the library
+    rather than inspecting the options, which would re-derive the label rule
+    demo-side (see the preset notes above).
+    """
+
+    def __init__(self, func):
+        self.func = func
+        self.calls = 0
+
+    def __call__(self, option):
+        self.calls += 1
+        return self.func(option)
 
 
 def make_on_change():

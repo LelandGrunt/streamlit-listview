@@ -1,5 +1,6 @@
 """Unit tests for the demo's pure logic modules (demo/ is not a package)."""
 import ast
+import json
 import math
 import sys
 from pathlib import Path
@@ -114,6 +115,56 @@ def test_fmt_type_badge_never_raises_on_unexpected_shapes():
         data.fmt_type_badge({"id": "orders", "text": None, "type": "Table"})
         == "orders"
     )
+
+
+def test_format_probe_passes_the_preset_through_and_counts_calls():
+    probe = data.FormatProbe(data.fmt_upper)
+    assert probe.calls == 0
+    assert probe("rome") == "ROME"
+    assert probe({"id": "paris"}) == "PARIS"
+    assert probe.calls == 2
+
+
+def test_format_probe_counts_only_the_options_listview_formats():
+    """The probe is how the demo tells an inert preset from a working one.
+
+    It must ask listview itself: an option with a usable `label` never reaches
+    format_func, while a label-less dict, a `label: None` dict and a scalar all
+    do. Reading the options demo-side would re-derive that rule.
+    """
+    from streamlit_listview._options import normalize_options
+
+    labelled = data.FormatProbe(data.fmt_upper)
+    normalize_options(data.CITIES, labelled)
+    assert labelled.calls == 0
+
+    mixed = data.FormatProbe(data.fmt_upper)
+    normalize_options(
+        [{"id": "berlin"}, {"id": "paris", "label": "Paris"}, "rome",
+         {"id": "oslo", "label": None}],
+        mixed,
+    )
+    assert mixed.calls == 3
+
+
+def test_fields_example_makes_every_preset_visible():
+    """The label-less example is what the demo loads to show a preset working,
+    so every preset has to change what its rows say. Numeric ids did not:
+    UPPERCASE, Title Case and Truncate of the id 1 all still read "1"."""
+    from streamlit_listview._options import normalize_options
+
+    app_source = (ROOT / "demo" / "app.py").read_text(encoding="utf-8")
+    options = json.loads(
+        ast.literal_eval(_module_constant(app_source, "CUSTOM_EXAMPLE_FIELDS"))
+    )
+
+    def labels(func):
+        return [item["label"] for item in normalize_options(options, func)[0]]
+
+    unformatted = labels(None)
+    for name, func in data.FORMAT_PRESETS.items():
+        if func is not None:
+            assert labels(func) != unformatted, name
 
 
 def test_make_on_change_returns_callable():
@@ -784,8 +835,6 @@ def test_data_sources_registry_keys_and_traits():
     assert list(dataset.DATA_SOURCES) == ["Built-in cities", "Custom", "Empty", "Large"]
     builtin = {name for name, s in dataset.DATA_SOURCES.items() if s.builtin}
     assert builtin == {"Built-in cities"}
-    explicit = {name for name, s in dataset.DATA_SOURCES.items() if s.labels_explicit}
-    assert explicit == {"Built-in cities", "Large"}
     large = dataset.DATA_SOURCES["Large"]
     assert large.sized and large.timed and large.snippet_comprehension
     assert dataset.DATA_SOURCES["Custom"].options_editor

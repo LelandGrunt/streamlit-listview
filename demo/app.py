@@ -312,14 +312,17 @@ CUSTOM_EXAMPLE_PAYLOAD = (
     "]"
 )
 
-# Rows inserted by the "Insert example with fields" button. Deliberately carry NO
-# `label`: an explicit label wins over format_func, so a labelled row would make
-# every preset inert. These feed the "Type badge (custom field)" preset, which
-# builds the label out of `text` and `type` — fields the widget never renders.
+# Rows inserted by the "Insert example with fields" button, and loaded by the
+# "Load an example without labels" button an inert preset offers. Deliberately
+# carry NO `label`: an explicit label wins over format_func, so a labelled row
+# would make every preset inert. `text` and `type` feed the "Type badge (custom
+# field)" preset, which builds the label out of fields the widget never renders;
+# the ids are words, not numbers, because the other presets transform the id —
+# and UPPERCASE, Title Case or Truncate of the id 1 all still read "1".
 CUSTOM_EXAMPLE_FIELDS = (
     "[\n"
-    '  {"id": 1, "text": "Orders", "type": "Table"},\n'
-    '  {"id": 2, "text": "OrdersView", "type": "View"}\n'
+    '  {"id": "orders", "text": "Orders", "type": "Table"},\n'
+    '  {"id": "orders_view", "text": "OrdersView", "type": "View"}\n'
     "]"
 )
 
@@ -327,6 +330,27 @@ CUSTOM_EXAMPLE_FIELDS = (
 def _insert_custom_example(text):
     """Fill the Custom options text area with an example row (button callback)."""
     st.session_state["cfg_options_text"] = text
+
+
+def _load_label_free_example():
+    """Switch Data to Custom with the label-less rows (button callback).
+
+    Offered next to the live widget, usually while the Data section is
+    off-screen, so it writes the persisted cfg values resolve_dataset reads
+    rather than relying on the Data widgets to carry them over.
+    """
+    cfg = st.session_state["demo_config"]
+    cfg["data_source"] = "Custom"
+    cfg["options_text"] = CUSTOM_EXAMPLE_FIELDS
+    # Drop both Data widgets' own state so each re-seeds from cfg when it next
+    # renders. Assigning the keys instead does not work: the source control
+    # seeds from default=cfg[...] (Streamlit warns about a widget given both),
+    # and a text-area key assigned while its widget is off-screen reaches the
+    # browser as the widget default — an EMPTY field on returning to Data —
+    # because only a value set in the same run as the render is pushed to the
+    # frontend. render_data's setdefault is such a same-run write.
+    st.session_state.pop("cfg_data_source", None)
+    st.session_state.pop("cfg_options_text", None)
 
 
 def _set_multi_default(values):
@@ -387,9 +411,10 @@ def render_data(cfg):
             on_click=_insert_custom_example,
             args=(CUSTOM_EXAMPLE_FIELDS,),
             help=(
-                "Rows with no `label`, carrying their own `text` and `type` "
-                "fields. Pick **Formatting → Type badge (custom field)** to see "
-                "`format_func` build each label out of those fields."
+                "Rows with no `label`, so every **Formatting** preset labels "
+                "them. They carry their own `text` and `type` fields: pick "
+                "**Type badge (custom field)** to see `format_func` build each "
+                "label out of those fields."
             ),
             width="stretch",
             key="cfg_insert_example_fields",
@@ -434,18 +459,25 @@ def render_basic(cfg, ids, groups):
         key="cfg_selection_mode",
     )
     if cfg["selection_mode"] == "single":
-        # None itself is the "no default" choice — kept out of the id namespace
-        # (rather than an in-band string sentinel) so a pasted Custom option
-        # whose id is literally "— none —" stays a normal, pickable default.
-        choices = [None, *ids]
-        prior = coerce_single_default(cfg["default"], ids)
+        # "No default" is the selectbox's own empty state — index=None, shown as
+        # the placeholder and cleared with its x — not a None entry among the
+        # options. Streamlit serializes a None *value* as "no selection", so a
+        # None option rendered as an EMPTY field whenever Streamlit pushed it:
+        # resetting an id that left the options (the "Load an example without
+        # labels" button swaps them while this section is on screen) or a key
+        # assigned below. Keeping None out of the options also keeps it out of
+        # the id namespace, so a pasted id "— none —" is a normal default.
+        #
+        # Driven through its key, like the multiselect below: seed from the
+        # persistent cfg default when the key was cleared while the section was
+        # off-screen, and drop an id that is no longer an option.
+        prior = st.session_state.get("cfg_default_single", cfg["default"])
+        st.session_state["cfg_default_single"] = coerce_single_default(prior, ids)
         cfg["default"] = st.selectbox(
             "Default",
-            choices,
-            index=choices.index(prior),
-            # str(v), not v: ids need not be strings, and selectbox's default
-            # format_func (str) is what rendered them before None joined the list.
-            format_func=lambda v: "— none —" if v is None else str(v),
+            ids,
+            index=None,
+            placeholder="— none —",
             help="Option pre-selected when the widget first mounts.",
             key="cfg_default_single",
         )
@@ -728,18 +760,8 @@ def render_formatting(cfg, ids, groups):
         ),
         key="cfg_format_preset",
     )
-    # Every option in the built-in and generated datasets carries an explicit
-    # `label`, which takes precedence over format_func — so a preset chosen there
-    # changes nothing on screen. Say so, rather than letting the control look broken.
-    if (
-        cfg["format_preset"] != "None"
-        and dataset.DATA_SOURCES[cfg["data_source"]].labels_explicit
-    ):
-        st.caption(
-            ":material/info: This dataset gives every option an explicit `label`, "
-            "which wins over `format_func`. Switch **Data → Custom** and paste "
-            "plain lines (or dicts without a `label`) to see the preset take effect."
-        )
+    # Whether the chosen preset changes anything is only known once listview
+    # has run, so render_demo reports an inert preset next to the live widget.
     cfg["on_change"] = st.toggle(
         "Change callback (on_change)",
         cfg["on_change"],
@@ -859,6 +881,9 @@ def render_demo():
         f"::r{st.session_state['demo_reset_nonce']}"
     )
     fmt = data.FORMAT_PRESETS[cfg["format_preset"]]
+    # The live call gets the preset wrapped, so the demo learns whether listview
+    # consulted it for any option (codegen still emits the bare preset).
+    fmt_probe = None if fmt is None else data.FormatProbe(fmt)
 
     # The live widget (and its "Live component" label) render into the chosen
     # target — the sidebar or the main demo column. Placement is NOT folded
@@ -878,7 +903,7 @@ def render_demo():
                 options,
                 selection_mode=cfg["selection_mode"],
                 default=cfg["default"],
-                format_func=fmt,
+                format_func=fmt_probe,
                 enable_search=cfg["enable_search"],
                 pin_search=cfg["pin_search"],
                 search_placeholder=cfg["search_placeholder"] or "Search",
@@ -908,6 +933,27 @@ def render_demo():
     with demo_col:
         if cfg["sidebar"]:
             st.caption("↩ The live widget is rendered in the sidebar.")
+
+        # A preset listview never called changed nothing on screen: every option
+        # carried its own label. Say so, rather than letting the control look
+        # broken, and offer rows it can label.
+        if fmt_probe is not None and options and fmt_probe.calls == 0:
+            st.warning(
+                f"The **{cfg['format_preset']}** preset has no effect here: every "
+                "option carries its own `label`, and an explicit label always wins "
+                "over `format_func`. The formatter only labels options without one.",
+                icon=":material/label_off:",
+            )
+            st.button(
+                "Load an example without labels",
+                icon=":material/dataset:",
+                on_click=_load_label_free_example,
+                help=(
+                    "Switch **Data** to **Custom** with rows that carry no "
+                    "`label`, so the preset labels them."
+                ),
+                key="demo_load_label_free_example",
+            )
 
         if source.empty_caption:
             st.caption(
