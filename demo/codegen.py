@@ -156,9 +156,8 @@ def build_snippet(config, options, builtin_dataset):
     defs = []  # function-definition blocks placed above the call
     head_kwargs = []  # raw-identifier kwargs: format_func, on_change
 
-    preset_name = config.get("format_preset", "None")
-    if preset_name != "None":
-        func = data.FORMAT_PRESETS[preset_name]
+    func = data.FORMAT_PRESETS.get(config.get("format_preset"))
+    if func is not None:
         # The preset's own source is the whole definition — that is a constraint
         # on the presets, not a convenience: only this one def is emitted, so a
         # preset that called a shared helper would NameError in the snippet the

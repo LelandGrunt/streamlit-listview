@@ -112,13 +112,13 @@ def fmt_type_badge(option):
     return str(text) if option.get("type") == "Table" else f"{text} 👓"
 
 
-# "None" => use listview's default (no formatter: the label is str(id)). Names
+# "No formatter" is not an entry: it is the Formatting picker's empty state
+# (None), which is also listview's own default (the label is str(id)). Names
 # must stay stable: codegen emits the source of the chosen function, so the
-# function name appears in the snippet, and the KEYS are persisted in
-# st.session_state and looked up with .index() — appending is safe, renaming
-# would raise on the next rerun of a live session.
+# function name appears in the snippet. The KEYS are persisted in
+# st.session_state and looked up with .get(), so a dropped or renamed key
+# degrades a live session to no formatter rather than raising.
 FORMAT_PRESETS = {
-    "None": None,
     "UPPERCASE": fmt_upper,
     "Title Case": fmt_title,
     "Bullet prefix": fmt_bullet,

@@ -66,7 +66,7 @@ DEFAULT_CONFIG = {
     "collapsed_groups": None,
     "sort": None,
     "sort_ascending": True,
-    "format_preset": "None",
+    "format_preset": None,
     "on_change": False,
 }
 
@@ -718,16 +718,31 @@ def render_groups(cfg, ids, groups):
 
 
 def render_sorting(cfg, ids, groups):
-    sort_choices = [None, "items", "groups", "both"]
+    # "No sort" is the selectbox's own empty state, as for the single-mode
+    # Default picker (see render_basic): an empty field is sort=None. A None
+    # option misrendered here as well — Streamlit treats a keyed selectbox whose
+    # stored value is None as index=None on the next rerun, so "— none —" grew
+    # a clear x that emptied the field to "Choose an option" for the same value.
+    #
+    # Always index=None, so the x stays available to clear a chosen sort; the
+    # key carries the value, seeded from cfg when it was cleared while the
+    # section was off-screen. Assigned on EVERY run, as the Default picker does,
+    # not setdefault-ed: only an assigned key is pushed to the browser, and with
+    # index=None nothing else tells a remounted field its value. Seeded once,
+    # quick section switches dropped that one push — the field came back empty
+    # while cfg kept the sort, and the next run read the empty field back.
+    sort_choices = ["items", "groups", "both"]
+    prior = st.session_state.get("cfg_sort", cfg["sort"])
+    st.session_state["cfg_sort"] = prior if prior in sort_choices else None
     cfg["sort"] = st.selectbox(
         "Sort",
         sort_choices,
-        index=sort_choices.index(cfg["sort"]),
-        format_func=lambda v: "— none —" if v is None else v,
+        index=None,
+        placeholder="— none —",
         help=(
             "Alphabetically sort items, group headers, or both "
             "(by displayed label / group name, case-insensitive). "
-            "None keeps input order."
+            "Clear it to keep input order."
         ),
         key="cfg_sort",
     )
@@ -744,12 +759,20 @@ def render_sorting(cfg, ids, groups):
 
 
 def render_formatting(cfg, ids, groups):
+    # Same empty state, driven the same way, as Sort (see render_sorting): an
+    # empty field is format_func=None, listview's default. A name a live session
+    # kept from an earlier preset list (the old "None" entry) seeds the empty
+    # state rather than an unknown value.
     preset_names = list(data.FORMAT_PRESETS)
+    prior = st.session_state.get("cfg_format_preset", cfg["format_preset"])
+    st.session_state["cfg_format_preset"] = (
+        prior if prior in preset_names else None
+    )
     cfg["format_preset"] = st.selectbox(
         "Label formatting (format_func)",
         preset_names,
-        index=preset_names.index(cfg["format_preset"]),
-        format_func=lambda name: "— none —" if name == "None" else name,
+        index=None,
+        placeholder="— none —",
         help=(
             "Transform how each option's label is displayed; the underlying value "
             "is unchanged. `format_func` receives the **whole option** — the dict "
@@ -880,7 +903,8 @@ def render_demo():
         f"demo_listview::{cfg['collapsed_groups']!r}::{cfg['default']!r}"
         f"::r{st.session_state['demo_reset_nonce']}"
     )
-    fmt = data.FORMAT_PRESETS[cfg["format_preset"]]
+    # .get: None is "no formatter", and so is a name no longer in the presets.
+    fmt = data.FORMAT_PRESETS.get(cfg["format_preset"])
     # The live call gets the preset wrapped, so the demo learns whether listview
     # consulted it for any option (codegen still emits the bare preset).
     fmt_probe = None if fmt is None else data.FormatProbe(fmt)

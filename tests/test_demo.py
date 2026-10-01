@@ -59,7 +59,6 @@ def test_format_presets_take_an_option():
     assert upper("Apple") == "APPLE"
     assert upper(7) == "7"
     assert upper({"id": "apple"}) == "APPLE"
-    assert data.FORMAT_PRESETS["None"] is None
     # the preset used by codegen must be named exactly `fmt_upper`
     assert upper.__name__ == "fmt_upper"
 
@@ -163,8 +162,7 @@ def test_fields_example_makes_every_preset_visible():
 
     unformatted = labels(None)
     for name, func in data.FORMAT_PRESETS.items():
-        if func is not None:
-            assert labels(func) != unformatted, name
+        assert labels(func) != unformatted, name
 
 
 def test_make_on_change_returns_callable():
@@ -332,7 +330,7 @@ _BASE_CFG = {
     "collapsed_groups": None,
     "sort": None,
     "sort_ascending": True,
-    "format_preset": "None",
+    "format_preset": None,
     "on_change": False,
 }
 _OPTS = [{"id": "berlin", "label": "Berlin", "group": "Germany"}]
@@ -402,6 +400,26 @@ def test_dependent_params_drive_skip_and_reset_in_agreement():
         assert reset == codegen._DEFAULTS[name]
 
 
+def test_no_formatter_is_the_pickers_empty_state_not_a_preset():
+    """No formatter is the Formatting picker's empty state (None), the same
+    None listview defaults format_func to — not an entry among the presets, so
+    every listed preset really formats and the default config picks none."""
+    assert all(callable(func) for func in data.FORMAT_PRESETS.values())
+    assert None not in data.FORMAT_PRESETS
+    assert "None" not in data.FORMAT_PRESETS
+
+
+@pytest.mark.parametrize("preset_name", [None, "None"])
+def test_snippet_without_a_known_preset_emits_no_format_func(preset_name):
+    """None is no formatter, and so is a name the presets no longer list — such
+    as the old "None" entry a live session can still carry in its config."""
+    code = codegen.build_snippet(
+        _cfg(format_preset=preset_name), _OPTS, builtin_dataset=False
+    )
+    assert "format_func" not in code
+    assert "def fmt_" not in code
+
+
 def test_snippet_format_preset_emits_def_and_kwarg():
     code = codegen.build_snippet(_cfg(format_preset="UPPERCASE"), _OPTS, builtin_dataset=False)
     assert "def fmt_upper(option):" in code
@@ -426,9 +444,7 @@ def test_snippet_format_preset_def_is_self_contained():
     assert namespace["fmt_upper"]("berlin") == "BERLIN"
 
 
-@pytest.mark.parametrize(
-    "preset_name", [n for n in data.FORMAT_PRESETS if n != "None"]
-)
+@pytest.mark.parametrize("preset_name", list(data.FORMAT_PRESETS))
 def test_every_emitted_preset_runs_standalone(preset_name):
     """Self-containment holds for EVERY preset, not just the one spot-checked above.
 
