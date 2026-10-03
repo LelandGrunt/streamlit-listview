@@ -1,4 +1,4 @@
-import { useCallback, useId, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, FC, MouseEvent } from "react";
 import type { FrontendRendererArgs } from "@streamlit/component-v2-lib";
 import type { Id, ListviewData, ListviewItem, ListviewState } from "./types";
@@ -15,6 +15,7 @@ import { useCollapse } from "./hooks/useCollapse";
 import { useScrollToItem } from "./hooks/useScrollToItem";
 import { useColorScheme } from "./hooks/useColorScheme";
 import { disabledIdSet, idKey, itemIdByKey } from "./utils/ids";
+import { reuseUnchangedItems, runsByKey } from "./utils/items";
 import { foldForMatch } from "./utils/text";
 
 // Module-level empty results for the "nothing to compute" paths below. Safe to
@@ -32,6 +33,28 @@ const NO_NEW_OPTIONS: ListviewItem[] = [];
 const NO_TARGET_IDS: Id[] = [];
 const NO_DISABLED_IDS: Set<Id> = new Set();
 const EMPTY_ID_MAP: Map<string, Id> = new Map();
+
+// A block renders its rows in keyed Fragment chunks, not as one flat run. When
+// an update brings many new rows into ONE parent at once — clearing or
+// backspacing the search, expanding a big group, options growing on a rerun —
+// React places each new row on its own and, for each, searches forward through
+// the following siblings for a settled DOM node to insert before
+// (`getHostSibling`). Across thousands of new siblings that search is O(k²):
+// clearing the search over 50k ungrouped rows took ~7 s (~40 s on a 4×-slowed
+// CPU), against ~0.85 s for the same rows grouped 100 to a block.
+//
+// A row's chunk is fixed by its place in the UNFILTERED list (`chunkOf` below),
+// never by the filtered rows: a filter then cannot move a row into another
+// chunk, so narrowing keeps every surviving row's DOM node, and the rows a
+// broadening filter brings back land either in a chunk that still holds a
+// settled survivor — which ends each sibling search within that chunk — or in a
+// wholly new chunk, inserted with one search for all of its rows. (Keying a
+// chunk by its first FILTERED row instead remounted the survivors on every
+// scattered narrowing keystroke: 2–3× slower at 50k.) Fragments add no DOM, so
+// rows stay direct children of their block, which scrollToId's sticky-header
+// check and the role="group" structure rely on. 100 is the group size that
+// measured fine.
+const ROW_CHUNK_SIZE = 100;
 
 export interface ListviewProps {
   data: ListviewData;
@@ -210,6 +233,18 @@ export const Listview: FC<ListviewProps> = ({
   // the help tooltip can match Streamlit's themed tooltip surface.
   const colorScheme = useColorScheme(rootRef);
 
+  // The caller's options, with every item unchanged since the previous render
+  // kept as the previous render's OBJECT — and the previous array itself when
+  // nothing changed. Each rerun ships the options as freshly parsed JSON, so
+  // reading `data.items` directly made every rerun of the app (any widget, not
+  // just this one) recompute every memo below that is keyed on the items and
+  // re-render every row: O(N) per rerun for a list whose options never moved.
+  // Read the options through `items` only, never `data.items`. The render-body
+  // ref write follows the prevNewOptionItemsRef pattern below.
+  const prevItemsRef = useRef<ListviewItem[]>(data.items);
+  const items = reuseUnchangedItems(prevItemsRef.current, data.items);
+  prevItemsRef.current = items;
+
   // What a fresh mount seeds the selection from: the persisted Python-side
   // selection when this mount is a remount that kept the widget state (a keyed
   // instance moved between st.sidebar and the main body — the element id drops
@@ -220,7 +255,7 @@ export const Listview: FC<ListviewProps> = ({
   const seedSelection = data.state_selection ?? data.default_ids;
 
   const selection = useSelection({
-    items: data.items,
+    items,
     selectionMode: data.selection_mode,
     maxSelections: data.max_selections,
     acceptNewOptions: data.accept_new_options,
@@ -246,7 +281,7 @@ export const Listview: FC<ListviewProps> = ({
     // (accept_new_options lets `default="7"` past the unknown-id check while
     // `options` holds the int 7), which is exactly the case a raw comparison
     // would call unknown.
-    const known = itemIdByKey(data.items);
+    const known = itemIdByKey(items);
     return seedSelection
       .filter((id) => !known.has(idKey(id)))
       .map((id) => newOptionRow(id));
@@ -260,11 +295,11 @@ export const Listview: FC<ListviewProps> = ({
   // NO_NEW_OPTIONS before reading this, so with the feature off (the common
   // case) the walk is skipped entirely.
   const knownIds = useMemo(
-    () => (data.accept_new_options ? itemIdByKey(data.items) : EMPTY_ID_MAP),
-    [data.accept_new_options, data.items],
+    () => (data.accept_new_options ? itemIdByKey(items) : EMPTY_ID_MAP),
+    [data.accept_new_options, items],
   );
 
-  // Synthetic rows for ids absent from data.items, surfaced only when
+  // Synthetic rows for ids absent from items, surfaced only when
   // accept_new_options is on: the persisted added options PLUS any other
   // selected-but-unknown id (e.g. a stale value left over when the caller
   // shrank `options`).
@@ -319,8 +354,8 @@ export const Listview: FC<ListviewProps> = ({
   prevNewOptionItemsRef.current = newOptionItems;
 
   const allItems = useMemo(
-    () => [...data.items, ...newOptionItems],
-    [data.items, newOptionItems],
+    () => [...items, ...newOptionItems],
+    [items, newOptionItems],
   );
 
   const { visibleItems, isFiltering } = useFilter({ items: allItems, query });
@@ -329,12 +364,12 @@ export const Listview: FC<ListviewProps> = ({
     () =>
       Array.from(
         new Set(
-          data.items
+          items
             .map((i) => i.group)
             .filter((g): g is string => g != null),
         ),
       ),
-    [data.items],
+    [items],
   );
   const collapse = useCollapse({
     collapsibleGroups: data.collapsible_groups,
@@ -363,17 +398,41 @@ export const Listview: FC<ListviewProps> = ({
     return [...groupItems(known), ...groupItems(added)];
   }, [visibleItems, newOptionItems]);
 
+  // Each row's render chunk: its place among ALL rows, filtered or not, in
+  // steps of ROW_CHUNK_SIZE (see there for why it must not follow the filter).
+  // Keyed by the item object, which the filter and the grouping pass through
+  // unchanged. Rebuilt only when the rows themselves change, not per keystroke.
+  const chunkOf = useMemo(() => {
+    const byItem = new Map<ListviewItem, number>();
+    allItems.forEach((item, i) => {
+      byItem.set(item, Math.floor(i / ROW_CHUNK_SIZE));
+    });
+    return byItem;
+  }, [allItems]);
+
   // Each block plus whether it renders collapsed (a group is only visually
-  // collapsed while no search is active — search overrides collapse). Computed
-  // once so the render below and focusableItems cannot disagree.
+  // collapsed while no search is active — search overrides collapse) and the
+  // chunks its rows render in. Computed once so the render below and
+  // focusableItems cannot disagree, and so the chunks are split only when the
+  // blocks change rather than on every render (each arrow key, each click).
+  // A block keeps the order of `allItems`, so its chunk numbers never decrease
+  // and each one is a single run — unique as a React key within the block.
   const renderBlocks = useMemo(
     () =>
-      renderGroups.map((group) => ({
-        group,
-        collapsed:
-          group.name != null && !isFiltering && collapse.isCollapsed(group.name),
-      })),
-    [renderGroups, isFiltering, collapse],
+      renderGroups.map((group) => {
+        const collapsed =
+          group.name != null &&
+          !isFiltering &&
+          collapse.isCollapsed(group.name);
+        return {
+          group,
+          collapsed,
+          chunks: collapsed
+            ? []
+            : runsByKey(group.items, (item) => chunkOf.get(item) as number),
+        };
+      }),
+    [renderGroups, isFiltering, collapse, chunkOf],
   );
 
   // Items that can take keyboard focus: the rendered blocks flattened, minus
@@ -403,7 +462,7 @@ export const Listview: FC<ListviewProps> = ({
   // merely wasted, it was unreachable-by-construction.
   //
   // Disabled-id membership for that exclusion (useSelection keeps its own private
-  // set over data.items; the scope needs one over allItems, so the
+  // set over items; the scope needs one over allItems, so the
   // accept_new_options rows are covered too). Its OWN memo, keyed on allItems,
   // rather than built inside targetIds: the disabled set cannot change with the
   // query, so folding it in there rebuilt a whole 5000-entry Set on every search
@@ -763,7 +822,7 @@ export const Listview: FC<ListviewProps> = ({
               {data.placeholder ?? ""}
             </div>
           ) : (
-            renderBlocks.map(({ group, collapsed }, index) => (
+            renderBlocks.map(({ group, chunks }, index) => (
               <div
                 className="listview-group"
                 // Keyed by POSITION, never by the group name: the name is
@@ -803,19 +862,22 @@ export const Listview: FC<ListviewProps> = ({
                     onToggle={() => collapse.toggle(group.name as string)}
                   />
                 )}
-                {!collapsed &&
-                  group.items.map((item) => (
-                    <ListItem
-                      key={idKey(item.id)}
-                      item={item}
-                      domId={optionDomId(item.id)}
-                      selected={selection.isSelected(item.id)}
-                      disabled={Boolean(item.disabled) || widgetDisabled}
-                      focused={focusedId === item.id}
-                      muted={selection.isMuted(item.id)}
-                      onSelect={onItemClick}
-                    />
-                  ))}
+                {chunks.map((run) => (
+                  <Fragment key={run.key}>
+                    {run.items.map((item) => (
+                      <ListItem
+                        key={idKey(item.id)}
+                        item={item}
+                        domId={optionDomId(item.id)}
+                        selected={selection.isSelected(item.id)}
+                        disabled={Boolean(item.disabled) || widgetDisabled}
+                        focused={focusedId === item.id}
+                        muted={selection.isMuted(item.id)}
+                        onSelect={onItemClick}
+                      />
+                    ))}
+                  </Fragment>
+                ))}
               </div>
             ))
           )}

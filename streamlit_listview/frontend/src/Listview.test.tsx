@@ -1358,6 +1358,98 @@ describe("group blocks", () => {
     expect(within(groups[0]).queryByText("Loose")).toBeNull();
   });
 
+  describe("rows beyond one render chunk", () => {
+    // A block renders its rows in chunks of 100 (the cure for React's quadratic
+    // sibling search when thousands of rows enter one parent at once). 250 rows
+    // span three chunks, the last one partial, and the chunks must stay
+    // invisible: the same rows, in the same order, under the same parent — also
+    // while the filter moves rows across chunk boundaries.
+    const rowLabel = (i: number) => `Row ${String(i).padStart(3, "0")}`;
+    const rowLabels = (from: number, to: number) =>
+      Array.from({ length: to - from }, (_, k) => rowLabel(from + k));
+    const rows = (group?: string) =>
+      Array.from({ length: 250 }, (_, i) => ({
+        id: `r${i}`,
+        label: rowLabel(i),
+        ...(group === undefined ? {} : { group }),
+      }));
+    const shown = () =>
+      screen.queryAllByRole("option").map((o) => o.textContent);
+
+    it("renders every row in order, all children of the one block", () => {
+      render(
+        <Listview data={baseData({ items: rows() })} setStateValue={vi.fn()} />,
+      );
+      const options = screen.getAllByRole("option");
+      expect(options.map((o) => o.textContent)).toEqual(rowLabels(0, 250));
+      expect(new Set(options.map((o) => o.parentElement)).size).toBe(1);
+    });
+
+    it("keeps every row once and in order as the filter crosses chunk boundaries", () => {
+      const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+      render(
+        <Listview
+          data={baseData({ items: rows(), enable_search: true })}
+          setStateValue={vi.fn()}
+        />,
+      );
+      const search = screen.getByTestId("stListviewSearch");
+      for (const [query, expected] of [
+        ["Row 1", rowLabels(100, 200)],
+        ["", rowLabels(0, 250)],
+        ["Row 24", rowLabels(240, 250)],
+        ["Row 2", rowLabels(200, 250)],
+        ["", rowLabels(0, 250)],
+      ] as const) {
+        fireEvent.change(search, { target: { value: query } });
+        expect(shown()).toEqual(expected);
+        const ids = screen.getAllByRole("option").map((o) => o.id);
+        expect(new Set(ids).size).toBe(ids.length);
+      }
+      expect(errors).not.toHaveBeenCalled();
+      errors.mockRestore();
+    });
+
+    it("keeps each surviving row's DOM node while the filter narrows and clears", () => {
+      // A row's chunk is fixed by its place in the UNFILTERED list. Were it
+      // derived from the filtered rows, narrowing would move survivors into
+      // other chunks, and React would destroy and rebuild every one of them on
+      // each keystroke instead of keeping them.
+      render(
+        <Listview
+          data={baseData({ items: rows(), enable_search: true })}
+          setStateValue={vi.fn()}
+        />,
+      );
+      const search = screen.getByTestId("stListviewSearch");
+      const row150 = () => screen.getByText("Row 150").closest('[role="option"]');
+      const node = row150();
+      for (const query of ["5", "Row 15", "Row 150", ""]) {
+        fireEvent.change(search, { target: { value: query } });
+        expect(row150()).toBe(node);
+      }
+    });
+
+    it("brings every row of a long group back in order when it is expanded", async () => {
+      const user = userEvent.setup();
+      render(
+        <Listview
+          data={baseData({ items: rows("G"), collapsible_groups: true })}
+          setStateValue={vi.fn()}
+        />,
+      );
+      const header = screen.getByRole("button", { name: /G/ });
+      await user.click(header);
+      expect(shown()).toEqual([]);
+      await user.click(header);
+      expect(shown()).toEqual(rowLabels(0, 250));
+      const group = screen.getByRole("group");
+      for (const option of screen.getAllByRole("option")) {
+        expect(option.parentElement).toBe(group);
+      }
+    });
+  });
+
   it("keeps the collapsible header a real button (it cannot be aria-hidden)", () => {
     render(
       <Listview

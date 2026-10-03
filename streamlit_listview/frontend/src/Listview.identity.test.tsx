@@ -22,6 +22,58 @@ vi.mock("./utils/text", async (importOriginal) => {
   };
 });
 
+describe("items referential identity across reruns", () => {
+  // Every Streamlit rerun hands the renderer freshly parsed JSON: equal content,
+  // new objects. The fold pass is keyed on the items array's identity, so it
+  // re-running is the observable form of "the rerun invalidated the whole
+  // filter/group/scope chain" (and handed every row a new `item` prop).
+  const fruit = () => [
+    { id: "a", label: "Apple" },
+    { id: "b", label: "Banana" },
+  ];
+  const data = (items: { id: string; label: string }[]) =>
+    makeData({ items, enable_search: true });
+
+  it("a rerun with unchanged options does not re-fold the labels", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <Listview data={data(fruit())} setStateValue={vi.fn()} />,
+    );
+    await user.type(screen.getByTestId("stListviewSearch"), "an");
+    expect(foldCalls).toHaveBeenCalledWith("Banana"); // wiring guard
+    foldCalls.mockClear();
+
+    rerender(<Listview data={data(fruit())} setStateValue={vi.fn()} />);
+
+    expect(screen.getByText("Banana")).toBeInTheDocument();
+    expect(foldCalls).not.toHaveBeenCalledWith("Apple");
+    expect(foldCalls).not.toHaveBeenCalledWith("Banana");
+  });
+
+  it("a rerun with a changed option re-folds and renders the new label", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <Listview data={data(fruit())} setStateValue={vi.fn()} />,
+    );
+    await user.type(screen.getByTestId("stListviewSearch"), "an");
+    foldCalls.mockClear();
+
+    rerender(
+      <Listview
+        data={data([
+          { id: "a", label: "Apple" },
+          { id: "b", label: "Bandana" },
+        ])}
+        setStateValue={vi.fn()}
+      />,
+    );
+
+    expect(foldCalls).toHaveBeenCalledWith("Apple");
+    expect(screen.getByText("Bandana")).toBeInTheDocument();
+    expect(screen.queryByText("Banana")).not.toBeInTheDocument();
+  });
+});
+
 describe("newOptionItems referential identity", () => {
   it("a click that cannot change the synthetic rows does not invalidate the fold/filter chain", async () => {
     const user = userEvent.setup();
