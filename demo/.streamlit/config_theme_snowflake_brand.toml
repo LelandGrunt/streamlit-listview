@@ -3,8 +3,11 @@ base = "light"
 baseFontSize = 14
 baseFontWeight = 400
 font = "Lato:https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap"
-headingFont = "Mulish:https://fonts.googleapis.com/css2?family=Mulish:wght@600;700;800&display=swap"
+headingFont = "Lato:https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap"
 codeFont = "'Space Mono':https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap"
+showWidgetBorder = true
+baseRadius = "6px"
+buttonRadius = "full"
 
 [theme.light]
 primaryColor = "#11567F"
@@ -17,12 +20,9 @@ codeTextColor = "#24323D"
 borderColor = "#D4DEE3"
 dataframeBorderColor = "#D4DEE3"
 dataframeHeaderBackgroundColor = "#EEF4F8"
-showWidgetBorder = true
-baseRadius = "6px"
-buttonRadius = "6px"
 
 [theme.dark]
-primaryColor = "#11567F"
+primaryColor = "#29B5E8"
 backgroundColor = "#08191F"
 secondaryBackgroundColor = "#0F2B35"
 textColor = "#E6EEF2"
@@ -32,6 +32,3 @@ codeTextColor = "#DCE9EE"
 borderColor = "#1F3A45"
 dataframeBorderColor = "#1F3A45"
 dataframeHeaderBackgroundColor = "#0F2B35"
-showWidgetBorder = false
-baseRadius = "8px"
-buttonRadius = "8px"

@@ -1,0 +1,28 @@
+{
+    "Themes": [
+        {
+            "Name": "a_customer",
+            "DisplayName": "A Customer Theme",
+            "Description": "A theme used by a customer.",
+            "FileName": "config_theme_a_customer.toml"
+        },
+        {
+            "Name": "databricks_brand",
+            "DisplayName": "Databricks Brand",
+            "Description": "A theme inspired by the Databricks Brand Guidelines.",
+            "FileName": "config_theme_databricks_brand.toml"
+        },
+        {
+            "Name": "databricks_ui",
+            "DisplayName": "Databricks UI",
+            "Description": "A theme inspired by the Databricks UI.",
+            "FileName": "config_theme_databricks_ui.toml"
+        },
+        {
+            "Name": "snowflake_brand",
+            "DisplayName": "Snowflake Brand",
+            "Description": "A theme inspired by the Snowflake Brand Guidelines.",
+            "FileName": "config_theme_snowflake_brand.toml"
+        }
+    ]
+}

@@ -1,7 +1,9 @@
 """listview interactive demo — run with: streamlit run demo/app.py"""
 
+import os
 import sys
 import time
+from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
@@ -18,6 +20,7 @@ from codegen import DEPENDENT_PARAMS, build_snippet  # noqa: E402
 from parsing import coerce_multi_default, coerce_single_default, has_selection  # noqa: E402
 
 import dataset  # noqa: E402
+import themes  # noqa: E402
 
 from streamlit_listview import listview  # noqa: E402
 
@@ -82,6 +85,30 @@ st.session_state.setdefault("demo_reset_nonce", 0)
 # True for the one run right after a reset, so the demo can explain a re-seeded
 # Default (the list won't be empty when a Default is configured).
 st.session_state.setdefault("demo_just_reset", False)
+
+# The switchable themes: every demo/.streamlit/config_theme_<name>.toml, shown
+# under its display name from config_themes.json (or its bare name without one).
+THEMES = themes.discover_themes(DEMO_DIR / ".streamlit")
+THEME_LABELS = themes.theme_labels(DEMO_DIR / ".streamlit")
+# The Theme picker's entry for "no theme file". A real option, not None: a
+# selectbox renders a None value as an empty field, not as an entry.
+DEFAULT_THEME = "Streamlit default"
+# A deployment can switch the picker off (LISTVIEW_DEMO_THEME_SWITCHER=0, e.g. as
+# a Community Cloud secret). Read on every rerun, so a changed secret applies
+# without a restart.
+THEME_SWITCHER = themes.switcher_enabled(os.environ)
+
+# Streamlit sends a run's theme before the script (and its widget callbacks) has
+# run, so a theme switched during this run reaches the browser only with the
+# next one: either this session's own pick (_switch_theme) or the server theme
+# falling back to the default, THEME_TTL after the last switch or at once when
+# the picker was switched off.
+if themes.SERVER_THEME.expire(
+    now=datetime.now(timezone.utc), enabled=THEME_SWITCHER
+):
+    st.rerun()
+if st.session_state.pop("demo_theme_switched", False):
+    st.rerun()
 
 SIGNATURE = """def listview(
     label: str,
@@ -358,6 +385,21 @@ def _set_multi_default(values):
     st.session_state["cfg_default_multi"] = list(values)
 
 
+def _switch_theme():
+    """Apply the Theme picker's choice to the whole server (selectbox callback)."""
+    # Callbacks see the raw client value before the selectbox validates it, so
+    # switch only to a theme this deployment offers.
+    name = st.session_state["cfg_theme"]
+    if not THEME_SWITCHER or (name != DEFAULT_THEME and name not in THEMES):
+        return
+    if name == DEFAULT_THEME:
+        themes.SERVER_THEME.reset()
+    else:
+        options = themes.flatten_theme(THEMES[name].read_text(encoding="utf-8"))
+        themes.SERVER_THEME.apply(name, options, now=datetime.now(timezone.utc))
+    st.session_state["demo_theme_switched"] = True
+
+
 def _section_header(icon, title):
     """Render the active config section's bold icon + title header."""
     st.markdown(f"**:material/{icon}: {title}**")
@@ -597,6 +639,62 @@ def render_appearance(cfg, ids, groups):
     )
 
 
+def render_theme(cfg, ids, groups):
+    server = themes.SERVER_THEME
+    st.info(
+        "**A showcase, not part of the listview API.** Switching the theme "
+        "doesn't change the generated code: it only shows that the listview is "
+        "themeable, and how its style adapts to the theme Streamlit is "
+        "configured with.",
+        icon=":material/info:",
+    )
+    # The picker shows the SERVER's theme, never this session's last pick:
+    # another session may have switched since, and a stale pick must not read as
+    # the theme on screen. Only a change made here (on_change) switches it.
+    st.session_state["cfg_theme"] = (
+        DEFAULT_THEME if server.active is None else server.active
+    )
+    st.selectbox(
+        "Theme",
+        [DEFAULT_THEME, *THEMES],
+        format_func=lambda name: THEME_LABELS.get(name, name),
+        help=(
+            "A theme file from `demo/.streamlit/` (`config_theme_<name>.toml`), "
+            "named in `config_themes.json`. "
+            "The listview has no theme parameter: it inherits the theme Streamlit "
+            "is configured with."
+        ),
+        key="cfg_theme",
+        on_change=_switch_theme,
+    )
+    st.caption(
+        ":material/public: Applies to the **whole server**: every open session "
+        "picks it up on its next rerun, because a Streamlit theme is server "
+        "config, not session state."
+    )
+    if server.active is None:
+        st.caption(
+            "Streamlit's built-in theme, plus whatever `.streamlit/config.toml` "
+            "sets. Pick a theme file to re-theme the app and watch the listview "
+            "follow."
+        )
+        return
+
+    st.caption(
+        f":material/schedule: Falls back to *Streamlit default* on "
+        f"{server.expires_at:%Y-%m-%d %H:%M} UTC, "
+        f"{themes.THEME_TTL.total_seconds() / 3600:g}\u00a0h after the last switch."
+    )
+    text = THEMES[server.active].read_text(encoding="utf-8")
+    if themes.theme_variants(themes.flatten_theme(text)) == ["light", "dark"]:
+        st.caption(
+            ":material/contrast: This theme defines a light and a dark variant: "
+            "switch between them in the app menu (**⋮**, top right)."
+        )
+    st.markdown("Saved as `.streamlit/config.toml`, this file is the whole setup:")
+    st.code(text, language="toml")
+
+
 def render_layout(cfg, ids, groups):
     cfg["sidebar"] = st.toggle(
         "Render widget in sidebar",
@@ -814,6 +912,7 @@ SECTIONS = {
     "Groups": ("folder", render_groups),
     "Sorting": ("sort", render_sorting),
     "Formatting": ("bolt", render_formatting),
+    "Theme": ("format_paint", render_theme),
 }
 
 
@@ -832,9 +931,12 @@ def render_demo():
     # floor.
     with config_col, st.container():
         st.subheader(":material/tune: Configuration")
+        # A switched-off Theme picker drops out of the pills; a session still
+        # on it falls back to the default section (st.pills resets a value
+        # that is no longer among its options).
         section = st.pills(
             "Configuration section",
-            list(SECTIONS),
+            [name for name in SECTIONS if THEME_SWITCHER or name != "Theme"],
             default="Basic",
             selection_mode="single",
             required=True,

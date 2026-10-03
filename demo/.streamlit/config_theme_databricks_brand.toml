@@ -2,51 +2,33 @@
 base = "light"
 baseFontSize = 14
 baseFontWeight = 400
-
-[theme.light]
-primaryColor = "#FF3621"
-backgroundColor = "#F9F7F4"
-secondaryBackgroundColor = "#EEEDE9"
-textColor = "#1B3139"
-linkColor = "#FF3621"
-codeBackgroundColor = "#EEEDE9"
-codeTextColor = "#1B3139"
-borderColor = "#E1DFD9"
-dataframeBorderColor = "#E1DFD9"
-dataframeHeaderBackgroundColor = "#EEEDE9"
+font = "'DM Sans':https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap"
+codeFont = "'DM Mono':https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&display=swap"
+headingFont = "'DM Sans':https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap"
 showWidgetBorder = true
 baseRadius = "6px"
 buttonRadius = "6px"
-font = "DM Sans, sans-serif"
-codeFont = "DM Mono, monospace"
-headingFont = "DM Sans, sans-serif"
+
+[theme.light]
+primaryColor = "#BD2B26"
+backgroundColor = "#F9F7F4"
+secondaryBackgroundColor = "#EEEDE9"
+textColor = "#1B3139"
+linkColor = "#BD2B26"
+codeBackgroundColor = "#EEEDE9"
+codeTextColor = "#1B3139"
+borderColor = "#DCE0E2"
+dataframeBorderColor = "#DCE0E2"
+dataframeHeaderBackgroundColor = "#EEEDE9"
 
 [theme.dark]
-primaryColor = "#FF6047"
-backgroundColor = "#0F1E24"
+primaryColor = "#FF5F46"
+backgroundColor = "#0B2026"
 secondaryBackgroundColor = "#1B3139"
-textColor = "#EDE9DF"
-linkColor = "#FF6047"
-codeBackgroundColor = "#15262D"
-codeTextColor = "#EDE9DF"
-borderColor = "#243A41"
-dataframeBorderColor = "#243A41"
+textColor = "#EEEDE9"
+linkColor = "#FF5F46"
+codeBackgroundColor = "#1B3139"
+codeTextColor = "#EEEDE9"
+borderColor = "#303F47"
+dataframeBorderColor = "#303F47"
 dataframeHeaderBackgroundColor = "#1B3139"
-showWidgetBorder = false
-baseRadius = "8px"
-buttonRadius = "8px"
-font = "DM Sans, sans-serif"
-codeFont = "DM Mono, monospace"
-headingFont = "DM Sans, sans-serif"
-
-[[theme.fontFaces]]
-family = "DM Sans"
-url = "https://fonts.gstatic.com/s/dmsans/v15/rP2tp2ywxg089UriI5-g4vlH9VoD8CmcqZG40F9JadbnoEwAop9wAA.woff2"
-weight = "400 700"
-style = "normal"
-
-[[theme.fontFaces]]
-family = "DM Mono"
-url = "https://fonts.gstatic.com/s/dmmono/v14/aFTU7PB1QTsUX8KYthSQBK6PloUg.woff2"
-weight = "400 500"
-style = "normal"

@@ -1,22 +1,27 @@
 [theme]
 font = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'"
-borderColor = "#c0cdd8"
+baseFontSize = 13
+headingFontWeights = 600
 showWidgetBorder = true
+baseRadius = "4px"
+buttonRadius = "4px"
 
 [theme.light]
 primaryColor = "#2272b4"
 backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#f6f7f9"
-textColor = "#000000"
-borderColor = "#e8ecf0"
-dataframeBorderColor = "#e8ecf0"
-dataframeHeaderBackgroundColor = "#f6f7f9"
+secondaryBackgroundColor = "#F7F7F7"
+textColor = "#11171C"
+linkColor = "#2272b4"
+borderColor = "#CBCBCB"
+dataframeBorderColor = "#EBEBEB"
+dataframeHeaderBackgroundColor = "#FFFFFF"
 
 [theme.dark]
-primaryColor = "#2272b4"
+primaryColor = "#4299E0"
 backgroundColor = "#11171C"
 secondaryBackgroundColor = "#1f272d"
-textColor = "#FFFFFF"
-borderColor = "#1f272d"
+textColor = "#E8ECF0"
+linkColor = "#8ACAFF"
+borderColor = "#37444F"
 dataframeBorderColor = "#1f272d"
-dataframeHeaderBackgroundColor = "#1f272d"
+dataframeHeaderBackgroundColor = "#11171C"

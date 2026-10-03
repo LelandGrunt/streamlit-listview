@@ -3,6 +3,7 @@ import ast
 import json
 import math
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,7 @@ import data  # noqa: E402
 import parsing  # noqa: E402
 import codegen  # noqa: E402
 import dataset  # noqa: E402
+import themes  # noqa: E402
 
 
 def test_dataset_shape():
@@ -1069,3 +1071,304 @@ def test_api_reference_documents_the_real_defaults():
     assert _kwonly_defaults(sig, "listview") == _kwonly_defaults(
         listview_source, "listview"
     )
+
+
+# --- themes: the server-wide theme switcher ----------------------------------
+
+_SHIPPED_THEMES = ROOT / "demo" / ".streamlit"
+_T0 = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
+
+
+@pytest.fixture
+def theme_config():
+    """Streamlit's config is process-global: put every theme option back.
+
+    Yields the config module plus a snapshot of each theme option's value, so a
+    test compares against whatever this process started with (a user-level
+    ~/.streamlit/config.toml may well set some) rather than assuming None.
+    """
+    from streamlit import config
+
+    saved = {
+        key: (opt.value, opt.where_defined)
+        for key, opt in config.get_config_options().items()
+        if key.startswith("theme.")
+    }
+    yield config, {key: value for key, (value, _) in saved.items()}
+    for key, (value, where) in saved.items():
+        config.set_option(key, value, where)
+
+
+def test_discover_themes_finds_only_theme_files_sorted_by_name(tmp_path):
+    for name in ("config_theme_zeta.toml", "config_theme_alpha.toml"):
+        (tmp_path / name).write_text("[theme]\n", encoding="utf-8")
+    # config.toml is what Streamlit reads at boot, not a switchable theme.
+    (tmp_path / "config.toml").write_text("", encoding="utf-8")
+    (tmp_path / "secrets.toml").write_text("", encoding="utf-8")
+
+    found = themes.discover_themes(tmp_path)
+
+    assert list(found) == ["alpha", "zeta"]
+    assert found["alpha"] == tmp_path / "config_theme_alpha.toml"
+
+
+def test_discover_themes_finds_the_shipped_files():
+    assert list(themes.discover_themes(_SHIPPED_THEMES)) == [
+        "a_customer",
+        "databricks_brand",
+        "databricks_ui",
+        "snowflake_brand",
+    ]
+
+
+def test_theme_labels_maps_each_name_to_its_display_name(tmp_path):
+    (tmp_path / themes.THEME_LABELS_FILE).write_text(
+        json.dumps(
+            {
+                "Themes": [
+                    {
+                        "Name": "alpha",
+                        "DisplayName": "Alpha Theme",
+                        "Description": "Not shown in the picker.",
+                        "FileName": "config_theme_alpha.toml",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert themes.theme_labels(tmp_path) == {"alpha": "Alpha Theme"}
+
+
+def test_shipped_theme_labels_name_exactly_the_shipped_files():
+    """Every theme file gets its display name, and every entry its file: an
+    entry naming no file is dead, and a file without one shows its bare name."""
+    found = themes.discover_themes(_SHIPPED_THEMES)
+    manifest = json.loads(
+        (_SHIPPED_THEMES / themes.THEME_LABELS_FILE).read_text(encoding="utf-8")
+    )
+
+    assert set(themes.theme_labels(_SHIPPED_THEMES)) == set(found)
+    for entry in manifest["Themes"]:
+        assert entry["FileName"] == found[entry["Name"]].name
+
+
+def test_flatten_theme_spells_streamlit_option_keys():
+    text = """
+[theme]
+base = "light"
+headingFontSizes = ["2rem", "1.5rem"]
+
+[theme.light]
+primaryColor = "#111111"
+
+[theme.dark.sidebar]
+backgroundColor = "#222222"
+
+[[theme.fontFaces]]
+family = "DM Sans"
+url = "https://example.com/dm.woff2"
+"""
+    assert themes.flatten_theme(text) == {
+        "theme.base": "light",
+        "theme.headingFontSizes": ["2rem", "1.5rem"],
+        "theme.light.primaryColor": "#111111",
+        "theme.dark.sidebar.backgroundColor": "#222222",
+        # An array of tables is the option's value, not a nested section.
+        "theme.fontFaces": [
+            {"family": "DM Sans", "url": "https://example.com/dm.woff2"}
+        ],
+    }
+
+
+def test_flatten_theme_drops_everything_outside_the_theme_table():
+    # Switching a theme must never reach the server/client/... options.
+    text = '[server]\nport = 1\n\n[client]\ntoolbarMode = "minimal"\n'
+    assert themes.flatten_theme(text) == {}
+
+
+@pytest.mark.parametrize("name", list(themes.discover_themes(_SHIPPED_THEMES)))
+def test_every_shipped_theme_sets_only_real_streamlit_options(name, theme_config):
+    """A typo in a theme file would only log a warning and silently drop the
+    color — so pin each shipped key against Streamlit's own option table."""
+    config, _ = theme_config
+    path = themes.discover_themes(_SHIPPED_THEMES)[name]
+    options = themes.flatten_theme(path.read_text(encoding="utf-8"))
+
+    assert options, f"{path.name} sets no theme option"
+    unknown = set(options) - set(config.get_config_options())
+    assert not unknown, f"{path.name} sets unknown options: {sorted(unknown)}"
+
+
+@pytest.mark.parametrize("name", list(themes.discover_themes(_SHIPPED_THEMES)))
+def test_every_shipped_theme_builds_a_streamlit_theme(name, theme_config):
+    """Real keys are not enough: a value Streamlit rejects — say a Google Fonts
+    URL naming two families — raises while the theme is BUILT, and once the
+    switcher has applied it that happens on every rerun of every session. So
+    build each shipped theme the way AppSession does, section by section."""
+    from streamlit.proto.NewSession_pb2 import CustomThemeConfig
+    from streamlit.runtime.app_session import _populate_theme_msg
+
+    path = themes.discover_themes(_SHIPPED_THEMES)[name]
+    options = themes.flatten_theme(path.read_text(encoding="utf-8"))
+    themes.ServerTheme().apply(name, options, now=_T0)
+
+    msg = CustomThemeConfig()
+    for section, part in [
+        ("theme", msg),
+        ("theme.light", msg.light),
+        ("theme.dark", msg.dark),
+        ("theme.sidebar", msg.sidebar),
+        ("theme.light.sidebar", msg.light.sidebar),
+        ("theme.dark.sidebar", msg.dark.sidebar),
+    ]:
+        _populate_theme_msg(part, section)
+
+
+@pytest.mark.parametrize(
+    "options, expected",
+    [
+        ({"theme.primaryColor": "#000000"}, []),
+        ({"theme.light.primaryColor": "#000000"}, ["light"]),
+        (
+            {"theme.dark.textColor": "#ffffff", "theme.light.textColor": "#000000"},
+            ["light", "dark"],
+        ),
+        # A sidebar-only override is no variant of its own.
+        ({"theme.sidebar.backgroundColor": "#000000"}, []),
+    ],
+)
+def test_theme_variants_lists_the_light_and_dark_sections(options, expected):
+    assert themes.theme_variants(options) == expected
+
+
+def test_server_theme_starts_on_the_streamlit_default():
+    server = themes.ServerTheme()
+    assert server.active is None
+    assert server.applied_at is None
+    assert server.expires_at is None
+
+
+def test_server_theme_apply_overlays_the_live_config(theme_config):
+    config, _ = theme_config
+    server = themes.ServerTheme()
+
+    server.apply("brand", {"theme.light.primaryColor": "#123456"}, now=_T0)
+
+    assert config.get_option("theme.light.primaryColor") == "#123456"
+    assert server.active == "brand"
+    assert server.applied_at == _T0
+    assert server.expires_at == _T0 + themes.THEME_TTL
+    opt = config.get_config_options()["theme.light.primaryColor"]
+    assert opt.where_defined == themes.WHERE_DEFINED
+
+
+def test_server_theme_switch_drops_what_the_previous_theme_set(theme_config):
+    """Overlays never stack: an option only the old theme set must go back to
+    the boot value, or the new theme renders with the old one's leftovers."""
+    config, baseline = theme_config
+    server = themes.ServerTheme()
+
+    server.apply("a", {"theme.textColor": "#aaaaaa", "theme.primaryColor": "#a00000"}, now=_T0)
+    server.apply("b", {"theme.primaryColor": "#b00000"}, now=_T0)
+
+    assert config.get_option("theme.primaryColor") == "#b00000"
+    assert config.get_option("theme.textColor") == baseline["theme.textColor"]
+    assert server.active == "b"
+
+
+def test_server_theme_reset_restores_the_boot_config(theme_config):
+    """The boot value — config.toml, env, CLI flags — is what "Streamlit default"
+    means, including where it was defined, not merely None."""
+    config, _ = theme_config
+    config.set_option("theme.primaryColor", "#abcdef", "a config.toml")
+    server = themes.ServerTheme()
+
+    server.apply("brand", {"theme.primaryColor": "#123456"}, now=_T0)
+    server.reset()
+
+    assert config.get_option("theme.primaryColor") == "#abcdef"
+    assert config.get_config_options()["theme.primaryColor"].where_defined == "a config.toml"
+    assert server.active is None
+    assert server.applied_at is None
+
+
+def test_server_theme_never_snapshots_a_live_overlay_as_the_boot_config(theme_config):
+    """A fresh ServerTheme (themes.py hot-reloaded) can meet a config still
+    carrying the previous instance's overlay; that overlay is not the boot
+    config, or "Streamlit default" would restore the old theme for good."""
+    config, baseline = theme_config
+    themes.ServerTheme().apply("old", {"theme.primaryColor": "#123456"}, now=_T0)
+
+    reloaded = themes.ServerTheme()
+    reloaded.apply("new", {"theme.textColor": "#654321"}, now=_T0)
+    reloaded.reset()
+
+    assert config.get_option("theme.primaryColor") is None
+    assert config.get_option("theme.textColor") == baseline["theme.textColor"]
+
+
+def test_server_theme_expire_keeps_a_theme_younger_than_the_ttl(theme_config):
+    config, _ = theme_config
+    server = themes.ServerTheme(ttl=timedelta(hours=24))
+    server.apply("brand", {"theme.primaryColor": "#123456"}, now=_T0)
+
+    assert server.expire(now=_T0 + timedelta(hours=24) - timedelta(seconds=1)) is False
+    assert server.active == "brand"
+    assert config.get_option("theme.primaryColor") == "#123456"
+
+
+def test_server_theme_expire_resets_once_the_ttl_is_up(theme_config):
+    config, baseline = theme_config
+    server = themes.ServerTheme(ttl=timedelta(hours=24))
+    server.apply("brand", {"theme.primaryColor": "#123456"}, now=_T0)
+
+    assert server.expire(now=_T0 + timedelta(hours=24)) is True
+    assert server.active is None
+    assert config.get_option("theme.primaryColor") == baseline["theme.primaryColor"]
+    # Already back on the default: nothing left to expire, so no second rerun.
+    assert server.expire(now=_T0 + timedelta(days=2)) is False
+
+
+def test_server_theme_expire_is_a_noop_on_the_default():
+    assert themes.ServerTheme().expire(now=_T0) is False
+
+
+def test_server_theme_expire_resets_at_once_when_the_switcher_is_off(theme_config):
+    """A deployment that switches the picker off while a theme is applied gets
+    the default back on the next rerun, not after the rest of the TTL."""
+    config, baseline = theme_config
+    server = themes.ServerTheme()
+    server.apply("brand", {"theme.primaryColor": "#123456"}, now=_T0)
+
+    assert server.expire(now=_T0, enabled=False) is True
+    assert server.active is None
+    assert config.get_option("theme.primaryColor") == baseline["theme.primaryColor"]
+    assert server.expire(now=_T0, enabled=False) is False
+
+
+@pytest.mark.parametrize(
+    "environ, expected",
+    [
+        ({}, True),
+        ({themes.SWITCHER_ENV: ""}, True),
+        ({themes.SWITCHER_ENV: "1"}, True),
+        ({themes.SWITCHER_ENV: "yes"}, True),
+        ({themes.SWITCHER_ENV: "0"}, False),
+        ({themes.SWITCHER_ENV: "false"}, False),
+        ({themes.SWITCHER_ENV: " OFF "}, False),
+        ({themes.SWITCHER_ENV: "No"}, False),
+    ],
+)
+def test_switcher_enabled_unless_the_deployment_switches_it_off(environ, expected):
+    assert themes.switcher_enabled(environ) is expected
+
+
+def test_switcher_variable_follows_the_repo_naming():
+    # Same prefix as LISTVIEW_SKIP_NPM_BUILD, so both read as this project's.
+    assert themes.SWITCHER_ENV == "LISTVIEW_DEMO_THEME_SWITCHER"
+
+
+def test_server_theme_ttl_defaults_to_one_day():
+    assert themes.THEME_TTL == timedelta(hours=24)
+    assert themes.ServerTheme().ttl == themes.THEME_TTL

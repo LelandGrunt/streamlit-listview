@@ -6,13 +6,15 @@ Each module declares which Streamlit script it drives and navigates to it
 before every test; the launch/await preamble they used to duplicate lives here
 instead — the same de-duplication e2e/demo/conftest.py already did for the
 demo subpackage (whose own ``app_file`` / ``go_to_app`` shadow these). Servers
-are booted once per distinct (script, flags) pair for the whole session and
-shared across modules — see ``_servers``.
+are booted once per distinct (script, flags, environment) for the whole
+session and shared across modules — see ``_servers``.
 
 Per-module contract:
 
 * ``APP_FILE`` (required) — ``Path`` of the Streamlit script to serve.
 * ``EXTRA_ARGS`` (optional) — extra ``streamlit run`` flags, e.g. a theme.
+* ``EXTRA_ENV`` (optional) — extra environment variables for the server process,
+  e.g. the demo's ``LISTVIEW_DEMO_THEME_SWITCHER``.
 * define a module-level ``go_to_app`` fixture to override the shared navigation
   (test_performance.py does: it times ``page.goto`` itself).
 """
@@ -71,21 +73,29 @@ def app_file(request):
 def _servers():
     """Session-scoped cache of running harness servers.
 
-    Keyed by (script, extra args): modules that drive the same script with the
-    same flags share one boot — the demo modules all serve demo/app.py —
+    Keyed by (script, extra args, extra env): modules that drive the same script
+    with the same flags and environment share one boot — the demo modules all serve demo/app.py —
     while a module with its own flags (test_core's theme) gets a distinct
     server automatically. Test isolation is unharmed: Streamlit session state
-    lives per browser session and every test opens a fresh page. ExitStack
+    lives per browser session and every test opens a fresh page. The one
+    exception is the demo's Theme picker, which re-themes the whole server, so
+    e2e/demo/test_demo_theme.py keys a server of its own via EXTRA_ENV. ExitStack
     stops every server at session end even if one teardown raises.
     """
     with contextlib.ExitStack() as stack:
         runners = {}
 
-        def lookup(app_file, extra_args) -> StreamlitRunner:
-            key = (str(app_file), tuple(extra_args or ()))
+        def lookup(app_file, extra_args, extra_env=None) -> StreamlitRunner:
+            key = (
+                str(app_file),
+                tuple(extra_args or ()),
+                tuple(sorted((extra_env or {}).items())),
+            )
             if key not in runners:
                 runners[key] = stack.enter_context(
-                    StreamlitRunner(app_file, extra_args=list(key[1]))
+                    StreamlitRunner(
+                        app_file, extra_args=list(key[1]), extra_env=dict(key[2])
+                    )
                 )
             return runners[key]
 
@@ -101,7 +111,11 @@ def app(request, app_file, _servers):
     caching instead of hanging, and the next module that needs the same server
     retries the boot — the old boot-per-module failure semantics.
     """
-    return _servers(app_file, getattr(request.module, "EXTRA_ARGS", None))
+    return _servers(
+        app_file,
+        getattr(request.module, "EXTRA_ARGS", None),
+        getattr(request.module, "EXTRA_ENV", None),
+    )
 
 
 @pytest.fixture(autouse=True)

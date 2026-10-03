@@ -36,12 +36,16 @@ class StreamlitRunner:
         server_port: typing.Optional[int] = None,
         extra_args: typing.Optional[typing.List[str]] = None,
         startup_timeout: int = 60,
+        extra_env: typing.Optional[typing.Dict[str, str]] = None,
     ):
         self._proc = None
         self._stdout_file = None
         self.server_port = server_port
         self.script_path = script_path
         self.extra_args = list(extra_args or [])
+        # Environment variables layered over this process's own, for a harness
+        # whose behavior an environment switch decides (the demo's theme picker).
+        self.extra_env = dict(extra_env or {})
         # How long start() waits for /_stcore/health. Overridable because the GIF
         # generator (scripts/gif/generate.py) shares this launcher but may be the
         # first run after a fresh install, when Streamlit still has to serve a
@@ -76,7 +80,7 @@ class StreamlitRunner:
             stdout=self._stdout_file,
             stderr=subprocess.STDOUT,
             text=True,
-            env={**os.environ.copy()},
+            env={**os.environ.copy(), **self.extra_env},
         )
         if not self._wait_until_running():
             output = self._read_output()

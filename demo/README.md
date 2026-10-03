@@ -21,6 +21,40 @@ list, or a **Large** generated dataset (up to 10,000 items) that shows render an
 scroll performance at scale. The **API reference** tab documents the full
 signature, parameters, return value, and runnable examples (`demo/examples/`).
 
+## Theme switcher
+
+The **Theme** section re-themes the app with any `config_theme_<name>.toml` in
+`demo/.streamlit/`; drop a new file there and it shows up in the picker, under
+its `DisplayName` from `demo/.streamlit/config_themes.json` (or its bare name
+without an entry there). It is a
+showcase of the demo, not part of the listview API: the listview has no theme
+parameter, so the generated code stays the same while the widget's style adapts
+to whatever theme Streamlit is configured with.
+A theme that defines `[theme.light]` and `[theme.dark]` switches between the two
+in the app menu (**⋮**).
+
+Streamlit has no per-session theme, so the switch applies to the **whole
+server**: every open session picks it up on its next rerun, including other
+visitors of a hosted demo. It falls back to the Streamlit default 24 hours after
+the last switch, and on every server restart, since it lives in memory only.
+
+To hide the switcher on one deployment, set `LISTVIEW_DEMO_THEME_SWITCHER` to
+`0` (`false`, `off` and `no` work too); unset, it is on. Locally:
+
+```sh
+LISTVIEW_DEMO_THEME_SWITCHER=0 uv run streamlit run demo/app.py
+```
+
+On Streamlit Community Cloud, add it under the app's **Settings → Secrets** as a
+root-level key; Streamlit copies root-level secrets into the environment:
+
+```toml
+LISTVIEW_DEMO_THEME_SWITCHER = "0"
+```
+
+The app reads the variable on every rerun, and a theme still applied when the
+switch goes off falls back to the default at once.
+
 ## Rebuilding the frontend
 
 Edits under `streamlit_listview/frontend/src/` do not go through the install, so
