@@ -297,8 +297,8 @@ The build backend compiles the frontend automatically (`npm ci` if needed, then
 `streamlit_listview/pyproject.toml` component manifest (Streamlit reads it at
 runtime to resolve the asset globs). This produces `dist/`:
 
-- `dist/streamlit_listview-1.0.0-py3-none-any.whl`
-- `dist/streamlit_listview-1.0.0.tar.gz` (sdist)
+- `dist/streamlit_listview-1.0.1-py3-none-any.whl`
+- `dist/streamlit_listview-1.0.1.tar.gz` (sdist)
 
 ### Requirements
 

@@ -7,4 +7,4 @@
 # bundle that is gitignored. Installing the published wheel instead ships the
 # prebuilt bundle. Bump the pin with each release.
 streamlit>=1.51
-streamlit-listview==1.0.0
+streamlit-listview==1.0.1
