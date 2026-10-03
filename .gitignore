@@ -13,6 +13,10 @@ coverage.xml
 htmlcov/
 streamlit_listview/frontend/coverage/
 
+# Performance benchmark results (machine-specific; a comparison is always a
+# same-machine pair, so baselines are never committed)
+bench-results/
+
 # Node
 node_modules/
 

@@ -16,12 +16,19 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     css: false,
+    benchmark: {
+      // The performance benchmarks (src/bench/*.bench.tsx — see CLAUDE.md,
+      // "Performance benchmarks"). `vitest bench` only: `vitest run` never
+      // collects them, so they can neither slow nor fail the unit suite.
+      include: ["src/**/*.bench.{ts,tsx}"],
+    },
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
       include: ["src/**/*.{ts,tsx}"],
       exclude: [
         "src/**/*.{test,spec}.{ts,tsx}", // the tests themselves
+        "src/**/*.bench.{ts,tsx}", // benchmark scenarios: run by `vitest bench`, never by the coverage run
         "src/**/*.d.ts", // ambient type declarations
         "src/types.ts", // type-only module (no runtime code)
         "src/test/**", // test harness / setup

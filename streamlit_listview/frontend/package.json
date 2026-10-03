@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test:types": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run --coverage && npm run test:types",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "bench": "vitest bench --run"
   },
   "browserslist": [
     ">0.2%",
