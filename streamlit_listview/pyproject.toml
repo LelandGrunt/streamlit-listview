@@ -5,7 +5,7 @@
 # ("streamlit_listview.listview") declared in __init__.py.
 [project]
 name = "streamlit_listview"
-version = "1.0.0"
+version = "1.0.1"
 
 [[tool.streamlit.component.components]]
 name = "listview"

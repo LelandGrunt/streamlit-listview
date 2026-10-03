@@ -156,6 +156,8 @@ To cut a release, bump the version in **all five places that assert it** — the
 4. `README.md` — the wheel/sdist filename examples: `tests/test_readme.py::test_version_matches_pyproject_and_no_stale_scaffold` pins them to the root `pyproject.toml`. The version badge needs no bump — it is the live shields.io PyPI badge, so the test pins only the project name it queries.
 5. `demo/requirements.txt` — the `streamlit-listview==<version>` pin the Streamlit Community Cloud demo installs (and so does the Codespaces dev container, `.devcontainer/devcontainer.json`, which Community Cloud generated and which runs `demo/app.py` the same way): `tests/test_packaging.py::test_demo_requirements_pin_the_released_version` pins it to the root `pyproject.toml`. The file sits next to `demo/app.py` so Community Cloud picks it before the root `uv.lock` (which would build the repo and needs npm, absent there). Community Cloud redeploys on every branch push, so push the **tag first** and the branch only once the publish job has finished — otherwise the hosted demo installs a pin PyPI does not have yet and fails until you reboot it.
 
+Two more steps no test enforces: run `uv lock` so `uv.lock` records the new project version (otherwise the next `uv run` rewrites it as an unrelated diff), and turn the `Unreleased` heading in `CHANGELOG.md` into the version and release date.
+
 Then commit, `git tag v<version>`, and push the tag to the **GitHub** remote by name (`git push <github-remote> v<version>`): the workflow only runs there, and a bare `git push --tags` goes to the default remote, which need not be GitHub. The build job hard-fails if the tag doesn't match `[project].version`, so the tag and the published wheel can never disagree.
 
 **Pre-releases** use PEP 440's canonical spelling — `1.0.0rc1` (or `a1`/`b1`), tagged `v1.0.0rc1` — in all five places. Never `1.0.0-rc.1` or `1.0.0-preRelease`: the latter is not a valid version at all, and the former is normalized to `1.0.0rc1` in the wheel filename while the tag guard and `verify_wheel.py` compare the raw string, so the release fails. PyPI never lets a version number be reused (not even after deleting it), so a broken rc is followed by `rc2`, not re-uploaded. `pip install streamlit-listview` skips pre-releases; the `==1.0.0rc1` pin in `demo/requirements.txt` names one explicitly, so the hosted demo can run on the rc.
@@ -167,7 +169,7 @@ Then commit, `git tag v<version>`, and push the tag to the **GitHub** remote by 
 The package is pure-`py3-none-any` (the React bundle is data, not a compiled extension), so a single wheel + sdist covers every platform — no `cibuildwheel` matrix. The sdist ships the prebuilt `frontend/build/` and omits `frontend/src/`, so installing from sdist needs **no Node**.
 
 ## Docs
-`README.md` documents the public API; `demo/README.md` covers the playground; `BENCHMARKS.md` is the developer guide to the performance benchmarks (test concept, methodology, how to run, compare and read them). Keep it in step with the *Performance benchmarks* section above when either tier changes.
+`README.md` documents the public API; `demo/README.md` covers the playground; `CHANGELOG.md` records user-visible changes per release (Keep a Changelog format); `BENCHMARKS.md` is the developer guide to the performance benchmarks (test concept, methodology, how to run, compare and read them). Keep it in step with the *Performance benchmarks* section above when either tier changes.
 
 ## External references (Components V2)
 
