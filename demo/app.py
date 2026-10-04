@@ -31,6 +31,8 @@ try:
 except PackageNotFoundError:  # running from source without an installed dist
     LISTVIEW_VERSION = "dev"
 
+CHANGELOG_URL = "https://github.com/LelandGrunt/streamlit-listview/blob/main/CHANGELOG.md"
+
 st.set_page_config(
     page_title="Listview · Component Demo",
     # The SVG favicon switches between its light and dark colors by itself,
@@ -1241,7 +1243,9 @@ def render_api():
             )
 
 
-st.title(f":material/list: Listview Demo :primary-badge[v{LISTVIEW_VERSION}]")
+st.title(
+    f":material/list: Listview Demo [:primary-badge[v{LISTVIEW_VERSION}]]({CHANGELOG_URL})"
+)
 st.caption("An interactive, themeable selection list for Streamlit.")
 
 demo_tab, api_tab = st.tabs(
