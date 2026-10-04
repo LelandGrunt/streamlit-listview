@@ -1,6 +1,7 @@
 """listview interactive demo — run with: streamlit run demo/app.py"""
 
 import os
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -12,6 +13,7 @@ import streamlit as st
 
 # Make sibling modules importable regardless of the working directory.
 DEMO_DIR = Path(__file__).resolve().parent
+LOGO_DIR = DEMO_DIR.parent / "assets" / "logo"
 if str(DEMO_DIR) not in sys.path:
     sys.path.insert(0, str(DEMO_DIR))
 
@@ -31,7 +33,9 @@ except PackageNotFoundError:  # running from source without an installed dist
 
 st.set_page_config(
     page_title="Listview · Component Demo",
-    page_icon=":material/list:",
+    # The SVG favicon switches between its light and dark colors by itself,
+    # following the browser's color-scheme preference.
+    page_icon=str(LOGO_DIR / "favicon.svg"),
     layout="wide",
 )
 
@@ -41,6 +45,31 @@ st.set_page_config(
 # block-container padding, so trim it with a small CSS rule. 3rem still clears
 # the header comfortably without the wasted space.
 st.html("<style>.stMainBlockContainer { padding-top: 3rem; }</style>")
+
+
+def adaptive_logo(name):
+    """The light SVG, given the dark variant's fills under a dark color scheme.
+
+    The two variants differ only in their fills. An SVG shown as an image takes
+    its prefers-color-scheme from the color-scheme Streamlit sets on the app
+    root, so the logo follows a theme change in the browser at once.
+    st.context.theme cannot: a rerun the script starts itself (the Theme
+    picker's) reuses the browser's previous report.
+    """
+    light = (LOGO_DIR / f"{name}.svg").read_text(encoding="utf-8")
+    dark = (LOGO_DIR / f"{name}-dark.svg").read_text(encoding="utf-8")
+    fill = re.compile(r'fill="(#[0-9A-Fa-f]+)"')
+    swaps = dict(zip(fill.findall(light), fill.findall(dark)))
+    rules = "".join(f'[fill="{a}"]{{fill:{b}}}' for a, b in swaps.items() if a != b)
+    style = f"<style>@media (prefers-color-scheme:dark){{{rules}}}</style>"
+    return light.replace("<defs>", style + "<defs>", 1)
+
+
+st.logo(
+    adaptive_logo("listview-logo"),
+    icon_image=adaptive_logo("listview-mark"),
+    link="https://github.com/LelandGrunt/streamlit-listview",
+)
 
 DEFAULT_CONFIG = {
     "data_source": "Built-in cities",

@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/LelandGrunt/streamlit-listview/HEAD/assets/logo/listview-logo-dark.svg">
+    <img src="https://raw.githubusercontent.com/LelandGrunt/streamlit-listview/HEAD/assets/logo/listview-logo.svg" alt="streamlit-listview" width="360">
+  </picture>
+</p>
+
 [![Open in Streamlit](https://img.shields.io/badge/Open_in_Streamlit-FF4B4B?logo=streamlit&logoColor=white)](https://st-listview-demo.streamlit.app/)
 [![PyPI](https://img.shields.io/pypi/v/streamlit-listview?logo=pypi&logoColor=white&color=3775A9)](https://pypi.org/project/streamlit-listview/)
 ![Python](https://img.shields.io/badge/python-%E2%89%A5_3.10-3776AB?logo=python&logoColor=white)
