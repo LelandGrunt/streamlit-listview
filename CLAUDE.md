@@ -173,6 +173,22 @@ The package is pure-`py3-none-any` (the React bundle is data, not a compiled ext
 
 **Writing rule: every technical document in this repository (`README.md`, `demo/README.md`, `CHANGELOG.md`, `BENCHMARKS.md`, this file) follows plain English according to Strunk & White, *The Elements of Style*.** In practice: short sentences with one idea each; the active voice; statements in positive form (say what the code does, not what it no longer does); definite, concrete words and the measured number rather than "fast" or "large"; omit needless words and qualifiers ("very", "really", "simply"); parallel form for coordinate items (table columns, bullet lists, the halves of a comparison); no colloquialisms or metaphors the reader must decode ("under the hood", "canaries" without a gloss); jargon defined for the document's audience — a changelog reader is a Python user, not a React developer. Why: these files are read by users and by coding agents in every session, so a sentence that has to be read twice costs everyone, and a vague one leads to a wrong change. Review a draft against this rule before committing it, as `BENCHMARKS.md` and `CHANGELOG.md` were on 2026-10-04.
 
+### README demo GIF (`assets/listview-demo.gif`)
+**Regenerate the GIF in the same commit as any change to how the widget looks or behaves.** The README links the GIF at `HEAD`, so GitHub and the PyPI project page always show the copy on the default branch; a style change merged without it advertises a widget the code no longer renders. The rule covers `listview.css`, the markup in `Listview.tsx` and `components/`, the Markdown renderer, any hook whose effect the user sees (search, selection, select-all, collapse, keyboard focus), a Python default that changes rendering, and `scripts/gif/` itself. A refactor, a performance change or a test change needs no new GIF. When in doubt, regenerate: on one machine the generator is deterministic, so an unchanged widget yields a byte-identical file and no diff (verified on 2026-10-04: a fresh bundle at `cd78de0` reproduced the committed GIF exactly).
+
+From the repo root, after a one-time `uv run --extra devel playwright install chromium`:
+```sh
+npm --prefix streamlit_listview/frontend run build
+LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel --with pillow python scripts/gif/generate.py   # -> assets/listview-demo.gif
+```
+- **Build first.** The generator captures the gitignored bundle in `frontend/build/`, and a source edit does not update it (see *Build output is gitignored*). A stale bundle yields a GIF of the old widget.
+- **`--with pillow`** adds the one capture dependency the `devel` extra lacks.
+- **Check the result before committing.** `--keep-frames` keeps the PNG frames under `build/gif-frames/`; open them and confirm the change shows.
+- **Commit only a real change.** If the GIF changes although nothing visible did (another machine's fonts, a newer Chromium), leave it out of the commit.
+- **Keep the capture working.** `scripts/gif/capture.py` finds the widget by its `data-testid`s (`stListviewOption-<id>`, `stListviewSearch`, `stListviewSearchClear`, `stListviewSelectAllToggle`, `stListviewGroup`). A renamed testid or a removed feature breaks it; fix the script in the same change rather than drop a step.
+
+`scripts/gif/README.md` describes the generator's parts and options.
+
 ## External references (Components V2)
 
 This repo **hand-rolls** the V2 stack — it was not scaffolded from a template. The official docs below are useful for cross-checking *boilerplate* (registration, the `FrontendRenderer` contract, packaging), but they are silent on this repo's hard-won invariants (Shadow-DOM `--st-*` theming, the no-dynamic-`import()` single-chunk rule, the lightningcss/`color-scheme` workaround) — for those, trust **this file**.
