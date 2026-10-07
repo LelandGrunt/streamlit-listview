@@ -44,9 +44,11 @@ def _validate_id(item_id: Any, *, kind: str, context: str = "") -> None:
     read back from ``st.session_state[key]``): a default or persisted id is
     seeded straight into the frontend selection, so it crosses the same boundary
     as an option id and every rule below applies to it for exactly the same
-    reasons. ``kind`` names the id's role in the message ("option" / "default" /
-    "persisted"); ``context`` is appended verbatim after the offending value
-    (e.g. ``" (from option ...)"``).
+    reasons. ``_new_entry`` asks the same question of an id coming back the
+    other way: no honest frontend returns an id that fails it, so ``_new_entry``
+    returns such an id as its ``str()``. ``kind`` names the id's role in the
+    message ("option" / "default" / "persisted" / "selected"); ``context`` is
+    appended verbatim after the offending value (e.g. ``" (from option ...)"``).
 
     Ids are restricted to exactly str or int, positively. The frontend
     identifies rows by JavaScript ``String(id)``, which diverges from Python
@@ -287,29 +289,38 @@ def new_option_kind(id_to_original: dict[Any, Any]) -> NewOptionKind:
 def _new_entry(selected_id: Any, kind: NewOptionKind) -> Any:
     """The value a selected id that names no option comes back as.
 
-    It takes the type of the other options (``kind``, from
+    The selection is JSON the browser sends, so only an honest frontend limits
+    it to the ids the boundary admits. An id that fails ``_validate_id`` — a
+    dict, a list, None, a bool (JSON ``true`` arrives as ``True``, an int
+    subclass), a float or an int past ``MAX_SAFE_JS_INT`` — comes from a
+    tampered frontend, and it is replaced by its ``str()`` before anything
+    else: no kind may hand the caller ``{"$ne": None}`` as an id.
+
+    The entry then takes the type of the other options (``kind``, from
     ``new_option_kind``):
       * "dict" -> ``{"id": selected_id, "label": str(selected_id)}``, the
         synthetic row the frontend renders for the id (``newOptionRow``:
         ``{ id, label: idKey(id) }``). ``str()`` is the display spelling here,
         as in ``_label_for``, not row identity.
       * "int" -> the id itself when it is an int, the int a canonical integer
-        string spells (``_parse_new_int_id``), and ``str(selected_id)`` for
-        anything else. That last case is an entry made while the options had
-        another type — it still renders as a row, so dropping it would make the
-        rows and the value disagree — or a tampered frontend. bool is excluded
-        explicitly: JSON ``true`` arrives as ``True``, an int subclass.
+        string spells (``_parse_new_int_id``), and the str otherwise. That last
+        case is an entry made while the options had another type — it still
+        renders as a row, so dropping it would make the rows and the value
+        disagree — or a tampered frontend.
       * "str" -> ``str(selected_id)``.
     """
+    try:
+        _validate_id(selected_id, kind="selected")
+    except ValueError:
+        selected_id = str(selected_id)
     if kind == "dict":
         return {"id": selected_id, "label": str(selected_id)}
     if kind == "int":
-        if isinstance(selected_id, int) and not isinstance(selected_id, bool):
+        if isinstance(selected_id, int):
             return selected_id
-        if isinstance(selected_id, str):
-            number = _parse_new_int_id(selected_id)
-            if number is not None:
-                return number
+        number = _parse_new_int_id(selected_id)
+        if number is not None:
+            return number
     return str(selected_id)
 
 

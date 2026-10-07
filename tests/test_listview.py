@@ -1161,6 +1161,33 @@ def test_entry_from_another_kind_stays_a_str_with_int_options(listview_mod):
     assert result == ["abc"]
 
 
+@pytest.mark.parametrize(
+    "options, sent, expected",
+    [
+        pytest.param(
+            [{"id": "a", "label": "Apple"}],
+            {"$ne": None},
+            {"id": "{'$ne': None}", "label": "{'$ne': None}"},
+            id="dict-options",
+        ),
+        pytest.param([1, 2], 2**60, "1152921504606846976", id="int-options"),
+    ],
+)
+def test_new_entry_from_a_tampered_frontend_comes_back_as_text(
+    listview_mod, options, sent, expected
+):
+    # The selection is JSON sent by the browser, and the wrapper checks only
+    # that it is a list. A modified frontend can put any JSON value in it, so a
+    # new entry made from one comes back as the value's text: never as an id
+    # such as {"$ne": None} that an app could pass on to a NoSQL filter.
+    mod, fake = listview_mod
+    fake.return_value = {"selection": [sent]}
+    result = mod.listview(
+        "Pick", options, selection_mode="single", accept_new_options=True
+    )
+    assert result == expected
+
+
 def test_unknown_default_with_dict_options_comes_back_as_a_dict(listview_mod):
     mod, fake = listview_mod
     result = mod.listview(

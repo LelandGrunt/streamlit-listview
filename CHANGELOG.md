@@ -24,6 +24,10 @@ Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](h
 - **With int options, the add field accepts only whole numbers.** It takes `42` or `-5` and refuses `abc`, `1.5`, `007` and `+5`, with the hint "Enter a whole number" below the field. Text that matches an existing row's id or label still selects that row, but users can no longer add free text to a list of int options.
 - **With int options, an unknown `default` must be a whole number.** `default="abc"` raises `ValueError`; `default=42` and `default="42"` both come back as `42`.
 
+### Fixed
+
+- **`listview()` turns an unexpected value in an added entry into text.** The browser returns the selection to Python as JSON, so a modified page can send any value JSON can express as an added entry: a dict such as `{"$ne": None}`, a list, `None`, `True`, a float, or an int with `abs(value) > 2**53 - 1`. `listview()` returns such a value as `str(value)`: as the entry's `id` and `label` with dict options, and as the entry itself otherwise. An app that puts an added entry into a database query, such as a MongoDB filter, thus receives only a `str` or an `int` with `abs(value) <= 2**53 - 1`. Entries that users type into the add field come back as the table above shows.
+
 ## [1.0.1] - 2026-10-04
 
 Faster large lists. The API and behaviour are unchanged, so upgrading needs no edits.

@@ -905,12 +905,48 @@ def test_map_int_kind_leaves_any_other_string_a_str(text):
     assert map_selection([text], {1: 1}, "single", kind="int") == text
 
 
-@pytest.mark.parametrize("value, expected", [(True, "True"), (42.5, "42.5")])
-def test_map_int_kind_stringifies_a_bool_or_float_from_a_tampered_frontend(
-    value, expected
-):
+# Ids that only a modified frontend sends. The selection arrives as JSON from
+# the browser, so where the frontend sends a str or an int, a tampered one can
+# send any JSON value. A new entry made from such an id comes back as its str()
+# in every kind: an app that passes the entry's id to a type-sensitive sink,
+# such as a NoSQL filter, must never receive {"$ne": None} as an id.
+TAMPERED_IDS = [
+    pytest.param({"$ne": None}, "{'$ne': None}", id="dict"),
+    pytest.param([1, 2], "[1, 2]", id="list"),
+    pytest.param(None, "None", id="none"),
     # JSON true arrives as True, an int subclass: it must not pass as an int.
-    assert map_selection([value], {1: 1}, "single", kind="int") == expected
+    pytest.param(True, "True", id="bool"),
+    pytest.param(42.5, "42.5", id="float"),
+    pytest.param(float("nan"), "nan", id="nan"),
+    pytest.param(float("inf"), "inf", id="inf"),
+    pytest.param(2**53, "9007199254740992", id="first-unsafe-int"),
+    pytest.param(2**60, "1152921504606846976", id="unsafe-int"),
+]
+
+
+@pytest.mark.parametrize("value, text", TAMPERED_IDS)
+def test_map_dict_kind_stringifies_a_tampered_id(value, text):
+    result = map_selection([value], {"a": {"id": "a"}}, "single", kind="dict")
+    assert result == {"id": text, "label": text}
+
+
+@pytest.mark.parametrize("value, text", TAMPERED_IDS)
+def test_map_int_kind_stringifies_a_tampered_id(value, text):
+    assert map_selection([value], {1: 1}, "single", kind="int") == text
+
+
+@pytest.mark.parametrize("value, text", TAMPERED_IDS)
+def test_map_str_kind_stringifies_a_tampered_id(value, text):
+    assert map_selection([value], {"a": "a"}, "single", kind="str") == text
+
+
+def test_map_dict_kind_keeps_the_largest_safe_int_id():
+    # 2**53 - 1 is the largest int the boundary admits, so it stays an int: an
+    # unknown int default with dict options comes back this way.
+    result = map_selection(
+        [MAX_SAFE_JS_INT], {"a": {"id": "a"}}, "single", kind="dict"
+    )
+    assert result == {"id": 9007199254740991, "label": "9007199254740991"}
 
 
 def test_map_int_kind_collapses_two_spellings_of_one_entry():
