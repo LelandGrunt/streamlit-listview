@@ -37,6 +37,17 @@ describe("makeLargeDataset", () => {
   it("is empty at n=0", () => {
     expect(makeLargeDataset(0, "grouped")).toEqual([]);
   });
+
+  // The five-digit padding holds through 100,000 rows; a larger size would
+  // spell a six-digit id that sorts before `item-99999`. tests/test_demo.py
+  // pins the demo's largest size to the same bound.
+  it("keeps ids unique and in row order at the largest size", () => {
+    const n = SIZES[SIZES.length - 1];
+    const ids = makeLargeDataset(n, "ungrouped").map((item) => String(item.id));
+    expect(ids[n - 1]).toBe("item-99999");
+    expect(new Set(ids).size).toBe(n);
+    expect(ids).toEqual([...ids].sort());
+  });
 });
 
 describe("benchData", () => {
@@ -86,7 +97,7 @@ describe("subsetFromEnv", () => {
     expect(() =>
       subsetFromEnv("LISTVIEW_BENCH_SIZES", "100,2000", SIZES),
     ).toThrow(
-      'LISTVIEW_BENCH_SIZES: "2000" is not one of 100, 1000, 5000, 10000, 25000, 50000',
+      'LISTVIEW_BENCH_SIZES: "2000" is not one of 100, 1000, 5000, 10000, 25000, 50000, 100000',
     );
     expect(() =>
       subsetFromEnv("LISTVIEW_BENCH_SHAPES", "grouped,,ungrouped", SHAPES),

@@ -8,7 +8,7 @@ How to run the listview's performance benchmarks, compare two versions of the co
 
 They are tooling for maintainers: CI does not run them, they enforce no thresholds, and the wheel ships none of them.
 
-**Contents:** [Quick start](#quick-start) · [Test concept](#test-concept) · [Methodology](#methodology) · [Prerequisites](#prerequisites) · [Running the frontend tier](#running-the-frontend-tier) · [Running the browser tier](#running-the-browser-tier) · [Comparing two versions](#comparing-two-versions) · [Reading the results](#reading-the-results) · [Worked example](#worked-example-main-vs-the-render-chunk-branch) · [Troubleshooting](#troubleshooting) · [Extending the benchmarks](#extending-the-benchmarks) · [File map](#file-map)
+**Contents:** [Quick start](#quick-start) · [Test concept](#test-concept) · [Methodology](#methodology) · [Prerequisites](#prerequisites) · [Running the frontend tier](#running-the-frontend-tier) · [Running the browser tier](#running-the-browser-tier) · [Comparing two versions](#comparing-two-versions) · [Reading the results](#reading-the-results) · [Worked example](#worked-example-main-vs-the-render-chunk-branch) · [Reference run](#reference-run-100-to-100000-rows) · [Troubleshooting](#troubleshooting) · [Extending the benchmarks](#extending-the-benchmarks) · [File map](#file-map)
 
 ---
 
@@ -17,11 +17,11 @@ They are tooling for maintainers: CI does not run them, they enforce no threshol
 From a clone with the frontend built (`npm ci && npm run build` in `streamlit_listview/frontend/`) and the development environment installed (`uv run --extra devel playwright install chromium` once):
 
 ```sh
-# Frontend tier: fast, React-only, relative numbers (~6 min for everything)
+# Frontend tier: React-only, relative numbers (~20 min for everything)
 cd streamlit_listview/frontend
 LISTVIEW_BENCH_SIZES=1000,50000 npm run bench
 
-# Browser tier: real Chromium + Streamlit, numbers of record (~14 min for everything)
+# Browser tier: real Chromium + Streamlit, numbers of record (~19 min for everything)
 cd ../..
 uv run --extra devel pytest e2e/perf/ --perf-out bench-results/quick.jsonl --perf-sizes 1000,50000 --perf-reps 1
 uv run --extra devel python -m e2e.perf.report bench-results/quick.jsonl
@@ -53,19 +53,19 @@ A slower result never fails a benchmark. The benchmarks fail only when a scenari
 | Measures | React's own work: reconciliation, memo recomputation, DOM mutation | everything a user waits for: Python call, payload transfer, parsing, React, style, layout, paint, scroll |
 | Blind to | layout, paint, scroll, Streamlit's rerun round trip | nothing, but slower and noisier |
 | Use it for | quick A/B of React-side changes, many samples per scenario | the numbers you quote; DOM-size or CSS work; anything Streamlit-side |
-| Full matrix | about 6 min | about 14 min on the reference machine at 3 reps (15–20 min on slower machines) |
+| Full matrix | about 20 min on the reference machine, 8.5 of them in the two 100,000-row cells | about 19 min on the reference machine at 3 reps, 5 of them in the two 100,000-row cells |
 | Results | vitest table, JSON through `--outputJson`, built-in `--compare` | JSONL records, `python -m e2e.perf.report` |
 | Code | `streamlit_listview/frontend/src/bench/` | `e2e/perf/` |
 
-**Why two tiers.** The frontend tier isolates the part of the cost the component's own code controls, so a React-side improvement appears at full size and with many samples. The browser tier adds everything around it. A fix can therefore look large in the frontend tier and smaller in the browser tier, and both readings are correct: the browser tier also contains Streamlit's payload transfer and Chrome's work over a DOM of about 200,000 nodes at 50,000 rows, which React-side changes do not touch. Quote browser-tier numbers to users; use frontend-tier numbers to decide between code alternatives.
+**Why two tiers.** The frontend tier isolates the part of the cost the component's own code controls, so a React-side improvement appears at full size and with many samples. The browser tier adds everything around it. A fix can therefore look large in the frontend tier and smaller in the browser tier, and both readings are correct: the browser tier also contains Streamlit's payload transfer and Chrome's work over a DOM of about 400,000 nodes at 100,000 rows, which React-side changes do not touch. Quote browser-tier numbers to users; use frontend-tier numbers to decide between code alternatives.
 
 ### The matrix
 
 Every benchmark runs over the same cells:
 
-- **Sizes:** 100, 1,000, 5,000, 10,000, 25,000 and 50,000 options. Around 50,000 is the practical ceiling of a non-virtualized list.
+- **Sizes:** 100, 1,000, 5,000, 10,000, 25,000, 50,000 and 100,000 options. Around 50,000 is the practical ceiling of a non-virtualized list; the 100,000 cells measure how the cost grows past it, and match the largest size the demo offers.
 - **Shapes:** `grouped`, in groups of 100 with collapsible group headers, and `ungrouped`.
-- **Dataset:** generated by `demo/data.py::make_large_dataset` (id `item-00042`, label `Item 00042`, group `Batch 000`). The frontend tier uses a TypeScript mirror (`src/bench/fixtures.ts`) that unit tests pin to the same literals as the Python generator, so both tiers measure identical rows.
+- **Dataset:** generated by `demo/data.py::make_large_dataset` (id `item-00042`, label `Item 00042`, group `Batch 000`). The frontend tier uses a TypeScript mirror (`src/bench/fixtures.ts`) that unit tests pin to the same literals as the Python generator, so both tiers measure identical rows. The five-digit numbers stay unique and in row order up to 100,000 rows (`item-99999`); unit tests in both languages pin that bound.
 - **Widget configuration:** single selection, search enabled, height 300 px, collapsible groups in the grouped shape. `add_option` also enables `accept_new_options`.
 
 ### Scenarios
@@ -96,15 +96,15 @@ The frontend tier merges the two reset pairs because vitest's `bench()` has no p
 ### Frontend tier
 
 - **Harness.** `vitest bench` (built on tinybench) in jsdom, rendering with `@testing-library/react`. One `describe` per cell (shape × size) and one `bench` per scenario.
-- **Setup is untimed.** A bench's `setup` mounts the list, looks up the DOM elements the timed body needs, and checks the precondition. It runs once before the warm-up and once before the measured run; `teardown` unmounts and releases every cached handle, so 50,000-row trees do not accumulate in memory.
+- **Setup is untimed.** A bench's `setup` mounts the list, looks up the DOM elements the timed body needs, and checks the precondition. It runs once before the warm-up and once before the measured run; `teardown` unmounts and releases every cached handle, so 100,000-row trees do not accumulate in memory.
 - **Self-resetting bodies.** `rerun_*` alternate between two pre-built fresh copies of the options, so every rerun hands the component new objects, as a real rerun does, and no JSON is built inside the timed body. `click_select` alternates between two rows; `add_option` commits a new unique value each time.
 - **Sample budgets.** Without fixed sample counts, large cells would run for minutes:
 
-  | Scenario group | ≤ 5,000 rows | 10,000 | 25,000 | 50,000 |
-  |---|---|---|---|---|
-  | `mount`, `search_narrow_then_clear` | tinybench default: ≥ 500 ms and ≥ 10 samples | 8 | 5 | 3 |
-  | `rerun_*`, `click_select`, `group_collapse_then_expand` | tinybench default | 15 | 15 | 15 |
-  | `add_option` | 10, fixed, because each added row stays in the list | 15 | 15 | 15 |
+  | Scenario group | ≤ 5,000 rows | 10,000 | 25,000 | 50,000 | 100,000 |
+  |---|---|---|---|---|---|
+  | `mount`, `search_narrow_then_clear` | tinybench default: ≥ 500 ms and ≥ 10 samples | 8 | 5 | 3 | 3 |
+  | `rerun_*`, `click_select`, `group_collapse_then_expand` | tinybench default | 15 | 15 | 15 | 15 |
+  | `add_option` | 10, fixed, because each added row stays in the list | 15 | 15 | 15 | 15 |
 
   A fixed count includes one warm-up iteration; the sub-second scenarios include two.
 - **Positional pairing.** vitest's `--compare` matches benchmarks by their position in the file, not by name. The bench file therefore declares every cell and skips the ones a filter leaves out (`describe.skipIf`), so a subset run still aligns with a full baseline, as long as both sides use the same bench file.
@@ -148,7 +148,7 @@ One line of the JSONL file, abbreviated:
 - **A built bundle** for the browser tier: `npm run build` in `streamlit_listview/frontend/`. The benchmark stops with a message naming the missing directory if there is none.
 - **uv** with the development extra. Every Python command goes through `uv run --extra devel …`.
 - **Chromium for Playwright**, once per machine: `uv run --extra devel playwright install chromium`.
-- **Memory.** At 50,000 rows the jsdom worker peaks around 2.9 GB. On a smaller machine, run a subset.
+- **Memory.** At 100,000 rows the jsdom worker peaks around 3.6 GB. That is close to Node's default heap limit, which Node derives from the machine's memory: 4.3 GB on the 32 GB reference machine, less on smaller ones. On a smaller machine, run a subset. Do not raise the limit with `--max-old-space-size`: with 8 GB, the 100,000-row `mount` varied by ±99 % instead of ±3 %, because fewer but longer garbage collections fell inside single iterations.
 - **A quiet machine.** Close heavy applications, keep the laptop plugged in, and never run two benchmarks at the same time.
 
 ---
@@ -158,7 +158,7 @@ One line of the JSONL file, abbreviated:
 Run from `streamlit_listview/frontend/`.
 
 ```sh
-npm run bench                                                         # the full matrix, ~6 min
+npm run bench                                                         # the full matrix, ~20 min
 LISTVIEW_BENCH_SIZES=1000,50000 npm run bench                         # some sizes
 LISTVIEW_BENCH_SHAPES=ungrouped npm run bench                         # one shape
 npm run bench -- -t "rerun"                                           # only benchmarks whose name matches
@@ -166,7 +166,7 @@ npm run bench -- --outputJson ../../bench-results/before.json         # save the
 npm run bench -- --compare ../../bench-results/before.json            # compare with saved results
 ```
 
-`LISTVIEW_BENCH_SIZES` accepts any of `100,1000,5000,10000,25000,50000`; `LISTVIEW_BENCH_SHAPES` accepts `grouped,ungrouped`. Anything else stops the run with an error naming the allowed values.
+`LISTVIEW_BENCH_SIZES` accepts any of `100,1000,5000,10000,25000,50000,100000`; `LISTVIEW_BENCH_SHAPES` accepts `grouped,ungrouped`. Anything else stops the run with an error naming the allowed values.
 
 ## Running the browser tier
 
@@ -184,7 +184,7 @@ uv run --extra devel pytest e2e/perf/ --perf-out bench-results/slow.jsonl --perf
 | `--perf-out FILE.jsonl` | none | where to append the records; without it pytest skips the benchmark |
 | `--perf-reps N` | 3 | measured runs per cell, after one discarded warm-up |
 | `--perf-throttle RATE` | 1 | CPU slowdown factor through DevTools |
-| `--perf-sizes LIST` | all | subset of `100,1000,5000,10000,25000,50000` |
+| `--perf-sizes LIST` | all | subset of `100,1000,5000,10000,25000,50000,100000` |
 | `--perf-shapes LIST` | all | subset of `grouped,ungrouped` |
 
 Pass these options only with `e2e/perf/` on the command line; plain `pytest e2e/` collects the benchmark and skips it. `--perf-out` appends, so use a new file per run, or delete the old one first.
@@ -288,7 +288,7 @@ A negative `Δ` means B is faster. A row present on only one side shows `—`, a
 | How long does typing a search, or clearing it, freeze the list? | `search_narrow.painted_ms`, `search_clear.painted_ms` |
 | How expensive is a rerun of the app for this widget? | `rerun_unchanged.settled_ms` and `.task_ms`; `ws_bytes` for the payload |
 | How quickly does a click show feedback? | `click_select.local_painted_ms`, and `settled_ms` for the full round trip |
-| Does scrolling stay smooth? | `scroll.p95_ms` at 25k and 50k; 60 Hz is about 16.7 ms per frame |
+| Does scrolling stay smooth? | `scroll.p95_ms` from 25k to 100k; 60 Hz is about 16.7 ms per frame |
 | Is it the React side or everything around it? | the frontend tier for the same scenario |
 
 ### Rules for drawing conclusions
@@ -298,7 +298,7 @@ A negative `Δ` means B is faster. A row present on only one side shows `—`, a
 3. **Compare like with like.** Same machine, same size and shape selection, same benchmark files, runs close together in time. The first cell of a run starts cold; that once made a 100-row mount read twice as slow in a subset run. Prefer full runs, or the same subset on both sides.
 4. **Frontend numbers are relative.** jsdom is not a browser, and React runs its development build there. Use them to rank alternatives; quote browser numbers.
 5. **Expect the browser tier to show a smaller gain for React-side fixes.** A rerun in the browser also contains the Python call (about 100 ms at 50,000 rows), the payload transfer (2.3 to 3.4 MB at 50,000 rows), parsing, and Chrome's style, layout and paint over about 200,000 DOM nodes. Only the React part shrinks.
-6. **Small sizes are noisy and fast.** Below 5,000 rows most scenarios take a few milliseconds, and `scroll` sits at the 60 Hz frame time. Base decisions on 10,000 to 50,000 rows.
+6. **Small sizes are noisy and fast.** Below 5,000 rows most scenarios take a few milliseconds, and `scroll` sits at the 60 Hz frame time. Base decisions on 10,000 to 100,000 rows.
 7. **Three reps detect large effects.** For a suspected 5 to 10 % effect in the browser tier, run that cell with `--perf-reps 10` on both sides.
 
 ---
@@ -324,6 +324,34 @@ How to read it:
 
 ---
 
+## Reference run: 100 to 100,000 rows
+
+On 2026-10-07 the full matrix ran with the 100,000-row cells added, on the reference machine: Windows 11, Core Ultra 7 155H, 32 GB, CPU throttling off. Both tiers completed every cell. Browser tier, grouped shape, medians of 3 reps:
+
+| Measurement | Metric | 10,000 | 50,000 | 100,000 |
+|---|---|---|---|---|
+| The list appears | `mount.painted_ms` | 381 ms | 1,464 ms | 2,596 ms |
+| Clearing the search | `search_clear.painted_ms` | 175 ms | 1,113 ms | 1,991 ms |
+| Rerun, options unchanged | `rerun_unchanged.settled_ms` | 97 ms | 470 ms | 854 ms |
+| Rerun, one option changed | `rerun_one_changed.settled_ms` | 97 ms | 381 ms | 1,194 ms |
+| Click: the row highlights | `click_select.local_painted_ms` | 26 ms | 136 ms | 286 ms |
+| Click: the app settles | `click_select.settled_ms` | 115 ms | 429 ms | 1,308 ms |
+| Scroll frame, median / p95 | `scroll.p50_ms` / `p95_ms` | 17 / 18 ms | 29 / 32 ms | 91 / 198 ms |
+| Payload sent with the list | `mount.ws_bytes` | 0.67 MB | 3.35 MB | 6.70 MB |
+| The `listview()` call in Python | `py_mount.py_ms` | 25 ms | 119 ms | 235 ms |
+| DOM nodes | `dom_nodes` | 41,274 | 205,274 | 410,274 |
+
+The ungrouped shape differs from these figures by at most 25 %, except the scroll p95 at 50,000 rows (50 ms), and its payload is a third smaller: 4.5 MB at 100,000 rows.
+
+How to read it:
+
+- **Mount, search and an unchanged rerun grow with the rows.** Doubling the rows from 50,000 to 100,000 multiplies their time by 1.8 to 2.2.
+- **A changed row, a click's round trip and scrolling grow faster.** The same doubling multiplies their time by 3 to 6. At 100,000 rows a click keeps the main thread busy for 1.2 s (`click_select.task_ms`); the component's script takes 0.15 s of that, and style and layout almost nothing. The rest is Chrome's work outside script, style and layout, which the 2026-10-03 trace at 50,000 rows attributed to pre-paint, hit testing, commit and paint over the whole DOM. Only a smaller DOM reduces it.
+- **100,000 rows work, but slowly.** The demo offers the size so users can see that cost; 50,000 rows remain the practical ceiling of a list that renders every row.
+- **The frontend tier** needed no change beyond the new size. Its 100,000-row mount takes 5.6 s grouped and 11.7 s ungrouped in jsdom, and the grouped 100,000-row cell peaked at 3.6 GB of memory.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Cause and fix |
@@ -336,7 +364,7 @@ How to read it:
 | `run the browser benchmark from the root of the checkout it lives in …` | `cd` to the repository root that contains the `e2e/perf/` you are running |
 | `benchmark precondition failed: …` | the component did not behave as the scenario expects; the message names the condition. Investigate before weakening it |
 | `benchmark timeout waiting for …` after 240 s | the page never reached the condition, for example a component that does not render every row |
-| the frontend run dies with a heap or worker error at 50k | not enough memory; run a subset or close other applications |
+| the frontend run dies with a heap or worker error at 50k or 100k | not enough memory; run a subset or close other applications |
 | `UnicodeEncodeError` from the report | an old copy of `report.py`; the current one forces UTF-8 output |
 
 **Known limitation: virtualization.** Both tiers consider a mount finished when the last row exists in the DOM. A virtualized (windowed) list never renders it, so the frontend tier fails its precondition and the browser tier times out. Before a virtualized implementation can be benchmarked, `mount` needs a different end condition, such as the scroll height or a row-count attribute.
@@ -356,7 +384,7 @@ Appending keeps every existing pairing, so saved frontend baselines stay compara
 
 **A new browser scenario.** Add a JavaScript snippet to `e2e/perf/measure.py`, using `window.__bench` helpers such as `until`, `painted`, `byId` and `settled`, and call it from `run_cell`. The record key you write becomes the scenario name. `report.py` includes any numeric field automatically.
 
-**A new size or shape.** Extend `SIZES` / `SHAPES` in both `src/bench/fixtures.ts` and `e2e/perf/cells.py`, and adjust the sample budgets for anything larger than 50,000 rows.
+**A new size or shape.** Extend `SIZES` / `SHAPES` in both `src/bench/fixtures.ts` and `e2e/perf/cells.py`, and adjust the sample budgets for anything larger than 100,000 rows. A size above 100,000 also needs a sixth digit in both dataset generators, since `item-100000` would sort before `item-99999`.
 
 **After any change to the benchmark code**, run the quick checks:
 

@@ -47,6 +47,12 @@ CITIES = [
 GROUPS = group_names(CITIES)
 
 
+# The Large source's "Items" choices. The largest must stay within what
+# make_large_dataset's five-digit padding spells uniquely and in order:
+# 100,000 rows end at `item-99999`. tests/test_demo.py pins that.
+LARGE_SIZES = (100, 500, 1_000, 2_500, 5_000, 10_000, 25_000, 50_000, 100_000)
+
+
 def make_large_dataset(n):
     """Generate a deterministic list of n grouped options for the performance demo.
 

@@ -4,7 +4,8 @@
 Not a pass/fail performance test — it fails only when a scenario cannot
 complete (a precondition or a timeout inside measure.py). Skipped unless
 ``--perf-out`` is given (e2e/perf/conftest.py). The full matrix at the default
-3 reps takes 15–20 minutes; ``--perf-sizes 1000,50000`` for a quick look.
+3 reps takes about 19 minutes, 5 of them in the two 100k cells;
+``--perf-sizes 1000,50000`` for a quick look.
 """
 from datetime import datetime, timezone
 

@@ -22,7 +22,7 @@ def test_parse_subset_keeps_the_given_order_and_trims():
 def test_parse_subset_refuses_unknown_or_blank_entries_naming_the_option():
     with pytest.raises(
         ValueError,
-        match=r"--perf-sizes: '2000' is not one of 100, 1000, 5000, 10000, 25000, 50000",
+        match=r"--perf-sizes: '2000' is not one of 100, 1000, 5000, 10000, 25000, 50000, 100000$",
     ):
         cells.parse_subset("--perf-sizes", "100,2000", cells.SIZES)
     with pytest.raises(ValueError, match=r"--perf-sizes: '' is not one of"):

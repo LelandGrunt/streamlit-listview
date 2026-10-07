@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeVar
 
-SIZES: tuple[int, ...] = (100, 1_000, 5_000, 10_000, 25_000, 50_000)
+SIZES: tuple[int, ...] = (100, 1_000, 5_000, 10_000, 25_000, 50_000, 100_000)
 SHAPES: tuple[str, ...] = ("grouped", "ungrouped")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -31,8 +31,8 @@ def parse_subset(name: str, raw: str | None, allowed: Sequence[T]) -> list[T]:
     """The subset a comma-separated option names, or all of ``allowed`` when unset/blank.
 
     An unknown or blank entry raises, naming the option: a typo must not shrink
-    the matrix silently — a run that quietly skipped 50k would be read as "no
-    regression at 50k".
+    the matrix silently — a run that quietly skipped 100k would be read as "no
+    regression at 100k".
     """
     if raw is None or not raw.strip():
         return list(allowed)

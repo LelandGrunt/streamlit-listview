@@ -62,7 +62,7 @@ def pytest_addoption(parser):
     )
     group.addoption(
         "--perf-sizes", default=None, metavar="LIST",
-        help="comma-separated subset of 100,1000,5000,10000,25000,50000",
+        help="comma-separated subset of 100,1000,5000,10000,25000,50000,100000",
     )
     group.addoption(
         "--perf-shapes", default=None, metavar="LIST",

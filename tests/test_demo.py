@@ -676,6 +676,7 @@ def test_app_wires_large_data_source():
     src = (ROOT / "demo" / "app.py").read_text(encoding="utf-8")
     assert '"large_size"' in src            # config key
     assert "select_slider(" in src          # size control
+    assert "options=data.LARGE_SIZES" in src  # its choices
     ds = (ROOT / "demo" / "dataset.py").read_text(encoding="utf-8")
     assert '"Large"' in ds                  # registry key (data-source segment)
     assert "make_large_dataset(" in ds      # options resolution
@@ -763,6 +764,20 @@ def test_make_large_dataset_accepted_by_normalizer():
 
     items, _ = normalize_options(data.make_large_dataset(500), str)
     assert len(items) == 500
+
+
+def test_large_sizes_fit_the_five_digit_ids():
+    """The largest "Items" choice must not outgrow the generator's padding.
+
+    Past 100,000 rows a sixth digit appears: ids stay unique but stop sorting
+    in row order (``item-100000`` sorts before ``item-99999``), and so does the
+    demo's Sort control over the labels.
+    """
+    assert list(data.LARGE_SIZES) == sorted(set(data.LARGE_SIZES))
+    assert data.LARGE_SIZES[-1] <= 100_000
+    ids = [it["id"] for it in data.make_large_dataset(100_000)]
+    assert ids[-1] == "item-99999"
+    assert ids == sorted(set(ids)), "ids must be unique and sort in row order"
 
 
 def test_snippet_large_source_emits_comprehension():

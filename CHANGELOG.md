@@ -4,6 +4,12 @@ Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+### Added
+
+- The demo's **Large** dataset offers up to 100,000 items, up from 10,000.
+- The demo turns on Streamlit's websocket compression (`server.enableWebsocketCompression`). At 100,000 options a click or settings change then sends 0.48 MB over the network instead of 6.75 MB, for about 0.1 s more server CPU. An app of your own with a large option list can turn on the same setting.
+- The performance benchmarks also measure 100,000 rows. At that size, in Chromium, the list appears after 2.6 s, and a clicked row highlights after 0.29 s and the app settles after 1.3 s. The options take 6.7 MB to send, and Streamlit sends them again on every rerun that changes the listview's parameters or, for a listview with a `key`, its selection. See [BENCHMARKS.md](BENCHMARKS.md).
+
 ### Changed
 
 - **An entry the user adds via `accept_new_options` comes back in the type of the other options.** Before, it always came back as the typed string, so code had to test each returned value with `isinstance`. Now:

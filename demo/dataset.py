@@ -22,8 +22,8 @@ def _derived(options):
 def _large_dataset(n):
     """Build the Large dataset plus its derived ids/groups, memoized on ``n``.
 
-    resolve_dataset runs on every rerun, and at the size slider's 10,000 max this
-    is the demo's dominant server-side cost: 10k dicts and ~30k f-strings, then
+    resolve_dataset runs on every rerun, and at the size slider's 100,000 max this
+    is the demo's dominant server-side cost: 100k dicts and ~300k f-strings, then
     two more full walks to derive the ids and the group names. All three are pure
     functions of ``n``, so build them once per size. ``st.cache_data`` hands back a
     fresh copy on every call, so nothing downstream can poison the cache.

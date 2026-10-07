@@ -506,11 +506,15 @@ def render_data(cfg):
     elif source.sized:
         cfg["large_size"] = st.select_slider(
             "Items",
-            options=[100, 500, 1000, 2500, 5000, 10000],
+            options=data.LARGE_SIZES,
             value=cfg["large_size"],
+            format_func=lambda n: f"{n:,}",
             help=(
-                "Number of generated options. The list isn't virtualized, "
-                "so larger sizes show the component's render/scroll cost."
+                "Number of generated options. The list renders every row, so "
+                "larger sizes show its render and scroll cost: at 100,000 rows "
+                "it takes about 3 s to appear on a fast laptop, and each click "
+                "or settings change resends all options (6.75 MB, compressed "
+                "to 0.48 MB on the network)."
             ),
             key="cfg_large_size",
         )

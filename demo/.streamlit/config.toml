@@ -1,0 +1,6 @@
+[server]
+# The Large dataset's 100,000 options make a 6.75 MB message, which Streamlit
+# sends again on every click and settings change. Compressed, it crosses the
+# network as 0.48 MB, for about 0.1 s more server CPU (measured 2026-10-07).
+# Streamlit reads this file because it sits next to the entrypoint, demo/app.py.
+enableWebsocketCompression = true

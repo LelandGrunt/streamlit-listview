@@ -17,8 +17,13 @@ environment, installs the package, and compiles the frontend into
 The **Demo** tab is a live playground: every parameter is a control, and the
 generated code updates as you change settings. The **Data source** control
 switches between the built-in city dataset, your own pasted options, an empty
-list, or a **Large** generated dataset (up to 10,000 items) that shows render and
-scroll performance at scale. The **API reference** tab documents the full
+list, or a **Large** generated dataset (up to 100,000 items) that shows render and
+scroll performance at scale. The listview renders every row: at 100,000 items
+it takes about 3 seconds to appear on a fast laptop, scrolls at about 11 frames
+per second, and each click or settings change resends all options: 6.75 MB,
+which `demo/.streamlit/config.toml` compresses to 0.48 MB on the network by
+turning on `server.enableWebsocketCompression`.
+The **API reference** tab documents the full
 signature, parameters, return value, and runnable examples (`demo/examples/`).
 
 ## Theme switcher

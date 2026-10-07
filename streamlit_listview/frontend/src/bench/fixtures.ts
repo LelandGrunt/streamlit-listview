@@ -11,7 +11,9 @@ import { makeData } from "../test/makeData";
  */
 
 /** The row counts every benchmark cell is measured at. */
-export const SIZES = [100, 1_000, 5_000, 10_000, 25_000, 50_000] as const;
+export const SIZES = [
+  100, 1_000, 5_000, 10_000, 25_000, 50_000, 100_000,
+] as const;
 export type Size = (typeof SIZES)[number];
 
 /** `grouped` = batches of 100 (the demo/e2e shape); `ungrouped` = no group key. */
@@ -69,7 +71,7 @@ export function freshCopy(items: ListviewItem[]): ListviewItem[] {
  * The subset a comma-separated environment variable names, or all of `all`
  * when it is unset or blank. An entry outside `all` throws, naming the
  * variable: a typo must shrink nothing silently — a matrix that quietly ran
- * without its 50k column would be read as "no regression at 50k".
+ * without its 100k column would be read as "no regression at 100k".
  */
 export function subsetFromEnv<T extends string | number>(
   name: string,

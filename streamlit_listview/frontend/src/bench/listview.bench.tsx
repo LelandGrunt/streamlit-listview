@@ -60,8 +60,10 @@ interface BenchBudget {
 
 // tinybench runs a task until BOTH its time budget (default 500 ms) and its
 // iteration count (default 10) are met. Up to 5k rows that is cheap. Above it
-// one iteration costs seconds (50k mount ≈ 4.6 s in jsdom), so the count is
-// fixed and the budgets zeroed, with one warm-up iteration instead of five.
+// one iteration costs seconds (a mount in jsdom: 2.4-5.1 s at 50k, 5.6-11.7 s
+// at 100k, grouped-ungrouped), so the count is fixed and the budgets zeroed,
+// with one warm-up iteration instead of five. 100k keeps 50k's 3: each 100k
+// cell already runs about 4 minutes.
 function budget(n: number): BenchBudget {
   if (n <= 5_000) {
     return {};
@@ -70,7 +72,7 @@ function budget(n: number): BenchBudget {
   return { iterations, time: 0, warmupIterations: 1, warmupTime: 0 };
 }
 
-// `budget` is sized for mount (~2 s a go at 50k). The other scenarios cost
+// `budget` is sized for mount (seconds a go from 25k up). The other scenarios cost
 // 10-15x less per iteration, and 3 samples of them swing ~20% run to run —
 // more than the few-percent effects an A/B comparison has to resolve — so
 // above 5k rows they get a larger fixed count.
@@ -81,7 +83,7 @@ function cheapBudget(n: number): BenchBudget {
   return { iterations: 15, time: 0, warmupIterations: 2, warmupTime: 0 };
 }
 
-/** A rendered row by its DOM id — an id-map hit, cheap even at 50k rows. */
+/** A rendered row by its DOM id — an id-map hit, cheap even at 100k rows. */
 const row = (id: Id) => document.getElementById(`listview-opt-${id}`);
 
 for (const shape of SHAPES) {
@@ -107,7 +109,7 @@ for (const shape of SHAPES) {
         });
 
       // Render AND unmount in the timed body: with no per-iteration hook, the
-      // alternative is hundreds of 100-row trees (or three 50k ones) left
+      // alternative is hundreds of 100-row trees (or three 100k ones) left
       // mounted, skewing every later iteration. The unmount is ~10% of the
       // mount at 50k; the number is a mount cycle and is documented as such.
       bench(
@@ -139,7 +141,7 @@ for (const shape of SHAPES) {
       // One mounted instance per scenario. `setup` (untimed; once before the
       // warm-up, once before the measured run) mounts it, caches the DOM
       // handles the body needs — looked up ONCE, never inside the timed body,
-      // where a querySelectorAll over 50k rows would be the measurement — and
+      // where a querySelectorAll over 100k rows would be the measurement — and
       // checks the scenario's precondition; `teardown` unmounts AND lets go
       // of every handle (see `release`).
       let view: RenderResult;
