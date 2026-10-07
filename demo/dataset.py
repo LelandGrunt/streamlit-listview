@@ -98,3 +98,23 @@ def resolve_dataset(cfg):
     """
     source = DATA_SOURCES[cfg["data_source"]]
     return *source.resolve(cfg), source.builtin
+
+
+def dataset_identity(cfg):
+    """Return a string that changes whenever the config picks another dataset.
+
+    render_demo folds it into the widget key, so a new dataset remounts the
+    listview with an empty selection. Without the remount the selection outlives
+    the dataset it was made against, and with ``accept_new_options`` the listview
+    keeps every id that left the options as a new entry.
+
+    The identity is the source name, plus the item count for a sized source.
+    Edits to the Custom options text are left out on purpose: they change the
+    options of one dataset in place, the way an app changes ``options`` on a
+    keyed widget, and the demo shows how the listview reconciles its selection
+    with them.
+    """
+    name = cfg["data_source"]
+    if DATA_SOURCES[name].sized:
+        return f"{name!r}:{cfg['large_size']!r}"
+    return repr(name)

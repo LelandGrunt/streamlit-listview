@@ -27,6 +27,7 @@ Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](h
 ### Fixed
 
 - **`listview()` turns an unexpected value in an added entry into text.** The browser returns the selection to Python as JSON, so a modified page can send any value JSON can express as an added entry: a dict such as `{"$ne": None}`, a list, `None`, `True`, a float, or an int with `abs(value) > 2**53 - 1`. `listview()` returns such a value as `str(value)`: as the entry's `id` and `label` with dict options, and as the entry itself otherwise. An app that puts an added entry into a database query, such as a MongoDB filter, thus receives only a `str` or an `int` with `abs(value) <= 2**53 - 1`. Entries that users type into the add field come back as the table above shows.
+- **The demo clears the selection when you pick another data source or Large size.** Before, the selection outlived its dataset: with **Accept new options** on, every row selected in the old dataset stayed selected as an added entry. Edits to the **Custom** options keep the selection, so the demo still shows how a keyed listview corrects its selection when `options` change.
 
 ## [1.0.1] - 2026-10-04
 

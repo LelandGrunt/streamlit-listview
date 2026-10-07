@@ -1019,7 +1019,10 @@ def render_demo():
 
     # The selection lives in the component's frontend React state, so it
     # only clears/re-seeds on remount — and a v2 component remounts when its
-    # key changes. Three mount-time things therefore fold into the key:
+    # key changes. Four mount-time things therefore fold into the key:
+    #   * the dataset — a new data source or Large size starts with an empty
+    #     selection. In place, the selection outlives its dataset, and with
+    #     accept_new_options the listview keeps each old id as a new entry.
     #   * collapsed_groups — initial-state-only, so changing it re-applies.
     #   * default — seeds the frontend selection at mount only; on a keyed
     #     instance a later default change re-seeds NEITHER the display NOR
@@ -1033,7 +1036,8 @@ def render_demo():
     # 1 vs "1") must still render distinct keys, or the remount never fires
     # and the picked default is silently never applied.
     widget_key = (
-        f"demo_listview::{cfg['collapsed_groups']!r}::{cfg['default']!r}"
+        f"demo_listview::{dataset.dataset_identity(cfg)}"
+        f"::{cfg['collapsed_groups']!r}::{cfg['default']!r}"
         f"::r{st.session_state['demo_reset_nonce']}"
     )
     # .get: None is "no formatter", and so is a name no longer in the presets.

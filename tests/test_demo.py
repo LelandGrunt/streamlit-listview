@@ -896,6 +896,39 @@ def test_data_sources_registry_keys_and_traits():
     assert dataset.DATA_SOURCES["Empty"].empty_caption
 
 
+def test_dataset_identity_differs_per_source():
+    # The widget key folds it in, so each source must remount the listview.
+    identities = {
+        dataset.dataset_identity(_data_cfg(data_source=name))
+        for name in dataset.DATA_SOURCES
+    }
+    assert len(identities) == len(dataset.DATA_SOURCES)
+
+
+def test_dataset_identity_follows_the_large_size():
+    small = dataset.dataset_identity(_data_cfg(data_source="Large", large_size=100))
+    large = dataset.dataset_identity(_data_cfg(data_source="Large", large_size=1000))
+    assert small != large
+
+
+def test_dataset_identity_ignores_settings_of_other_sources():
+    # A size change while another source is active must not remount it.
+    cities = [
+        dataset.dataset_identity(_data_cfg(large_size=size)) for size in (100, 1000)
+    ]
+    assert cities[0] == cities[1]
+
+
+def test_dataset_identity_ignores_custom_options_edits():
+    # A Custom edit changes one dataset in place, so the listview reconciles its
+    # selection instead of remounting with an empty one.
+    before = dataset.dataset_identity(
+        _data_cfg(data_source="Custom", options_text="a\nb")
+    )
+    after = dataset.dataset_identity(_data_cfg(data_source="Custom", options_text="a"))
+    assert before == after
+
+
 def test_resolve_unknown_source_raises_key_error():
     # No silent fallback to the built-in cities: an unknown name (unreachable via
     # the UI, whose choices come from the same registry) must fail loudly.
