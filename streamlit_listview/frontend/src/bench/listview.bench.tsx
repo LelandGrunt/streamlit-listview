@@ -8,6 +8,7 @@ import {
   SIZES,
   benchData,
   freshCopy,
+  isGrouped,
   makeLargeDataset,
   precondition,
   subsetFromEnv,
@@ -99,12 +100,13 @@ for (const shape of SHAPES) {
       // scenario, so every payload this cell builds carries it — the mount,
       // each rerun's payload, and the group scenario's own mount — and a
       // rerun can never change the configuration the list mounted with.
+      const grouped = isGrouped(shape);
       const cellData = (
         items: ListviewItem[],
         overrides: Partial<ListviewData> = {},
       ) =>
         benchData(items, {
-          collapsible_groups: shape === "grouped",
+          collapsible_groups: grouped,
           ...overrides,
         });
 
@@ -258,7 +260,7 @@ for (const shape of SHAPES) {
         },
       );
 
-      if (shape === "grouped") {
+      if (grouped) {
         const collapsed = () => row(first) === null;
         bench(
           "group_collapse_then_expand",

@@ -9,6 +9,7 @@ Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](h
 - The demo's **Large** dataset offers up to 100,000 items, up from 10,000.
 - The demo turns on Streamlit's websocket compression (`server.enableWebsocketCompression`). At 100,000 options a click or settings change then sends 0.48 MB over the network instead of 6.75 MB, for about 0.1 s more server CPU. An app of your own with a large option list can turn on the same setting.
 - The performance benchmarks also measure 100,000 rows. At that size, in Chromium, the list appears after 2.6 s, and a clicked row highlights after 0.29 s and the app settles after 1.3 s. The options take 6.7 MB to send, and Streamlit sends them again on every rerun that changes the listview's parameters or, for a listview with a `key`, its selection. See [BENCHMARKS.md](BENCHMARKS.md).
+- The performance benchmarks measure dict options that carry a `disabled` key on every row. At 100,000 rows the key makes the options 28 % larger (8.6 MB instead of 6.7 MB), the `listview()` call 20 % slower and a rerun that leaves the options unchanged 12 % slower. Search, clicks, group toggles and scrolling take as long as without the key. A row without the key is enabled, so pass `disabled` only on the rows you disable.
 
 ### Changed
 

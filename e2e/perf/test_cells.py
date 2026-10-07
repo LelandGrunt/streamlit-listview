@@ -4,10 +4,14 @@ so they run under a plain ``pytest e2e/`` (e2e/perf/conftest.py's go_to_app
 override takes no page)."""
 
 import json
+import sys
 
 import pytest
 
 from e2e.perf import cells
+
+sys.path.insert(0, str(cells.REPO_ROOT / "demo"))
+from data import make_large_dataset
 
 
 def test_parse_subset_returns_everything_when_unset_or_blank():
@@ -45,6 +49,59 @@ def test_cells_are_shape_major_with_stable_ids():
     ]
     assert out[0].grouped is True
     assert out[2].grouped is False
+
+
+def test_the_disabled_shape_is_grouped_and_listed_last():
+    assert cells.SHAPES == ("grouped", "ungrouped", "disabled")
+    assert cells.Cell(100, "disabled").grouped is True
+    assert cells.Cell(100, "disabled").id == "disabled-n100"
+
+
+def test_shape_rows_keeps_the_grouped_rows_and_drops_the_group_when_ungrouped():
+    rows = make_large_dataset(3)
+    assert cells.shape_rows(rows, "grouped") is rows
+    assert cells.shape_rows(rows, "ungrouped")[2] == {
+        "id": "item-00002",
+        "label": "Item 00002",
+    }
+
+
+# The same literals streamlit_listview/frontend/src/bench/fixtures.test.ts pins
+# the frontend's makeLargeDataset to.
+def test_shape_rows_adds_disabled_to_every_row_true_on_rows_5_15_25():
+    rows = make_large_dataset(250)
+    out = cells.shape_rows(rows, "disabled")
+    assert out[0] == {
+        "id": "item-00000",
+        "label": "Item 00000",
+        "group": "Batch 000",
+        "disabled": False,
+    }
+    assert out[5] == {
+        "id": "item-00005",
+        "label": "Item 00005",
+        "group": "Batch 000",
+        "disabled": True,
+    }
+    assert all(type(row["disabled"]) is bool for row in out)
+    disabled = [row["id"] for row in out if row["disabled"]]
+    assert len(disabled) == 25
+    assert disabled[1] == "item-00015"
+    assert disabled[24] == "item-00245"
+    assert [{k: v for k, v in row.items() if k != "disabled"} for row in out] == rows
+    assert "disabled" not in rows[5]  # the cached grouped rows stay untouched
+
+
+def test_shape_rows_leaves_every_row_a_scenario_drives_enabled_at_every_size():
+    # measure.py clicks, searches for or edits the first, middle and last row.
+    for n in cells.SIZES:
+        out = cells.shape_rows(make_large_dataset(n), "disabled")
+        assert [out[i]["disabled"] for i in (0, 1, n // 2, n - 1)] == [False] * 4
+
+
+def test_shape_rows_refuses_an_unknown_shape():
+    with pytest.raises(ValueError, match=r"'nested' is not one of grouped, "):
+        cells.shape_rows([], "nested")
 
 
 def test_require_bundle_passes_with_a_built_bundle(tmp_path):

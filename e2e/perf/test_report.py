@@ -11,10 +11,11 @@ from e2e.perf import report
 from e2e.perf.report import Stats
 
 
-def rec(n=100, grouped=True, rep=0, **scenarios):
+def rec(n=100, shape="grouped", rep=0, **scenarios):
     return {
         "n": n,
-        "grouped": grouped,
+        "shape": shape,
+        "grouped": shape != "ungrouped",
         "throttle": 1,
         "rep": rep,
         "branch": "abc",
@@ -43,7 +44,7 @@ def test_summarize_takes_median_low_high_and_count_per_cell_scenario_metric():
         rec(rep=i, mount={"painted_ms": v}) for i, v in enumerate([30.0, 10.0, 20.0])
     ]
     assert report.summarize(records) == {
-        (100, True, "mount", "painted_ms"): Stats(
+        (100, "grouped", "mount", "painted_ms"): Stats(
             median=20.0, low=10.0, high=30.0, count=3
         )
     }
@@ -53,55 +54,85 @@ def test_summarize_tolerates_records_that_lack_a_scenario():
     # An ungrouped rep has no group_* scenario; a rep that crashed after mount
     # has nothing else. Neither may raise, and counts differ per key.
     records = [
-        rec(grouped=False, mount={"painted_ms": 1.0}),
-        rec(grouped=False, rep=1, mount={"painted_ms": 3.0}, scroll={"p95_ms": 9.0}),
+        rec(shape="ungrouped", mount={"painted_ms": 1.0}),
+        rec(
+            shape="ungrouped", rep=1, mount={"painted_ms": 3.0}, scroll={"p95_ms": 9.0}
+        ),
     ]
     stats = report.summarize(records)
-    assert stats[(100, False, "mount", "painted_ms")].count == 2
-    assert stats[(100, False, "scroll", "p95_ms")] == Stats(9.0, 9.0, 9.0, 1)
-    assert (100, False, "group_collapse", "painted_ms") not in stats
+    assert stats[(100, "ungrouped", "mount", "painted_ms")].count == 2
+    assert stats[(100, "ungrouped", "scroll", "p95_ms")] == Stats(9.0, 9.0, 9.0, 1)
+    assert (100, "ungrouped", "group_collapse", "painted_ms") not in stats
+
+
+def test_summarize_keeps_the_grouped_and_disabled_shapes_apart():
+    # Both are grouped; keyed by `grouped` alone, their reps would pool.
+    records = [
+        rec(shape="grouped", mount={"painted_ms": 10.0}),
+        rec(shape="disabled", mount={"painted_ms": 30.0}),
+    ]
+    stats = report.summarize(records)
+    assert stats[(100, "grouped", "mount", "painted_ms")] == Stats(10.0, 10.0, 10.0, 1)
+    assert stats[(100, "disabled", "mount", "painted_ms")] == Stats(30.0, 30.0, 30.0, 1)
+
+
+def test_summarize_reads_the_shape_of_a_record_written_before_it_was_recorded():
+    # A baseline recorded before the `disabled` shape carries only `grouped`.
+    old = [
+        {
+            k: v
+            for k, v in rec(shape=s, mount={"painted_ms": 5.0}).items()
+            if k != "shape"
+        }
+        for s in ("grouped", "ungrouped")
+    ]
+    assert set(report.summarize(old)) == {
+        (100, "grouped", "mount", "painted_ms"),
+        (100, "ungrouped", "mount", "painted_ms"),
+    }
 
 
 def test_compare_pairs_keys_and_marks_a_missing_side():
     a = {
-        (100, True, "mount", "painted_ms"): Stats(20.0, 18.0, 22.0, 3),
-        (50000, True, "mount", "painted_ms"): Stats(4000.0, 3900.0, 4100.0, 3),
+        (100, "grouped", "mount", "painted_ms"): Stats(20.0, 18.0, 22.0, 3),
+        (50000, "grouped", "mount", "painted_ms"): Stats(4000.0, 3900.0, 4100.0, 3),
     }
     b = {
-        (100, True, "mount", "painted_ms"): Stats(15.0, 14.0, 16.0, 3),
-        (100, False, "mount", "painted_ms"): Stats(14.0, 14.0, 14.0, 1),
+        (100, "grouped", "mount", "painted_ms"): Stats(15.0, 14.0, 16.0, 3),
+        (100, "ungrouped", "mount", "painted_ms"): Stats(14.0, 14.0, 14.0, 1),
     }
     rows = report.compare(a, b)
     assert [r.key for r in rows] == [
-        (100, False, "mount", "painted_ms"),
-        (100, True, "mount", "painted_ms"),
-        (50000, True, "mount", "painted_ms"),
+        (100, "grouped", "mount", "painted_ms"),
+        (100, "ungrouped", "mount", "painted_ms"),
+        (50000, "grouped", "mount", "painted_ms"),
     ]
-    both = rows[1]
+    both = rows[0]
     assert both.delta == -5.0
     assert both.pct == -25.0
-    assert rows[0].a is None and rows[0].delta is None and rows[0].pct is None
+    assert rows[1].a is None and rows[1].delta is None and rows[1].pct is None
     assert rows[2].b is None
 
 
 def test_render_compare_markdown_has_a_header_separator_and_dashes_for_missing():
     rows = report.compare(
-        {(100, True, "mount", "painted_ms"): Stats(20.0, 18.0, 22.0, 3)},
-        {(100, False, "mount", "painted_ms"): Stats(14.0, 14.0, 14.0, 1)},
+        {(100, "grouped", "mount", "painted_ms"): Stats(20.0, 18.0, 22.0, 3)},
+        {(100, "ungrouped", "mount", "painted_ms"): Stats(14.0, 14.0, 14.0, 1)},
     )
     text = report.render_compare(rows, markdown=True)
     lines = text.splitlines()
     assert lines[0].startswith("| n ")
     assert set(lines[1]) <= set("|- ")
     assert "—" in lines[2] and "—" in lines[3]
-    # Row 1 (ungrouped) has no A side, row 2 (grouped) has A range of 18.0..22.0
+    # Row 1 (grouped) has an A range of 18.0..22.0, row 2 (ungrouped) no A side
     assert "18.0..22.0" in text
     assert text.rstrip().endswith("1 measurement(s) only in A, 1 only in B.")
 
 
 def test_render_summary_plain_lists_median_low_high_and_reps():
     text = report.render_summary(
-        {(1000, False, "scroll", "p95_ms"): Stats(24.5, 20.0, 31.0, 3)}, markdown=False
+        {(1000, "ungrouped", "scroll", "p95_ms"): Stats(24.5, 20.0, 31.0, 3)},
+        markdown=False,
     )
     header, row = text.splitlines()
     assert header.split() == [

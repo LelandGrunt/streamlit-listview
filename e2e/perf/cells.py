@@ -22,7 +22,9 @@ from pathlib import Path
 from typing import TypeVar
 
 SIZES: tuple[int, ...] = (100, 1_000, 5_000, 10_000, 25_000, 50_000, 100_000)
-SHAPES: tuple[str, ...] = ("grouped", "ungrouped")
+# The frontend tier's SHAPES (src/bench/fixtures.ts) in the same order; see
+# shape_rows for what each one renders.
+SHAPES: tuple[str, ...] = ("grouped", "ungrouped", "disabled")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 T = TypeVar("T")
@@ -58,7 +60,7 @@ class Cell:
 
     @property
     def grouped(self) -> bool:
-        return self.shape == "grouped"
+        return self.shape != "ungrouped"
 
     @property
     def id(self) -> str:
@@ -68,6 +70,25 @@ class Cell:
 def cells(sizes: Sequence[int], shapes: Sequence[str]) -> list[Cell]:
     """Shape-major: every size of one shape, then the next."""
     return [Cell(n, shape) for shape in shapes for n in sizes]
+
+
+def shape_rows(rows: list[dict], shape: str) -> list[dict]:
+    """A cell's options, derived from ``make_large_dataset``'s grouped rows.
+
+    ``grouped`` passes the rows through; ``ungrouped`` drops the group;
+    ``disabled`` adds a ``disabled`` key to every row, ``True`` on every tenth
+    (rows 5, 15, 25, …). No row the scenarios drive — the first, the middle
+    and the last — falls on ``i % 10 == 5``. The frontend tier's
+    ``makeLargeDataset`` derives the same shapes; the two tests pin the same
+    literals. New dicts, never a mutation: the harness caches ``rows``.
+    """
+    if shape == "grouped":
+        return rows
+    if shape == "ungrouped":
+        return [{"id": r["id"], "label": r["label"]} for r in rows]
+    if shape == "disabled":
+        return [{**r, "disabled": i % 10 == 5} for i, r in enumerate(rows)]
+    raise ValueError(f"shape {shape!r} is not one of {', '.join(SHAPES)}")
 
 
 def bundle_dir(root: Path) -> Path:

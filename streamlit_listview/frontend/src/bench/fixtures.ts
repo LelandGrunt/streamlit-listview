@@ -16,29 +16,45 @@ export const SIZES = [
 ] as const;
 export type Size = (typeof SIZES)[number];
 
-/** `grouped` = batches of 100 (the demo/e2e shape); `ungrouped` = no group key. */
-export const SHAPES = ["grouped", "ungrouped"] as const;
+/**
+ * `grouped` = batches of 100 (the demo/e2e shape); `ungrouped` = no group key;
+ * `disabled` = `grouped` plus a `disabled` key on every row, `true` on every
+ * tenth (rows 5, 15, 25, …). `disabled` stays LAST: `vitest bench --compare`
+ * pairs cells by position, so a baseline recorded before it existed still
+ * lines up with the first two shapes.
+ */
+export const SHAPES = ["grouped", "ungrouped", "disabled"] as const;
 export type Shape = (typeof SHAPES)[number];
+
+/** Whether the shape's rows carry a group, and the cell renders collapsible groups. */
+export function isGrouped(shape: Shape): boolean {
+  return shape !== "ungrouped";
+}
 
 /**
  * TypeScript mirror of demo/data.py::make_large_dataset — id `item-00042`,
  * label `Item 00042`, group `Batch 000` — so both tiers measure the same rows.
  * fixtures.test.ts pins it to the literals tests/test_demo.py pins the Python
- * generator to; change both generators or neither.
+ * generator to; change both generators or neither. The shapes are derived the
+ * way e2e/perf/cells.py::shape_rows derives them; the two tests pin the same
+ * literals. No row a scenario drives (0, 1, n/2, n-1) falls on `i % 10 === 5`.
  */
 export function makeLargeDataset(n: number, shape: Shape): ListviewItem[] {
   // eslint-disable-next-line unicorn/no-new-array -- preallocates n slots, for up to 100,000 rows
   const items: ListviewItem[] = new Array<ListviewItem>(n);
   for (let i = 0; i < n; i++) {
     const num = String(i).padStart(5, "0");
+    const id = `item-${num}`;
+    const label = `Item ${num}`;
+    const group = `Batch ${String(Math.floor(i / 100)).padStart(3, "0")}`;
+    // One object literal per shape, so the two older shapes build the same
+    // objects as before the third existed.
     items[i] =
-      shape === "grouped"
-        ? {
-            id: `item-${num}`,
-            label: `Item ${num}`,
-            group: `Batch ${String(Math.floor(i / 100)).padStart(3, "0")}`,
-          }
-        : { id: `item-${num}`, label: `Item ${num}` };
+      shape === "ungrouped"
+        ? { id, label }
+        : shape === "grouped"
+          ? { id, label, group }
+          : { id, label, group, disabled: i % 10 === 5 };
   }
   return items;
 }

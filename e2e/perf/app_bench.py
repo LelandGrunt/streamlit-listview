@@ -2,7 +2,8 @@
 """Streamlit harness for the browser-tier performance benchmark (e2e/perf).
 
 Driven by e2e/perf/test_bench.py through Playwright. The query string picks the
-cell — ``?n=<rows>&grouped=<0|1>&newopt=<0|1>`` — and the list mounts only on
+cell — ``?n=<rows>&shape=<grouped|ungrouped|disabled>&newopt=<0|1>`` (the
+rows of each shape: ``cells.shape_rows``) — and the list mounts only on
 the "show" button, so the test times the mount itself. "rerun" is an unrelated
 widget interaction: the options arrive unchanged, as freshly parsed JSON.
 "edit" flips one option's label (row N/2), so the rerun it causes ships a
@@ -23,30 +24,34 @@ from pathlib import Path
 
 import streamlit as st
 
-# `streamlit run` does not put demo/ on sys.path (it is not a package).
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "demo"))
+# `streamlit run` guarantees neither the checkout root (for the e2e package) nor
+# demo/ (not a package) on sys.path; e2e/app_performance.py does the same.
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "demo"))
+sys.path.insert(0, str(ROOT))
 from data import make_large_dataset
+from e2e.perf.cells import shape_rows
 from streamlit_listview import listview
 
 qp = st.query_params
 n = int(qp.get("n", "1000"))
-grouped = qp.get("grouped", "1") == "1"
+shape = qp.get("shape", "grouped")
+grouped = shape != "ungrouped"
 newopt = qp.get("newopt", "0") == "1"
 
 
 @st.cache_resource
-def dataset(n: int, grouped: bool) -> list:
-    rows = make_large_dataset(n)
-    return rows if grouped else [{"id": r["id"], "label": r["label"]} for r in rows]
+def dataset(n: int, shape: str) -> list:
+    return shape_rows(make_large_dataset(n), shape)
 
 
 @st.cache_resource
-def options_bytes(n: int, grouped: bool) -> int:
+def options_bytes(n: int, shape: str) -> int:
     """Size of the options as the caller passes them — what Streamlit resends every rerun."""
-    return len(json.dumps(dataset(n, grouped)).encode())
+    return len(json.dumps(dataset(n, shape)).encode())
 
 
-base = dataset(n, grouped)
+base = dataset(n, shape)
 
 ss = st.session_state
 ss.setdefault("show", False)
@@ -82,7 +87,7 @@ if ss.show:
     py_ms = (time.perf_counter() - started) * 1000
     sel = selected["id"] if isinstance(selected, dict) else selected
     st.text(
-        f"BENCH py_ms={py_ms:.1f} options_bytes={options_bytes(n, grouped)} "
+        f"BENCH py_ms={py_ms:.1f} options_bytes={options_bytes(n, shape)} "
         f"sel={sel} rerun={ss.reruns} edit={ss.edits}"
     )
 else:

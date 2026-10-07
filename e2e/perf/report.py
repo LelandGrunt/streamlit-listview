@@ -23,9 +23,9 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-Key = tuple[int, bool, str, str]  # (n, grouped, scenario, metric)
+Key = tuple[int, str, str, str]  # (n, shape, scenario, metric)
 
-META = frozenset({"n", "grouped", "throttle", "rep", "branch", "started"})
+META = frozenset({"n", "shape", "grouped", "throttle", "rep", "branch", "started"})
 
 
 @dataclass(frozen=True)
@@ -86,11 +86,20 @@ def flatten(record: dict) -> dict[tuple[str, str], float]:
     return out
 
 
+def record_shape(record: dict) -> str:
+    """The record's shape. A record written before the ``disabled`` shape existed
+    carries only ``grouped``, and then had exactly two shapes to tell apart."""
+    if "shape" in record:
+        return str(record["shape"])
+    return "grouped" if record["grouped"] else "ungrouped"
+
+
 def summarize(records: Iterable[dict]) -> dict[Key, Stats]:
     samples: dict[Key, list[float]] = {}
     for record in records:
+        shape = record_shape(record)
         for (scenario, metric), value in flatten(record).items():
-            key: Key = (int(record["n"]), bool(record["grouped"]), scenario, metric)
+            key: Key = (int(record["n"]), shape, scenario, metric)
             samples.setdefault(key, []).append(value)
     return {
         key: Stats(statistics.median(values), min(values), max(values), len(values))
@@ -106,10 +115,6 @@ def _fmt(value: float | None) -> str:
     if value is None:
         return "—"
     return f"{value:,.0f}" if abs(value) >= 100 else f"{value:,.1f}"
-
-
-def _shape(grouped: bool) -> str:
-    return "grouped" if grouped else "ungrouped"
 
 
 def _table(header: list[str], rows: list[list[str]], markdown: bool) -> str:
@@ -133,7 +138,7 @@ def render_summary(stats: dict[Key, Stats], markdown: bool) -> str:
     rows = [
         [
             str(n),
-            _shape(g),
+            shape,
             s,
             m,
             _fmt(st.median),
@@ -141,7 +146,7 @@ def render_summary(stats: dict[Key, Stats], markdown: bool) -> str:
             _fmt(st.high),
             str(st.count),
         ]
-        for (n, g, s, m), st in sorted(stats.items())
+        for (n, shape, s, m), st in sorted(stats.items())
     ]
     return _table(header, rows, markdown)
 
@@ -161,13 +166,13 @@ def render_compare(rows: list[Row], markdown: bool) -> str:
     ]
     body = []
     for row in rows:
-        n, g, s, m = row.key
+        n, shape, s, m = row.key
         a_range = "—" if row.a is None else f"{_fmt(row.a.low)}..{_fmt(row.a.high)}"
         b_range = "—" if row.b is None else f"{_fmt(row.b.low)}..{_fmt(row.b.high)}"
         body.append(
             [
                 str(n),
-                _shape(g),
+                shape,
                 s,
                 m,
                 _fmt(row.a.median if row.a else None),

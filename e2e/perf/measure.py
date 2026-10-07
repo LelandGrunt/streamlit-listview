@@ -313,8 +313,13 @@ def _show(
 
 def run_cell(browser: Browser, server_url: str, cell: Cell, throttle: int) -> dict:
     ids = cell_ids(cell.n)
-    record: dict = {"n": cell.n, "grouped": cell.grouped, "throttle": throttle}
-    base_url = f"{server_url}/?n={cell.n}&grouped={int(cell.grouped)}"
+    record: dict = {
+        "n": cell.n,
+        "shape": cell.shape,
+        "grouped": cell.grouped,
+        "throttle": throttle,
+    }
+    base_url = f"{server_url}/?n={cell.n}&shape={cell.shape}"
 
     page, cdp, ws_bytes = _open(browser, throttle)
     try:
@@ -363,7 +368,7 @@ def run_cell(browser: Browser, server_url: str, cell: Cell, throttle: int) -> di
         page.wait_for_timeout(1500)
         record["click_select"].update(_busy(before, _metrics(cdp)))
 
-        # 6) collapse and expand the first group (grouped shape only).
+        # 6) collapse and expand the first group (the grouped shapes only).
         if cell.grouped:
             record["group_collapse"] = page.evaluate(GROUP_JS, [ids.first, True])
             record["group_expand"] = page.evaluate(GROUP_JS, [ids.first, False])

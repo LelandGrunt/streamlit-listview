@@ -4,6 +4,7 @@ import {
   SIZES,
   benchData,
   freshCopy,
+  isGrouped,
   makeLargeDataset,
   precondition,
   subsetFromEnv,
@@ -32,6 +33,45 @@ describe("makeLargeDataset", () => {
     const items = makeLargeDataset(3, "ungrouped");
     expect(items[2]).toEqual({ id: "item-00002", label: "Item 00002" });
     expect(items.some((item) => "group" in item)).toBe(false);
+  });
+
+  // The same literals e2e/perf/test_cells.py pins cells.shape_rows to.
+  it("adds `disabled` to every grouped row in the disabled shape, true on rows 5, 15, 25, …", () => {
+    const items = makeLargeDataset(250, "disabled");
+    expect(items[0]).toEqual({
+      id: "item-00000",
+      label: "Item 00000",
+      group: "Batch 000",
+      disabled: false,
+    });
+    expect(items[5]).toEqual({
+      id: "item-00005",
+      label: "Item 00005",
+      group: "Batch 000",
+      disabled: true,
+    });
+    expect(items.every((item) => typeof item.disabled === "boolean")).toBe(
+      true,
+    );
+    const disabled = items.filter((item) => item.disabled);
+    expect(disabled).toHaveLength(25);
+    expect(disabled[1].id).toBe("item-00015");
+    expect(disabled[24].id).toBe("item-00245");
+    expect(items.map(({ disabled: _flag, ...row }) => row)).toEqual(
+      makeLargeDataset(250, "grouped"),
+    );
+  });
+
+  // Both tiers click, search for or edit these rows: the first two, the
+  // middle one and the last. A disabled one would turn a scenario into a
+  // precondition failure.
+  it("leaves every row a scenario drives enabled, at every size", () => {
+    for (const n of SIZES) {
+      const items = makeLargeDataset(n, "disabled");
+      for (const i of [0, 1, n >> 1, n - 1]) {
+        expect(items[i].disabled).toBe(false);
+      }
+    }
   });
 
   it("is empty at n=0", () => {
@@ -101,7 +141,15 @@ describe("subsetFromEnv", () => {
     );
     expect(() =>
       subsetFromEnv("LISTVIEW_BENCH_SHAPES", "grouped,,ungrouped", SHAPES),
-    ).toThrow('LISTVIEW_BENCH_SHAPES: "" is not one of grouped, ungrouped');
+    ).toThrow(
+      'LISTVIEW_BENCH_SHAPES: "" is not one of grouped, ungrouped, disabled',
+    );
+  });
+});
+
+describe("isGrouped", () => {
+  it("is true for every shape with groups", () => {
+    expect(SHAPES.filter(isGrouped)).toEqual(["grouped", "disabled"]);
   });
 });
 

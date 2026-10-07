@@ -77,7 +77,7 @@ def pytest_addoption(parser):
         "--perf-shapes",
         default=None,
         metavar="LIST",
-        help="comma-separated subset of grouped,ungrouped",
+        help="comma-separated subset of grouped,ungrouped,disabled",
     )
 
 
