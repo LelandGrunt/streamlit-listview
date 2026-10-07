@@ -17,21 +17,25 @@ LOGO_DIR = DEMO_DIR.parent / "assets" / "logo"
 if str(DEMO_DIR) not in sys.path:
     sys.path.insert(0, str(DEMO_DIR))
 
-import data  # noqa: E402
-from codegen import DEPENDENT_PARAMS, build_snippet  # noqa: E402
-from parsing import coerce_multi_default, coerce_single_default, has_selection  # noqa: E402
-
-import dataset  # noqa: E402
-import themes  # noqa: E402
-
-from streamlit_listview import listview  # noqa: E402
+import data
+import dataset
+import themes
+from codegen import DEPENDENT_PARAMS, build_snippet
+from parsing import (
+    coerce_multi_default,
+    coerce_single_default,
+    has_selection,
+)
+from streamlit_listview import listview
 
 try:
     LISTVIEW_VERSION = version("streamlit-listview")
 except PackageNotFoundError:  # running from source without an installed dist
     LISTVIEW_VERSION = "dev"
 
-CHANGELOG_URL = "https://github.com/LelandGrunt/streamlit-listview/blob/main/CHANGELOG.md"
+CHANGELOG_URL = (
+    "https://github.com/LelandGrunt/streamlit-listview/blob/main/CHANGELOG.md"
+)
 
 st.set_page_config(
     page_title="Listview · Component Demo",
@@ -134,9 +138,7 @@ THEME_SWITCHER = themes.switcher_enabled(os.environ)
 # next one: either this session's own pick (_switch_theme) or the server theme
 # falling back to the default, THEME_TTL after the last switch or at once when
 # the picker was switched off.
-if themes.SERVER_THEME.expire(
-    now=datetime.now(timezone.utc), enabled=THEME_SWITCHER
-):
+if themes.SERVER_THEME.expire(now=datetime.now(timezone.utc), enabled=THEME_SWITCHER):
     st.rerun()
 if st.session_state.pop("demo_theme_switched", False):
     st.rerun()
@@ -829,9 +831,7 @@ def render_groups(cfg, ids, groups):
         cfg["collapsed_groups"] = "all"
     else:
         prev = (
-            cfg["collapsed_groups"]
-            if isinstance(cfg["collapsed_groups"], list)
-            else []
+            cfg["collapsed_groups"] if isinstance(cfg["collapsed_groups"], list) else []
         )
         prev = [g for g in prev if g in groups]
         chosen = st.multiselect(
@@ -898,9 +898,7 @@ def render_formatting(cfg, ids, groups):
     # state rather than an unknown value.
     preset_names = list(data.FORMAT_PRESETS)
     prior = st.session_state.get("cfg_format_preset", cfg["format_preset"])
-    st.session_state["cfg_format_preset"] = (
-        prior if prior in preset_names else None
-    )
+    st.session_state["cfg_format_preset"] = prior if prior in preset_names else None
     cfg["format_preset"] = st.selectbox(
         "Label formatting (format_func)",
         preset_names,
@@ -990,9 +988,7 @@ def render_demo():
         source = dataset.DATA_SOURCES[cfg["data_source"]]
         _t0 = time.perf_counter()
         options, ids, groups, builtin = dataset.resolve_dataset(cfg)
-        large_build_ms = (
-            (time.perf_counter() - _t0) * 1000 if source.timed else None
-        )
+        large_build_ms = (time.perf_counter() - _t0) * 1000 if source.timed else None
 
         if render_section is not None:
             render_section(cfg, ids, groups)
@@ -1224,8 +1220,10 @@ def render_api():
         (
             ":material/settings: Behavior: limits, new options & disabled",
             "behavior.py",
-            "Cap picks with max_selections, let users add their own with "
-            "accept_new_options, and lock the list with disabled.",
+            (
+                "Cap picks with max_selections, let users add their own with "
+                "accept_new_options, and lock the list with disabled."
+            ),
         ),
         (
             ":material/account_tree: Groups, search & collapsing",

@@ -15,6 +15,7 @@ this conftest overrides from e2e/conftest.py is deliberately narrow:
   fixed, asserted number of listviews; the demo renders a configurable one, so it
   waits for the first to be visible instead of counting.
 """
+
 from pathlib import Path
 
 import pytest

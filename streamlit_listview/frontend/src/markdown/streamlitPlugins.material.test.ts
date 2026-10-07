@@ -4,7 +4,11 @@ import {
   createRemarkStreamlitLogo,
   materialIconPreprocess,
 } from "./streamlitPlugins";
-import { findElement, renderHast as renderHastWith, textOf } from "../test/hast";
+import {
+  findElement,
+  renderHast as renderHastWith,
+  textOf,
+} from "../test/hast";
 
 const renderHast = (src: string) =>
   renderHastWith(src, [
@@ -48,7 +52,10 @@ describe("createRemarkStreamlitLogo", () => {
   it("replaces :streamlit: with an inline streamlit-logo image", () => {
     // The logo token is neutralised to a sentinel by materialIconPreprocess
     // before parsing, then findAndReplace'd into the image.
-    const img = findElement(renderHast(materialIconPreprocess(":streamlit:")), "img");
+    const img = findElement(
+      renderHast(materialIconPreprocess(":streamlit:")),
+      "img",
+    );
     expect(img).toBeDefined();
     expect(img?.properties?.alt).toBe("Streamlit logo");
   });

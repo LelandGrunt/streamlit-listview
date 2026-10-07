@@ -4,6 +4,7 @@ The second half exercises `scripts/verify_wheel.py`, the CI gate that inspects a
 built wheel. It is driven against synthetic zips rather than a real `uv build`
 so the assertions (including the failure paths) run without a Node toolchain.
 """
+
 import re
 import sys
 import zipfile
@@ -20,7 +21,7 @@ EXPECTED_VERSION = "1.0.1"
 
 sys.path.insert(0, str(ROOT / "scripts"))
 
-import verify_wheel  # noqa: E402
+import verify_wheel
 
 
 def _read(p: Path) -> str:
@@ -62,7 +63,7 @@ def test_root_packagedata_bundles_build_and_nested_manifest():
     text = _read(ROOT_PYPROJECT)
     # package-data must ship the built frontend AND the nested pyproject manifest
     assert "frontend/build/**/*" in text
-    assert re.search(r'package-data[\s\S]*pyproject\.toml', text), (
+    assert re.search(r"package-data[\s\S]*pyproject\.toml", text), (
         "root package-data must include the nested pyproject.toml"
     )
 
@@ -149,12 +150,16 @@ def test_verify_wheel_rejects_an_extra_file_under_build(monkeypatch, tmp_path):
     )
     with pytest.raises(SystemExit) as exc:
         _verify(monkeypatch, wheel)
-    assert "unexpected files under frontend/build/: " \
-           "streamlit_listview/frontend/build/extra.txt" in str(exc.value)
+    assert (
+        "unexpected files under frontend/build/: "
+        "streamlit_listview/frontend/build/extra.txt" in str(exc.value)
+    )
 
 
 def test_verify_wheel_rejects_a_leaked_build_backend(monkeypatch, tmp_path):
-    wheel = _fake_wheel(tmp_path, [*_good_entries(), "streamlit_listview/_build_backend.py"])
+    wheel = _fake_wheel(
+        tmp_path, [*_good_entries(), "streamlit_listview/_build_backend.py"]
+    )
     with pytest.raises(SystemExit) as exc:
         _verify(monkeypatch, wheel)
     assert "must not ship _build_backend.py" in str(exc.value)

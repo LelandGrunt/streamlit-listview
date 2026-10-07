@@ -23,6 +23,7 @@ const DANGEROUS_URL_SCHEMES = ["javascript:", "vbscript:", "file:", "blob:"];
 // them before comparing. This is the faithful Streamlit regex /[\x00-\x1F]/g,
 // written with explicit \u escapes so it survives copy/paste intact. A literal
 // space (U+0020) is NOT a C0 control char and is intentionally left alone.
+// eslint-disable-next-line no-control-regex -- matching control characters is the point
 const C0_CONTROL_CHARS_REGEX = /[\u0000-\u001F]/g;
 
 /**
@@ -62,9 +63,7 @@ export function transformUri(href: string, key?: string): string {
 // react-markdown injects a `node` prop (the hast node) into every component
 // override; it must not be spread onto the DOM element. Tiny inline `omit`
 // avoids pulling in lodash (keeps the single-file bundle lean).
-function omitNode<T extends { node?: unknown }>(
-  props: T,
-): Omit<T, "node"> {
+function omitNode<T extends { node?: unknown }>(props: T): Omit<T, "node"> {
   const { node: _node, ...rest } = props;
   return rest;
 }

@@ -22,6 +22,7 @@ Overrides from e2e/conftest.py, the way e2e/demo/conftest.py does for the demo:
 ``app_file`` (one harness for the package) and ``go_to_app`` (each cell
 navigates to its own query string, and the pure tests need no page at all).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -53,19 +54,29 @@ def pytest_addoption(parser):
         "without it every e2e/perf benchmark is skipped",
     )
     group.addoption(
-        "--perf-reps", type=int, default=3, metavar="N",
+        "--perf-reps",
+        type=int,
+        default=3,
+        metavar="N",
         help="measured reps per cell, after one discarded warm-up (default 3)",
     )
     group.addoption(
-        "--perf-throttle", type=int, default=1, metavar="RATE",
+        "--perf-throttle",
+        type=int,
+        default=1,
+        metavar="RATE",
         help="CDP CPU throttling rate: 1 = none (default), 4 = a slow laptop",
     )
     group.addoption(
-        "--perf-sizes", default=None, metavar="LIST",
+        "--perf-sizes",
+        default=None,
+        metavar="LIST",
         help="comma-separated subset of 100,1000,5000,10000,25000,50000,100000",
     )
     group.addoption(
-        "--perf-shapes", default=None, metavar="LIST",
+        "--perf-shapes",
+        default=None,
+        metavar="LIST",
         help="comma-separated subset of grouped,ungrouped",
     )
 
@@ -99,8 +110,12 @@ def go_to_app():
 def pytest_generate_tests(metafunc):
     if "cell" in metafunc.fixturenames:
         config = metafunc.config
-        sizes = parse_subset("--perf-sizes", config.getoption("--perf-sizes", default=None), SIZES)
-        shapes = parse_subset("--perf-shapes", config.getoption("--perf-shapes", default=None), SHAPES)
+        sizes = parse_subset(
+            "--perf-sizes", config.getoption("--perf-sizes", default=None), SIZES
+        )
+        shapes = parse_subset(
+            "--perf-shapes", config.getoption("--perf-shapes", default=None), SHAPES
+        )
         matrix = cells(sizes, shapes)
         metafunc.parametrize("cell", matrix, ids=[c.id for c in matrix])
 

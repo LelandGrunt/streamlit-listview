@@ -11,6 +11,7 @@ Each test points `_FRONTEND` at a temp directory whose `src` / `node_modules`
 presence drives the branch under test, and stubs `subprocess.run` so npm never
 actually runs.
 """
+
 import sys
 from pathlib import Path
 
@@ -19,7 +20,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import _build_backend as bb  # noqa: E402
+import _build_backend as bb
 
 
 def _frontend(tmp_path, *, src=True, node_modules=True, build=True):

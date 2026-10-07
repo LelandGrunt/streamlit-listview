@@ -10,7 +10,7 @@ import json
 import sys
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import FloatRect, sync_playwright
 
 
 def capture(url: str, out_dir) -> int:
@@ -42,8 +42,9 @@ def capture(url: str, out_dir) -> int:
 
         root = page.locator('[data-testid="stListview"]').first
         box = root.bounding_box()
+        assert box is not None, "the listview root has no bounding box"
         pad = 12
-        clip = {
+        clip: FloatRect = {
             "x": max(box["x"] - pad, 0),
             "y": max(box["y"] - pad, 0),
             "width": box["width"] + 2 * pad,

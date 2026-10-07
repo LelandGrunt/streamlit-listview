@@ -120,7 +120,8 @@ function sameNewOptionRows(a: ListviewItem[], b: ListviewItem[]): boolean {
   return (
     a.length === b.length &&
     a.every(
-      (item, i) => idKey(item.id) === idKey(b[i].id) && item.label === b[i].label,
+      (item, i) =>
+        idKey(item.id) === idKey(b[i].id) && item.label === b[i].label,
     )
   );
 }
@@ -248,8 +249,10 @@ export const Listview: FC<ListviewProps> = ({
   // Read the options through `items` only, never `data.items`. The render-body
   // ref write follows the prevNewOptionItemsRef pattern below.
   const prevItemsRef = useRef<ListviewItem[]>(data.items);
+  /* eslint-disable react/refs -- a deliberate render-body ref, see above */
   const items = reuseUnchangedItems(prevItemsRef.current, data.items);
   prevItemsRef.current = items;
+  /* eslint-enable react/refs */
 
   // What a fresh mount seeds the selection from: the persisted Python-side
   // selection when this mount is a remount that kept the widget state (a keyed
@@ -351,6 +354,7 @@ export const Listview: FC<ListviewProps> = ({
   // value when the rebuild is element-wise identical. The render-body ref write
   // follows the itemClickRef pattern below.
   const prevNewOptionItemsRef = useRef<ListviewItem[]>(NO_NEW_OPTIONS);
+  /* eslint-disable react/refs -- a deliberate render-body ref, see above */
   const newOptionItems = sameNewOptionRows(
     prevNewOptionItemsRef.current,
     builtNewOptionItems,
@@ -358,6 +362,7 @@ export const Listview: FC<ListviewProps> = ({
     ? prevNewOptionItemsRef.current
     : builtNewOptionItems;
   prevNewOptionItemsRef.current = newOptionItems;
+  /* eslint-enable react/refs */
 
   const allItems = useMemo(
     () => [...items, ...newOptionItems],
@@ -370,9 +375,7 @@ export const Listview: FC<ListviewProps> = ({
     () =>
       Array.from(
         new Set(
-          items
-            .map((i) => i.group)
-            .filter((g): g is string => g != null),
+          items.map((i) => i.group).filter((g): g is string => g != null),
         ),
       ),
     [items],
@@ -448,7 +451,9 @@ export const Listview: FC<ListviewProps> = ({
   // and the added-options block always renders last.
   const focusableItems = useMemo(
     () =>
-      renderBlocks.flatMap(({ group, collapsed }) => (collapsed ? [] : group.items)),
+      renderBlocks.flatMap(({ group, collapsed }) =>
+        collapsed ? [] : group.items,
+      ),
     [renderBlocks],
   );
 
@@ -482,7 +487,9 @@ export const Listview: FC<ListviewProps> = ({
     if (!data.select_all) {
       return NO_TARGET_IDS;
     }
-    return visibleItems.filter((it) => !disabledIds.has(it.id)).map((it) => it.id);
+    return visibleItems
+      .filter((it) => !disabledIds.has(it.id))
+      .map((it) => it.id);
   }, [data.select_all, disabledIds, visibleItems]);
 
   // Select-all toggle state (D4), derived off the live selection so it stays
@@ -580,56 +587,56 @@ export const Listview: FC<ListviewProps> = ({
   // ancestor, including the Streamlit page: a listview with `default=` below the
   // fold yanked the host page away from whatever the user was reading, on first
   // render and on every rerun that changed `default_ids` by value.
-  const scrollToId = useCallback(
-    (id: Id, block: ScrollBlock = "center") => {
-      requestAnimationFrame(() => {
-        const body = bodyRef.current;
-        // Unreachable in practice: the body renders unconditionally, and this
-        // callback only runs after a commit. It guards an unmount racing the rAF.
-        /* v8 ignore next 3 */
-        if (!body) {
-          return;
+  const scrollToId = useCallback((id: Id, block: ScrollBlock = "center") => {
+    requestAnimationFrame(() => {
+      const body = bodyRef.current;
+      // Unreachable in practice: the body renders unconditionally, and this
+      // callback only runs after a commit. It guards an unmount racing the rAF.
+      /* v8 ignore next 3 */
+      if (!body) {
+        return;
+      }
+      const node = findRowNode(body, optionDomId(id));
+      if (node === null) {
+        return; // row not rendered (e.g. filtered out) → nothing to scroll to
+      }
+      const frame = body.clientHeight;
+      const rowBox = node.getBoundingClientRect();
+      // The row's offset inside the scrolled content: its position relative to
+      // the frame, plus however far the frame is already scrolled. scrollTop is
+      // measured from the padding-box edge while the rect is the border box, so
+      // the body's top border (clientTop) comes out — otherwise every "nearest"
+      // scroll landed one border-width off, clipping the row.
+      const top =
+        body.scrollTop +
+        rowBox.top -
+        (body.getBoundingClientRect().top + body.clientTop);
+      if (block === "center") {
+        // Out-of-range assignments are clamped by the browser, so the first and
+        // last rows need no special casing.
+        body.scrollTop = top - (frame - rowBox.height) / 2;
+      } else {
+        // A grouped row's own header is position: sticky; top: 0 — it paints over
+        // the top of the scrollport, so the band where a row is actually visible
+        // starts BELOW it. Bringing a row's top edge to the frame's top edge
+        // parked it exactly under that header: ArrowUp / Home focused a row the
+        // user could not see, and Enter selected it. A row always renders inside
+        // a group block whose first child is either that header or a row, so this
+        // is a fixed class-name check with none of the id-escaping hazards of the
+        // row lookup; an ungrouped block has no header and keeps the frame edge.
+        const first = (node.parentElement as HTMLElement)
+          .firstElementChild as Element;
+        const stickyHeight = first.classList.contains("listview-group-header")
+          ? first.getBoundingClientRect().height
+          : 0;
+        if (top - stickyHeight < body.scrollTop) {
+          body.scrollTop = top - stickyHeight; // above the visible band → top edge in, under the header
+        } else if (top + rowBox.height > body.scrollTop + frame) {
+          body.scrollTop = top + rowBox.height - frame; // below → bottom edge in
         }
-        const node = findRowNode(body, optionDomId(id));
-        if (node === null) {
-          return; // row not rendered (e.g. filtered out) → nothing to scroll to
-        }
-        const frame = body.clientHeight;
-        const rowBox = node.getBoundingClientRect();
-        // The row's offset inside the scrolled content: its position relative to
-        // the frame, plus however far the frame is already scrolled. scrollTop is
-        // measured from the padding-box edge while the rect is the border box, so
-        // the body's top border (clientTop) comes out — otherwise every "nearest"
-        // scroll landed one border-width off, clipping the row.
-        const top =
-          body.scrollTop + rowBox.top - (body.getBoundingClientRect().top + body.clientTop);
-        if (block === "center") {
-          // Out-of-range assignments are clamped by the browser, so the first and
-          // last rows need no special casing.
-          body.scrollTop = top - (frame - rowBox.height) / 2;
-        } else {
-          // A grouped row's own header is position: sticky; top: 0 — it paints over
-          // the top of the scrollport, so the band where a row is actually visible
-          // starts BELOW it. Bringing a row's top edge to the frame's top edge
-          // parked it exactly under that header: ArrowUp / Home focused a row the
-          // user could not see, and Enter selected it. A row always renders inside
-          // a group block whose first child is either that header or a row, so this
-          // is a fixed class-name check with none of the id-escaping hazards of the
-          // row lookup; an ungrouped block has no header and keeps the frame edge.
-          const first = (node.parentElement as HTMLElement).firstElementChild as Element;
-          const stickyHeight = first.classList.contains("listview-group-header")
-            ? first.getBoundingClientRect().height
-            : 0;
-          if (top - stickyHeight < body.scrollTop) {
-            body.scrollTop = top - stickyHeight; // above the visible band → top edge in, under the header
-          } else if (top + rowBox.height > body.scrollTop + frame) {
-            body.scrollTop = top + rowBox.height - frame; // below → bottom edge in
-          }
-        }
-      });
-    },
-    [],
-  );
+      }
+    });
+  }, []);
 
   // Keyboard focus moves only need the row brought just inside the frame:
   // "nearest" leaves an already-visible row exactly where it is, so arrowing
@@ -661,14 +668,18 @@ export const Listview: FC<ListviewProps> = ({
     setFocusToId: nav.setFocusToId,
     toggle: selection.toggle,
   });
+  // eslint-disable-next-line react/refs -- a deliberate render-body ref, see above
   itemClickRef.current = {
     widgetDisabled,
     setFocusToId: nav.setFocusToId,
     toggle: selection.toggle,
   };
   const onItemClick = useCallback((id: Id) => {
-    const { widgetDisabled: disabled, setFocusToId, toggle } =
-      itemClickRef.current;
+    const {
+      widgetDisabled: disabled,
+      setFocusToId,
+      toggle,
+    } = itemClickRef.current;
     // Defense-in-depth: ListItem already blocks clicks while disabled, so this
     // never fires then.
     /* v8 ignore next 3 */
@@ -722,7 +733,8 @@ export const Listview: FC<ListviewProps> = ({
       // the persisted state then hold a real int, and listview() returns 42, not
       // "42". Checked before the cap below, so a refused value is explained even
       // when nothing more could be added.
-      const newId = data.new_option_kind === "int" ? parseNewIntId(value) : value;
+      const newId =
+        data.new_option_kind === "int" ? parseNewIntId(value) : value;
       if (newId === undefined) {
         revealHint();
         return NOT_A_WHOLE_NUMBER;
@@ -787,7 +799,8 @@ export const Listview: FC<ListviewProps> = ({
   // markdown actually renders; WidgetLabel owns the span it points at.
   const labelId = useId();
   const focusedId = nav.focusedId;
-  const activeDescendant = focusedId != null ? optionDomId(focusedId) : undefined;
+  const activeDescendant =
+    focusedId != null ? optionDomId(focusedId) : undefined;
 
   const searchField = data.enable_search ? (
     <SearchField
@@ -847,13 +860,18 @@ export const Listview: FC<ListviewProps> = ({
           role="listbox"
           aria-labelledby={labelId}
           tabIndex={widgetDisabled ? -1 : 0}
-          aria-multiselectable={data.selection_mode === "multi" ? true : undefined}
+          aria-multiselectable={
+            data.selection_mode === "multi" ? true : undefined
+          }
           aria-disabled={widgetDisabled || undefined}
           aria-activedescendant={activeDescendant}
           onKeyDown={widgetDisabled ? undefined : nav.onKeyDown}
         >
           {isEmpty ? (
-            <div className="listview-placeholder" data-testid="listview-placeholder">
+            <div
+              className="listview-placeholder"
+              data-testid="listview-placeholder"
+            >
               {data.placeholder ?? ""}
             </div>
           ) : (

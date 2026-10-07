@@ -12,6 +12,7 @@ mid-way has only what it reached) simply contributes nothing to that key, and
 two files that only partly overlap are compared on the intersection with the
 rest counted in a footer — never a KeyError at the end of a 15-minute run.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -116,7 +117,9 @@ def _table(header: list[str], rows: list[list[str]], markdown: bool) -> str:
 
     def line(cells: list[str]) -> str:
         padded = [c.ljust(w) for c, w in zip(cells, widths)]
-        return "| " + " | ".join(padded) + " |" if markdown else "  ".join(padded).rstrip()
+        return (
+            "| " + " | ".join(padded) + " |" if markdown else "  ".join(padded).rstrip()
+        )
 
     lines = [line(header)]
     if markdown:
@@ -128,14 +131,34 @@ def _table(header: list[str], rows: list[list[str]], markdown: bool) -> str:
 def render_summary(stats: dict[Key, Stats], markdown: bool) -> str:
     header = ["n", "shape", "scenario", "metric", "median", "low", "high", "reps"]
     rows = [
-        [str(n), _shape(g), s, m, _fmt(st.median), _fmt(st.low), _fmt(st.high), str(st.count)]
+        [
+            str(n),
+            _shape(g),
+            s,
+            m,
+            _fmt(st.median),
+            _fmt(st.low),
+            _fmt(st.high),
+            str(st.count),
+        ]
         for (n, g, s, m), st in sorted(stats.items())
     ]
     return _table(header, rows, markdown)
 
 
 def render_compare(rows: list[Row], markdown: bool) -> str:
-    header = ["n", "shape", "scenario", "metric", "A median", "A range", "B median", "B range", "Δ", "Δ %"]
+    header = [
+        "n",
+        "shape",
+        "scenario",
+        "metric",
+        "A median",
+        "A range",
+        "B median",
+        "B range",
+        "Δ",
+        "Δ %",
+    ]
     body = []
     for row in rows:
         n, g, s, m = row.key
@@ -164,14 +187,24 @@ def render_compare(rows: list[Row], markdown: bool) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+    # Duck-typed: a wrapped stdout (an IDE console, colorama) may proxy
+    # reconfigure without being a TextIOWrapper.
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if reconfigure is not None:
+        reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(
         prog="python -m e2e.perf.report",
         description="Summarise one browser-tier results file, or compare a second against it.",
     )
-    parser.add_argument("a", type=Path, help="results file (JSONL); the baseline when two are given")
-    parser.add_argument("b", type=Path, nargs="?", help="second results file, compared against the first")
+    parser.add_argument(
+        "a", type=Path, help="results file (JSONL); the baseline when two are given"
+    )
+    parser.add_argument(
+        "b",
+        type=Path,
+        nargs="?",
+        help="second results file, compared against the first",
+    )
     parser.add_argument("--markdown", action="store_true", help="emit a Markdown table")
     args = parser.parse_args(argv)
     stats_a = summarize(load(args.a))

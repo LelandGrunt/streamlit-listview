@@ -80,11 +80,7 @@ export const HelpTooltip: FC<HelpTooltipProps> = ({ help, label }) => {
         </svg>
       </button>
       {open && (
-        <div
-          id={popoverId}
-          role="tooltip"
-          className="listview-help-popover"
-        >
+        <div id={popoverId} role="tooltip" className="listview-help-popover">
           <Markdown source={help} tier="help" />
         </div>
       )}

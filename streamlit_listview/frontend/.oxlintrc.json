@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  // oxlint's default plugins plus React (hook rules, refs, effects) and Vitest
+  // (focused, skipped and stray tests). Setting "plugins" replaces the
+  // defaults, so the list repeats them.
+  "plugins": ["eslint", "typescript", "unicorn", "oxc", "react", "vitest"],
+  "options": {
+    // The pre-commit hook and CI are gates: a warning fails them like an error.
+    "denyWarnings": true,
+    // A disable comment that suppresses nothing fails too, as in ruff and ty.
+    "reportUnusedDisableDirectives": "error"
+  },
+  "rules": {
+    // Off by default. A hook called conditionally or in a loop breaks the
+    // call order React relies on.
+    "react/rules-of-hooks": "error",
+    // `as any` switches the type checker off; each use needs a disable comment
+    // with its reason.
+    "typescript/no-explicit-any": "error",
+    // Style only: asks for type parameters on every vi.fn() (183 in the suite).
+    "vitest/require-mock-type-parameters": "off"
+  }
+}

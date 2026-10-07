@@ -6,7 +6,12 @@ import { SearchField } from "./SearchField";
 describe("SearchField", () => {
   it("renders an accessible search input with the placeholder and value", () => {
     render(
-      <SearchField value="ap" placeholder="Search" disabled={false} onChange={vi.fn()} />,
+      <SearchField
+        value="ap"
+        placeholder="Search"
+        disabled={false}
+        onChange={vi.fn()}
+      />,
     );
     const input = screen.getByTestId("stListviewSearch");
     expect(input).toHaveValue("ap");
@@ -16,7 +21,12 @@ describe("SearchField", () => {
 
   it("renders a decorative search icon regardless of whether there is a value", () => {
     const { rerender } = render(
-      <SearchField value="" placeholder="Search" disabled={false} onChange={vi.fn()} />,
+      <SearchField
+        value=""
+        placeholder="Search"
+        disabled={false}
+        onChange={vi.fn()}
+      />,
     );
     const emptyIcon = screen.getByTestId("stListviewSearchIcon");
     expect(emptyIcon).toBeInTheDocument();
@@ -24,7 +34,12 @@ describe("SearchField", () => {
     expect(emptyIcon).toHaveAttribute("aria-hidden", "true");
 
     rerender(
-      <SearchField value="ap" placeholder="Search" disabled={false} onChange={vi.fn()} />,
+      <SearchField
+        value="ap"
+        placeholder="Search"
+        disabled={false}
+        onChange={vi.fn()}
+      />,
     );
     expect(screen.getByTestId("stListviewSearchIcon")).toBeInTheDocument();
   });
@@ -32,21 +47,38 @@ describe("SearchField", () => {
   it("calls onChange with the typed value", () => {
     const onChange = vi.fn();
     render(
-      <SearchField value="" placeholder="Search" disabled={false} onChange={onChange} />,
+      <SearchField
+        value=""
+        placeholder="Search"
+        disabled={false}
+        onChange={onChange}
+      />,
     );
-    fireEvent.change(screen.getByTestId("stListviewSearch"), { target: { value: "x" } });
+    fireEvent.change(screen.getByTestId("stListviewSearch"), {
+      target: { value: "x" },
+    });
     expect(onChange).toHaveBeenCalledWith("x");
   });
 
   it("shows a clear button only when there is a value; clicking it clears", () => {
     const onChange = vi.fn();
     const { rerender } = render(
-      <SearchField value="" placeholder="Search" disabled={false} onChange={onChange} />,
+      <SearchField
+        value=""
+        placeholder="Search"
+        disabled={false}
+        onChange={onChange}
+      />,
     );
     expect(screen.queryByTestId("stListviewSearchClear")).toBeNull();
 
     rerender(
-      <SearchField value="ap" placeholder="Search" disabled={false} onChange={onChange} />,
+      <SearchField
+        value="ap"
+        placeholder="Search"
+        disabled={false}
+        onChange={onChange}
+      />,
     );
     fireEvent.click(screen.getByTestId("stListviewSearchClear"));
     expect(onChange).toHaveBeenCalledWith("");
@@ -84,7 +116,9 @@ describe("SearchField", () => {
         onEscape={onEscape}
       />,
     );
-    fireEvent.keyDown(screen.getByTestId("stListviewSearch"), { key: "Escape" });
+    fireEvent.keyDown(screen.getByTestId("stListviewSearch"), {
+      key: "Escape",
+    });
     expect(onEscape).toHaveBeenCalledTimes(1);
   });
 

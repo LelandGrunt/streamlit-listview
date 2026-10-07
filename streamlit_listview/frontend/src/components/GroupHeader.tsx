@@ -68,7 +68,14 @@ export const GroupHeader: FC<GroupHeaderProps> = ({
         data-collapsed={collapsed ? "true" : "false"}
       >
         {/* chevron-down; CSS rotates it -90deg when collapsed */}
-        <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d="M6 9l6 6 6-6"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
       <span className="listview-group-header__name">{name}</span>
       <span className="listview-group-header__count">({count})</span>

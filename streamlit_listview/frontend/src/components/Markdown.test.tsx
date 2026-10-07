@@ -34,7 +34,10 @@ describe("Markdown inline rendering (both tiers)", () => {
 
     it(`renders an image with src + alt in the ${tier} tier`, () => {
       const { container } = render(
-        <Markdown tier={tier} source="![alt text](https://example.com/p.png)" />,
+        <Markdown
+          tier={tier}
+          source="![alt text](https://example.com/p.png)"
+        />,
       );
       const img = container.querySelector("img") as HTMLImageElement | null;
       expect(img).not.toBeNull();
@@ -197,7 +200,9 @@ describe("Markdown icon/logo adjacency (token glued to a following word)", () =>
     const { container } = render(
       <Markdown tier="help" source={"`:material/check:`"} />,
     );
-    expect(container.querySelector("code")?.textContent).toBe(":material/check:");
+    expect(container.querySelector("code")?.textContent).toBe(
+      ":material/check:",
+    );
     expect(container.querySelector('span[role="img"]')).toBeNull();
   });
 
@@ -242,13 +247,17 @@ describe("Markdown math (KaTeX intentionally dropped for bundle size)", () => {
 
 describe("Markdown emoji (remark-emoji, conditional)", () => {
   it("converts a :shortcode: to its emoji glyph", () => {
-    const { container } = render(<Markdown source="party :tada:" tier="help" />);
+    const { container } = render(
+      <Markdown source="party :tada:" tier="help" />,
+    );
     expect(container.textContent).toContain("\u{1F389}"); // 🎉
     expect(container.textContent).not.toContain(":tada:");
   });
 
   it("leaves a non-shortcode colon sequence untouched (emoji plugin excluded)", () => {
-    const { container } = render(<Markdown source="ratio 3:4 wins" tier="help" />);
+    const { container } = render(
+      <Markdown source="ratio 3:4 wins" tier="help" />,
+    );
     expect(container.textContent).toContain("3:4");
   });
 });

@@ -14,9 +14,9 @@ def test_reset_clears_the_frontend_selection_not_only_the_result(page: Page):
     listview.get_by_test_id("stListviewOption-berlin").click()
 
     # Selected: row highlighted and result panel reports it.
-    expect(
-        listview.get_by_test_id("stListviewOption-berlin")
-    ).to_have_attribute("aria-selected", "true", timeout=10000)
+    expect(listview.get_by_test_id("stListviewOption-berlin")).to_have_attribute(
+        "aria-selected", "true", timeout=10000
+    )
     expect(page.get_by_text("1 selected")).to_be_visible(timeout=10000)
 
     # Reset (the button only appears once something is selected).

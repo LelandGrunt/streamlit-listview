@@ -13,8 +13,12 @@ describe("HelpTooltip", () => {
   });
 
   it("renders the HelpCircle SVG (aria-hidden, focusable=false) inside the trigger", () => {
-    const { container } = render(<HelpTooltip help="Some help" label="My field" />);
-    const svg = container.querySelector("svg.listview-help-icon") as SVGSVGElement;
+    const { container } = render(
+      <HelpTooltip help="Some help" label="My field" />,
+    );
+    const svg = container.querySelector(
+      "svg.listview-help-icon",
+    ) as SVGSVGElement;
     expect(svg).not.toBeNull();
     expect(svg.getAttribute("viewBox")).toBe("0 0 24 24");
     expect(svg.getAttribute("aria-hidden")).toBe("true");

@@ -1,6 +1,7 @@
+import math
 import re
-from collections.abc import Mapping
-from typing import Any, Callable, Iterable, Literal
+from collections.abc import Callable, Iterable, Mapping
+from typing import Any, Literal
 
 # JavaScript's Number.MAX_SAFE_INTEGER. The payload crosses a JSON boundary, so
 # every number arrives on the frontend as an IEEE-754 double; ints beyond this
@@ -104,10 +105,10 @@ def _is_usable_label(value: Any) -> bool:
     ``None`` and NaN mean "no label", not the literal text "None"/"nan": both are
     what ``df.to_dict("records")`` produces for a NULL label cell (pandas yields
     ``None`` for string dtype and ``nan`` for object dtype), and neither is
-    something the caller asked to see. NaN is recognised by its self-inequality so
+    something the caller asked to see. NaN is recognised with ``math.isnan`` so
     this package stays dependency-free (no pandas/numpy import).
     """
-    return value is not None and not (isinstance(value, float) and value != value)
+    return value is not None and not (isinstance(value, float) and math.isnan(value))
 
 
 def _label_for(
@@ -137,9 +138,7 @@ def _label_for(
         try:
             return str(option["label"])
         except Exception as exc:
-            raise ValueError(
-                f"str(label) failed for option {option!r}: {exc}"
-            ) from exc
+            raise ValueError(f"str(label) failed for option {option!r}: {exc}") from exc
     # str(item_id), not _id_key(item_id): this is the DISPLAY label, not row
     # identity. They spell the same today; routing it through _id_key would
     # freeze the default label to the row-key spelling forever.
@@ -147,9 +146,7 @@ def _label_for(
         return str(item_id if format_func is None else format_func(option))
     except Exception as exc:
         source = "str(id)" if format_func is None else "format_func"
-        raise ValueError(
-            f"{source} failed for option {option!r}: {exc}"
-        ) from exc
+        raise ValueError(f"{source} failed for option {option!r}: {exc}") from exc
 
 
 def normalize_options(
@@ -222,8 +219,7 @@ def normalize_options(
             hash(item_id)
         except TypeError as exc:
             raise ValueError(
-                f"option id is unhashable: {item_id!r} "
-                f"(from option {option!r})"
+                f"option id is unhashable: {item_id!r} (from option {option!r})"
             ) from exc
 
         # The per-id boundary gate (exactly str/int, bool rejected, |int| within
@@ -373,8 +369,7 @@ def map_selection(
     mapped: list[Any] = []
     if selected_ids:
         original_by_key = {
-            _id_key(item_id): original
-            for item_id, original in id_to_original.items()
+            _id_key(item_id): original for item_id, original in id_to_original.items()
         }
         seen_keys: set[str] = set()
         for selected_id in selected_ids:
@@ -442,7 +437,7 @@ def sort_items(
             block_items.sort(key=lambda it: it["label"].casefold(), reverse=reverse)
 
     if sort_groups:
-        named = [b for b in blocks if b[0] is not None]
+        named = [(name, block) for name, block in blocks if name is not None]
         ungrouped = [b for b in blocks if b[0] is None]
         named.sort(key=lambda b: b[0].casefold(), reverse=reverse)
         blocks = named + ungrouped

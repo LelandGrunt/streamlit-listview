@@ -1,0 +1,82 @@
+# Checks that run before every commit, and in CI on every push and pull request.
+#
+# Set up once per clone (worktrees share the hook):
+#   uv tool install pre-commit
+#   pre-commit install --allow-missing-config
+# Run every check on the whole repository:
+#   pre-commit run --all-files
+# Move the pinned Python tool versions to their latest releases:
+#   pre-commit autoupdate
+#
+# The Python hooks install their own pinned copy of their tool, so the local
+# uv, ruff or ty version does not matter. The frontend hooks run the project's
+# npm scripts with the versions in package-lock.json, so they need `npm ci` in
+# streamlit_listview/frontend first.
+minimum_pre_commit_version: "4.4.0" # `language: unsupported`
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/astral-sh/ty-pre-commit
+    rev: v0.0.85
+    hooks:
+      # ty checks the whole project on every commit, against the project
+      # environment (uv check). --extra devel adds pytest and Playwright for the
+      # test code; --no-install-project skips the editable install, which would
+      # build the frontend bundle; --frozen leaves uv.lock alone.
+      - id: ty
+        args: [--extra, devel, --no-install-project, --frozen]
+
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.12.23
+    hooks:
+      # Runs only when uv.lock or pyproject.toml changes. --locked also fails
+      # when uv.lock is out of date with pyproject.toml.
+      - id: uv-audit
+        args: [--locked, --preview-features=audit-command]
+
+  - repo: local
+    hooks:
+      # Without node_modules the hooks below fail with a bare "command not
+      # found"; this hook runs first and names the fix.
+      - id: frontend-deps
+        name: node_modules (frontend)
+        entry: node -e "require('fs').existsSync('streamlit_listview/frontend/node_modules') || (console.error('streamlit_listview/frontend/node_modules is missing. Run npm ci in streamlit_listview/frontend, then commit again.'), process.exit(1))"
+        language: unsupported
+        files: ^streamlit_listview/frontend/
+        pass_filenames: false
+      # tsc checks the app code (as `npm run build` does) and the tests (as
+      # `npm test` does).
+      - id: tsc
+        name: tsc (frontend)
+        entry: npm --prefix streamlit_listview/frontend run --silent typecheck:all
+        language: unsupported
+        files: ^streamlit_listview/frontend/
+        types_or: [ts, tsx, json]
+        pass_filenames: false
+      - id: oxlint
+        name: oxlint (frontend)
+        entry: npm --prefix streamlit_listview/frontend run --silent lint
+        language: unsupported
+        files: ^streamlit_listview/frontend/
+        types_or: [ts, tsx, json]
+        pass_filenames: false
+      # Checks only; `npm run format` in streamlit_listview/frontend fixes.
+      - id: prettier
+        name: prettier --check (frontend)
+        entry: npm --prefix streamlit_listview/frontend run --silent format:check
+        language: unsupported
+        files: ^streamlit_listview/frontend/
+        types_or: [ts, tsx, json]
+        pass_filenames: false
+      # Runs only when package.json or package-lock.json changes.
+      - id: npm-audit
+        name: npm audit (frontend)
+        entry: npm --prefix streamlit_listview/frontend audit
+        language: unsupported
+        files: ^streamlit_listview/frontend/package(-lock)?\.json$
+        pass_filenames: false

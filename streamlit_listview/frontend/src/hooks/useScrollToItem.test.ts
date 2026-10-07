@@ -14,7 +14,12 @@ function setup(initialDefaults: Id[]) {
   const ensureGroupExpanded = vi.fn();
   const { rerender } = renderHook(
     ({ defaultIds }) =>
-      useScrollToItem({ defaultIds, items: ITEMS, ensureGroupExpanded, scrollToId }),
+      useScrollToItem({
+        defaultIds,
+        items: ITEMS,
+        ensureGroupExpanded,
+        scrollToId,
+      }),
     { initialProps: { defaultIds: initialDefaults } },
   );
   return { scrollToId, ensureGroupExpanded, rerender };

@@ -27,6 +27,7 @@ export type Shape = (typeof SHAPES)[number];
  * generator to; change both generators or neither.
  */
 export function makeLargeDataset(n: number, shape: Shape): ListviewItem[] {
+  // eslint-disable-next-line unicorn/no-new-array -- preallocates n slots, for up to 100,000 rows
   const items: ListviewItem[] = new Array<ListviewItem>(n);
   for (let i = 0; i < n; i++) {
     const num = String(i).padStart(5, "0");

@@ -19,7 +19,10 @@ export interface NewOptionInputProps {
  * A refused value stays in the field, and the container's hint shows below the
  * row until the text changes.
  */
-export const NewOptionInput: FC<NewOptionInputProps> = ({ disabled, onAdd }) => {
+export const NewOptionInput: FC<NewOptionInputProps> = ({
+  disabled,
+  onAdd,
+}) => {
   const [value, setValue] = useState("");
   const [hint, setHint] = useState<string | null>(null);
   // Counts refusals, to key the hint's node: a second Enter on the same refused

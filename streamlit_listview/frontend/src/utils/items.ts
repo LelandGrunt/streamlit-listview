@@ -71,6 +71,7 @@ export function reuseUnchangedItems(
   if (i === n && n === m) {
     return prev;
   }
+  // eslint-disable-next-line unicorn/no-new-array -- preallocates n slots; this runs on every render, at up to 100,000 rows
   const out: ListviewItem[] = new Array<ListviewItem>(n);
   for (let j = 0; j < i; j++) {
     out[j] = prev[j];

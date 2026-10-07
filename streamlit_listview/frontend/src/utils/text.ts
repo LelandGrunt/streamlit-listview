@@ -104,25 +104,27 @@ function reduceEmojiShortcode(token: string): string {
  * text, and there is one stripper to fix when a directive is added.
  */
 export function plainTextLabel(md: string): string {
-  return md
-    // Material icons and the Streamlit logo -> drop (grammars shared with the
-    // renderer — see MATERIAL_ICON_RE above). Both render as iconography (an
-    // icon span / an inline logo image), which this name has always omitted
-    // rather than read out.
-    .replace(MATERIAL_ICON_RE, "")
-    .replace(STREAMLIT_LOGO_RE, "")
-    .replace(CLAIMED_DIRECTIVE, reduceClaimedDirective) // :red[x] -> x, :red[] -> :red
-    .replace(EMOJI_SHORTCODE, reduceEmojiShortcode) // :tada: -> 🎉, unknown -> literal
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1") // [text](url)/image -> text
-    .replace(/[*~`]+/g, "") // bold/italic(*)/strike/code markers
-    // Underscores: strip emphasis delimiters (_em_, __strong__) but KEEP
-    // intraword underscores — CommonMark does not treat those as emphasis, so an
-    // identifier like user_id must survive in the accessible name.
-    .replace(/_+/g, (run, offset: number, str: string) => {
-      const wordBefore = /\w/.test(str[offset - 1] ?? "");
-      const wordAfter = /\w/.test(str[offset + run.length] ?? "");
-      return wordBefore && wordAfter ? run : "";
-    })
-    .replace(/\s+/g, " ")
-    .trim();
+  return (
+    md
+      // Material icons and the Streamlit logo -> drop (grammars shared with the
+      // renderer — see MATERIAL_ICON_RE above). Both render as iconography (an
+      // icon span / an inline logo image), which this name has always omitted
+      // rather than read out.
+      .replace(MATERIAL_ICON_RE, "")
+      .replace(STREAMLIT_LOGO_RE, "")
+      .replace(CLAIMED_DIRECTIVE, reduceClaimedDirective) // :red[x] -> x, :red[] -> :red
+      .replace(EMOJI_SHORTCODE, reduceEmojiShortcode) // :tada: -> 🎉, unknown -> literal
+      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1") // [text](url)/image -> text
+      .replace(/[*~`]+/g, "") // bold/italic(*)/strike/code markers
+      // Underscores: strip emphasis delimiters (_em_, __strong__) but KEEP
+      // intraword underscores — CommonMark does not treat those as emphasis, so an
+      // identifier like user_id must survive in the accessible name.
+      .replace(/_+/g, (run, offset: number, str: string) => {
+        const wordBefore = /\w/.test(str[offset - 1] ?? "");
+        const wordAfter = /\w/.test(str[offset + run.length] ?? "");
+        return wordBefore && wordAfter ? run : "";
+      })
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 }

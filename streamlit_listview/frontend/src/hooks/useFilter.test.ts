@@ -17,24 +17,32 @@ describe("useFilter", () => {
   });
 
   it("treats a whitespace-only query as no filter", () => {
-    const { result } = renderHook(() => useFilter({ items: ITEMS, query: "   " }));
+    const { result } = renderHook(() =>
+      useFilter({ items: ITEMS, query: "   " }),
+    );
     expect(result.current.visibleItems).toEqual(ITEMS);
     expect(result.current.isFiltering).toBe(false);
   });
 
   it("filters by case-insensitive substring of the label", () => {
-    const { result } = renderHook(() => useFilter({ items: ITEMS, query: "an" }));
+    const { result } = renderHook(() =>
+      useFilter({ items: ITEMS, query: "an" }),
+    );
     expect(result.current.visibleItems.map((i) => i.id)).toEqual(["b"]);
     expect(result.current.isFiltering).toBe(true);
   });
 
   it("matches across groups and preserves item order", () => {
-    const { result } = renderHook(() => useFilter({ items: ITEMS, query: "e" }));
+    const { result } = renderHook(() =>
+      useFilter({ items: ITEMS, query: "e" }),
+    );
     expect(result.current.visibleItems.map((i) => i.id)).toEqual(["a", "c"]);
   });
 
   it("returns an empty list when nothing matches", () => {
-    const { result } = renderHook(() => useFilter({ items: ITEMS, query: "zzz" }));
+    const { result } = renderHook(() =>
+      useFilter({ items: ITEMS, query: "zzz" }),
+    );
     expect(result.current.visibleItems).toEqual([]);
     expect(result.current.isFiltering).toBe(true);
   });

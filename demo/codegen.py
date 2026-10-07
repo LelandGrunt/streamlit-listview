@@ -3,14 +3,15 @@
 Deterministic and dependency-free (no `black`): one kwarg per line, four-space
 indent, only non-default kwargs included.
 """
+
 import inspect
 import json
 import math
-
-from streamlit_listview import listview
+from collections.abc import Callable
 
 import data
 import dataset
+from streamlit_listview import listview
 
 # Parameters the generated call does NOT render as a value literal: the two
 # positional args, the two callables emitted as raw identifiers above the call
@@ -52,7 +53,7 @@ DEPENDENT_PARAMS = {
 # DEPENDENT_PARAMS rules are derived (skip == not enabled); the rest are
 # snippet-only — the demo deliberately keeps their cfg values (a disabled
 # search-placeholder field stays populated) rather than resetting them.
-_SKIP_WHEN = {
+_SKIP_WHEN: dict[str, Callable[[dict], bool]] = {
     name: (lambda c, enabled=enabled: not enabled(c))
     for name, (enabled, _reset) in DEPENDENT_PARAMS.items()
 }
@@ -168,16 +169,18 @@ def build_snippet(config, options, builtin_dataset):
     if config.get("on_change"):
         # Illustrative callback for the snippet; the live demo's own callback also
         # bumps a session counter, omitted here for clarity.
-        defs.append('def on_change():\n    st.toast("Selection changed", icon=":material/bolt:")')
+        defs.append(
+            'def on_change():\n    st.toast("Selection changed", icon=":material/bolt:")'
+        )
         head_kwargs.append(("on_change", "on_change"))
 
     value_kwargs = []
-    for name in _DEFAULTS:
+    for name, default in _DEFAULTS.items():
         skip = _SKIP_WHEN.get(name)
         if skip is not None and skip(config):
             continue
-        value = config.get(name, _DEFAULTS[name])
-        if value == _DEFAULTS[name]:
+        value = config.get(name, default)
+        if value == default:
             continue
         if isinstance(value, list) and not value:
             continue
@@ -185,7 +188,7 @@ def build_snippet(config, options, builtin_dataset):
             continue
         value_kwargs.append((name, _pyval(value)))
 
-    arg_lines = [f'    {_pyval(config["label"])},', "    options,"]
+    arg_lines = [f"    {_pyval(config['label'])},", "    options,"]
     arg_lines += [f"    {k}={v}," for k, v in head_kwargs]
     arg_lines += [f"    {k}={v}," for k, v in value_kwargs]
     arg_lines.append('    key="demo_listview",')

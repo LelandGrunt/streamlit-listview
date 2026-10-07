@@ -13,12 +13,8 @@ describe("NOTICE attribution", () => {
   it("attributes the ported Streamlit code under Apache-2.0 with the source URL", () => {
     expect(notice).toContain("Streamlit");
     expect(notice).toMatch(/Apache License,?\s*Version 2\.0/i);
-    expect(notice).toContain(
-      "StreamlitMarkdown.tsx",
-    );
-    expect(notice).toContain(
-      "https://github.com/streamlit/streamlit",
-    );
+    expect(notice).toContain("StreamlitMarkdown.tsx");
+    expect(notice).toContain("https://github.com/streamlit/streamlit");
   });
 
   it("attributes the react-feather HelpCircle glyph under MIT", () => {

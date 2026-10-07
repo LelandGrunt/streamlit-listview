@@ -43,17 +43,13 @@ function keyEvent(key: string, target?: EventTarget): FakeKeyEvent {
 describe("useKeyboardNav", () => {
   it("starts with no focused item", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() =>
-      useKeyboardNav({ items, onSelect }),
-    );
+    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
     expect(result.current.focusedId).toBeNull();
   });
 
   it("ArrowDown focuses the first focusable item, then skips disabled ones", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() =>
-      useKeyboardNav({ items, onSelect }),
-    );
+    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
     act(() => result.current.onKeyDown(keyEvent("ArrowDown")));
     expect(result.current.focusedId).toBe("a");
     act(() => result.current.onKeyDown(keyEvent("ArrowDown")));
@@ -63,9 +59,7 @@ describe("useKeyboardNav", () => {
 
   it("ArrowUp moves focus backwards and stops at the first focusable item", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() =>
-      useKeyboardNav({ items, onSelect }),
-    );
+    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
     act(() => result.current.onKeyDown(keyEvent("End")));
     expect(result.current.focusedId).toBe(4);
     act(() => result.current.onKeyDown(keyEvent("ArrowUp")));
@@ -88,9 +82,7 @@ describe("useKeyboardNav", () => {
 
   it("Home focuses the first focusable item; End focuses the last focusable item", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() =>
-      useKeyboardNav({ items, onSelect }),
-    );
+    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
     act(() => result.current.onKeyDown(keyEvent("End")));
     expect(result.current.focusedId).toBe(4);
     act(() => result.current.onKeyDown(keyEvent("Home")));
@@ -99,9 +91,7 @@ describe("useKeyboardNav", () => {
 
   it("Enter selects the focused item", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() =>
-      useKeyboardNav({ items, onSelect }),
-    );
+    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
     act(() => result.current.onKeyDown(keyEvent("ArrowDown")));
     act(() => result.current.onKeyDown(keyEvent("Enter")));
     expect(onSelect).toHaveBeenCalledWith("a");
@@ -109,9 +99,7 @@ describe("useKeyboardNav", () => {
 
   it("Space selects the focused item and is treated the same as Enter", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() =>
-      useKeyboardNav({ items, onSelect }),
-    );
+    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
     act(() => result.current.onKeyDown(keyEvent("End")));
     act(() => result.current.onKeyDown(keyEvent(" ")));
     expect(onSelect).toHaveBeenCalledWith(4);
@@ -119,18 +107,14 @@ describe("useKeyboardNav", () => {
 
   it("Enter/Space with nothing focused does not call onSelect", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() =>
-      useKeyboardNav({ items, onSelect }),
-    );
+    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
     act(() => result.current.onKeyDown(keyEvent("Enter")));
     expect(onSelect).not.toHaveBeenCalled();
   });
 
   it("ignores unrelated keys without calling onSelect", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() =>
-      useKeyboardNav({ items, onSelect }),
-    );
+    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
     act(() => result.current.onKeyDown(keyEvent("a")));
     expect(result.current.focusedId).toBeNull();
     expect(onSelect).not.toHaveBeenCalled();
@@ -181,7 +165,12 @@ describe("useKeyboardNav", () => {
     act(() => result.current.onKeyDown(keyEvent("End")));
     expect(result.current.focusedId).toBe(4);
     // shrink so the previously focused row no longer exists
-    rerender({ list: [{ id: "a", label: "A" }, { id: "c", label: "C" }] });
+    rerender({
+      list: [
+        { id: "a", label: "A" },
+        { id: "c", label: "C" },
+      ],
+    });
     expect(result.current.focusedId).toBeNull();
     act(() => result.current.onKeyDown(keyEvent("ArrowDown")));
     // resumes from the top, NOT Math.min(staleIndex + 1, last) -> last item
@@ -219,9 +208,7 @@ describe("useKeyboardNav", () => {
 
   it("setFocusToId sets focus when the id belongs to a focusable item", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() =>
-      useKeyboardNav({ items, onSelect }),
-    );
+    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
     expect(result.current.focusedId).toBeNull();
     act(() => result.current.setFocusToId("c"));
     expect(result.current.focusedId).toBe("c");
@@ -232,9 +219,7 @@ describe("useKeyboardNav", () => {
 
   it("setFocusToId is a no-op when the id is disabled or does not exist", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() =>
-      useKeyboardNav({ items, onSelect }),
-    );
+    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
     // first move focus to a known item so we can verify it does not change
     act(() => result.current.setFocusToId("a"));
     expect(result.current.focusedId).toBe("a");
@@ -258,7 +243,10 @@ describe("useKeyboardNav", () => {
 });
 
 describe("slash and escape", () => {
-  const items = [{ id: "a", label: "A" }, { id: "b", label: "B" }];
+  const items = [
+    { id: "a", label: "A" },
+    { id: "b", label: "B" },
+  ];
 
   it('"/" calls onSlash and prevents default', () => {
     const onSlash = vi.fn();
@@ -281,14 +269,18 @@ describe("slash and escape", () => {
   });
 
   it("Escape without an onEscape handler does nothing (no throw)", () => {
-    const { result } = renderHook(() => useKeyboardNav({ items, onSelect: vi.fn() }));
+    const { result } = renderHook(() =>
+      useKeyboardNav({ items, onSelect: vi.fn() }),
+    );
     const event = keyEvent("Escape");
     act(() => result.current.onKeyDown(event));
     expect(event.preventDefault).not.toHaveBeenCalled();
   });
 
   it('"/" without an onSlash handler does nothing (no throw)', () => {
-    const { result } = renderHook(() => useKeyboardNav({ items, onSelect: vi.fn() }));
+    const { result } = renderHook(() =>
+      useKeyboardNav({ items, onSelect: vi.fn() }),
+    );
     const event = keyEvent("/");
     act(() => result.current.onKeyDown(event));
     expect(event.preventDefault).not.toHaveBeenCalled();
@@ -329,7 +321,7 @@ describe("keys aimed at a focused descendant control", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it("ignores arrows, Escape and \"/\" that bubbled up from a nested control", () => {
+  it('ignores arrows, Escape and "/" that bubbled up from a nested control', () => {
     const onSelect = vi.fn();
     const onEscape = vi.fn();
     const onSlash = vi.fn();

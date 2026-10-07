@@ -48,8 +48,9 @@ def build_gif(frames_dir, out, scale: float = 0.5, colors: int = 256) -> Path:
         if target is None:
             w, h = im.size
             target = (round(w * scale), round(h * scale))
-        imgs.append(im.resize(target, Image.LANCZOS))
+        imgs.append(im.resize(target, Image.Resampling.LANCZOS))
         durations.append(int(dur))
+    assert target is not None  # the manifest is non-empty, checked above
 
     # Global palette from a montage of every frame, so colors that appear only in
     # later states (selection tint, filtered view) are represented.
@@ -57,15 +58,10 @@ def build_gif(frames_dir, out, scale: float = 0.5, colors: int = 256) -> Path:
     montage = Image.new("RGB", (w, h * len(imgs)))
     for i, im in enumerate(imgs):
         montage.paste(im, (0, i * h))
-    pal = montage.quantize(colors=colors, method=Image.MEDIANCUT)
+    pal = montage.quantize(colors=colors, method=Image.Quantize.MEDIANCUT)
     del montage  # free the tall palette image before quantizing every frame
 
-    try:
-        no_dither = Image.Dither.NONE
-    except AttributeError:  # older Pillow
-        no_dither = Image.NONE
-
-    frames_p = [im.quantize(palette=pal, dither=no_dither) for im in imgs]
+    frames_p = [im.quantize(palette=pal, dither=Image.Dither.NONE) for im in imgs]
 
     out.parent.mkdir(parents=True, exist_ok=True)
     frames_p[0].save(

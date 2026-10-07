@@ -11,6 +11,7 @@ The list is deliberately shorter than its height, leaving empty space below the
 last row for the click-to-focus test, and its groups are collapsible so the
 headers render as <button>s.
 """
+
 import streamlit as st
 
 from streamlit_listview import listview

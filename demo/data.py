@@ -1,4 +1,5 @@
 """Built-in demo dataset + format_func presets/probe + on_change callback factory."""
+
 from parsing import group_names
 
 CITIES = [
@@ -62,7 +63,11 @@ def make_large_dataset(n):
     works and the demo's generated snippet stays a one-line comprehension.
     """
     return [
-        {"id": f"item-{i:05d}", "label": f"Item {i:05d}", "group": f"Batch {i // 100:03d}"}
+        {
+            "id": f"item-{i:05d}",
+            "label": f"Item {i:05d}",
+            "group": f"Batch {i // 100:03d}",
+        }
         for i in range(n)
     ]
 

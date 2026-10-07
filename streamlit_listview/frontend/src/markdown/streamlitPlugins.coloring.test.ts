@@ -124,7 +124,9 @@ describe("createRemarkColoringAndSmall", () => {
 
   it("keeps a valid foreground when the background is an injection payload", () => {
     const span = findElement(
-      renderHast(':color[x]{foreground=#fff background="red; position: fixed"}'),
+      renderHast(
+        ':color[x]{foreground=#fff background="red; position: fixed"}',
+      ),
       "span",
     );
     // Invalid background dropped -> no bg modifier; valid foreground preserved.

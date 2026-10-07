@@ -4,6 +4,7 @@ Usage: python scripts/verify_wheel.py [path-to-wheel]
 If no path is given, the newest dist/*.whl is used.
 Exits non-zero with a clear message on any missing piece.
 """
+
 import re
 import sys
 import zipfile
@@ -83,10 +84,22 @@ def main() -> None:
         print(f"  ok: exactly one {desc}")
 
     print(f"Inspecting {wheel.name} ({len(names)} entries)")
-    has_exactly_one(lambda n: n.startswith("streamlit_listview/frontend/build/")
-                    and n.endswith(".js") and "/index-" in n, "built index-*.js")
-    has_exactly_one(lambda n: n.startswith("streamlit_listview/frontend/build/")
-                    and n.endswith(".css") and "/index-" in n, "built index-*.css")
+    has_exactly_one(
+        lambda n: (
+            n.startswith("streamlit_listview/frontend/build/")
+            and n.endswith(".js")
+            and "/index-" in n
+        ),
+        "built index-*.js",
+    )
+    has_exactly_one(
+        lambda n: (
+            n.startswith("streamlit_listview/frontend/build/")
+            and n.endswith(".css")
+            and "/index-" in n
+        ),
+        "built index-*.css",
+    )
 
     # The package-data glob is frontend/build/**/* — the wheel packages
     # EVERYTHING under build/, so a file slipped in beside the bundle between
@@ -94,10 +107,14 @@ def main() -> None:
     # single-chunk build emits exactly one index-*.js plus one index-*.css,
     # both directly under build/; with the exactly-one checks above this pins
     # the wheel's build/ contents to exactly that set.
-    bundle_entry = re.compile(r"^streamlit_listview/frontend/build/index-[^/]+\.(?:js|css)$")
+    bundle_entry = re.compile(
+        r"^streamlit_listview/frontend/build/index-[^/]+\.(?:js|css)$"
+    )
     unexpected = sorted(
-        n for n in names
-        if n.startswith("streamlit_listview/frontend/build/") and not bundle_entry.match(n)
+        n
+        for n in names
+        if n.startswith("streamlit_listview/frontend/build/")
+        and not bundle_entry.match(n)
     )
     if unexpected:
         sys.exit(
@@ -106,12 +123,18 @@ def main() -> None:
         )
     print("  ok: frontend/build/ carries nothing beside the two bundle files")
 
-    has(lambda n: n == "streamlit_listview/pyproject.toml", "the nested component manifest")
+    has(
+        lambda n: n == "streamlit_listview/pyproject.toml",
+        "the nested component manifest",
+    )
 
     # PEP 639: license-files = ["LICENSE", "NOTICE"] must land in dist-info/licenses/
     # so every distributed artifact carries the license text and the third-party
     # attributions for the ported Streamlit/react-feather code.
-    has(lambda n: n.endswith(".dist-info/licenses/LICENSE"), "dist-info/licenses/LICENSE")
+    has(
+        lambda n: n.endswith(".dist-info/licenses/LICENSE"),
+        "dist-info/licenses/LICENSE",
+    )
     has(lambda n: n.endswith(".dist-info/licenses/NOTICE"), "dist-info/licenses/NOTICE")
 
     # The in-tree build backend ships in the sdist (so sdist->wheel builds) but

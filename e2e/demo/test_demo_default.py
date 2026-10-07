@@ -36,9 +36,9 @@ def test_setting_a_default_pre_selects_it_and_shows_the_result(page: Page):
 
     listview = page.get_by_test_id("stListview").first
     # The row is pre-selected ...
-    expect(
-        listview.get_by_test_id("stListviewOption-berlin")
-    ).to_have_attribute("aria-selected", "true", timeout=10000)
+    expect(listview.get_by_test_id("stListviewOption-berlin")).to_have_attribute(
+        "aria-selected", "true", timeout=10000
+    )
     # ... and the result panel reflects it instead of staying empty.
     expect(page.get_by_text("1 selected")).to_be_visible(timeout=10000)
     expect(page.get_by_text("Nothing selected yet.")).to_have_count(0)
@@ -53,9 +53,9 @@ def test_reset_with_a_default_configured_explains_the_re_seed(page: Page):
 
     # Reset: the list re-seeds to berlin and an explanation appears.
     page.get_by_role("button", name="Reset selection").click()
-    expect(
-        page.get_by_text("re-seeded the list to the configured")
-    ).to_be_visible(timeout=10000)
+    expect(page.get_by_text("re-seeded the list to the configured")).to_be_visible(
+        timeout=10000
+    )
     # The row stays selected (re-seeded to the Default), as the message explains.
     expect(
         page.get_by_test_id("stListview").first.get_by_test_id(
@@ -88,9 +88,9 @@ def test_default_picker_is_available_for_the_large_source(page: Page):
     pick_default(page, "item-00042", filter_first=True)
 
     listview = page.get_by_test_id("stListview").first
-    expect(
-        listview.get_by_test_id("stListviewOption-item-00042")
-    ).to_have_attribute("aria-selected", "true", timeout=15000)
+    expect(listview.get_by_test_id("stListviewOption-item-00042")).to_have_attribute(
+        "aria-selected", "true", timeout=15000
+    )
     expect(page.get_by_text("1 selected")).to_be_visible(timeout=10000)
     expect(page.get_by_text("Nothing selected yet.")).to_have_count(0)
 
@@ -112,7 +112,7 @@ def test_sample_defaults_preset_loads_a_multi_value_default(page: Page):
 
     # Reset re-seeds to the configured list default and explains why.
     page.get_by_role("button", name="Reset selection").click()
-    expect(
-        page.get_by_text("re-seeded the list to the configured")
-    ).to_be_visible(timeout=10000)
+    expect(page.get_by_text("re-seeded the list to the configured")).to_be_visible(
+        timeout=10000
+    )
     expect(page.get_by_text("3 selected")).to_be_visible(timeout=10000)

@@ -1,4 +1,5 @@
 """Parse the Data text area into a list of listview options."""
+
 import json
 
 

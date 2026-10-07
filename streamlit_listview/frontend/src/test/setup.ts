@@ -12,5 +12,5 @@ if (!Element.prototype.scrollIntoView) {
 // updates. The flag does not change React's flushing behaviour itself; the
 // synchronous drain is produced by the act() wrappers in the individual tests.
 // @see https://reactjs.org/blog/2022/03/08/react-18-upgrade-guide.html#configuring-your-testing-environment
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- React reads this undeclared global
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;

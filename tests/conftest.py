@@ -46,11 +46,16 @@ class FakeComponent:
 
     def __init__(self):
         self.calls = []
+        self.declared = None  # the factory kwargs, recorded at import
         self._return_value = self._UNSET
 
     @property
     def return_value(self):
-        return {"selection": []} if self._return_value is self._UNSET else self._return_value
+        return (
+            {"selection": []}
+            if self._return_value is self._UNSET
+            else self._return_value
+        )
 
     @return_value.setter
     def return_value(self, value):

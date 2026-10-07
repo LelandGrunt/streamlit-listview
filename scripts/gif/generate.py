@@ -26,9 +26,9 @@ REPO_ROOT = HERE.parent.parent
 # healthy is the same job here as there, so it has one implementation.
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(REPO_ROOT))
-from capture import capture  # noqa: E402
-from e2e.e2e_utils import StreamlitRunner  # noqa: E402
-from make_gif import build_gif, validate_gif_params  # noqa: E402
+from capture import capture
+from e2e.e2e_utils import StreamlitRunner
+from make_gif import build_gif, validate_gif_params
 
 # Generous on purpose: this may be the first run after a fresh install, with a
 # cold component bundle still to serve.

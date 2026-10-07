@@ -8,7 +8,8 @@ HSL points instead of darkened by 30), and only a dark boot exercises it. The
 tests are re-collected here; the conftest boots this module's own server from
 EXTRA_ARGS.
 """
-from e2e.test_native_parity import *  # noqa: F401,F403 — the same tests, re-collected
+
+from e2e.test_native_parity import *  # the same tests, re-collected
 from e2e.test_native_parity import APP_FILE  # noqa: F401 — read by the conftest
 
 EXTRA_ARGS = ["--theme.base", "dark"]

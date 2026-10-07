@@ -1,4 +1,5 @@
 """README must document the real V2 API and carry no stale scaffold text."""
+
 import re
 import sys
 from pathlib import Path
@@ -9,7 +10,7 @@ PYPROJECT = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
 sys.path.insert(0, str(ROOT / "scripts"))
 
-import verify_wheel  # noqa: E402
+import verify_wheel
 
 
 def _first(pattern: str, text: str) -> str:
@@ -100,8 +101,8 @@ def test_version_matches_pyproject_and_no_stale_scaffold():
     assert re.search(rf"img\.shields\.io/pypi/v/{re.escape(name)}(?=[?)])", README)
     assert f"streamlit_listview-{version}-py3-none-any.whl" in README
     assert f"streamlit_listview-{version}.tar.gz" in README
-    assert "0.0.1" not in README          # stale expected-output filename
-    assert "num_clicks" not in README     # stale scaffold snippet
+    assert "0.0.1" not in README  # stale expected-output filename
+    assert "num_clicks" not in README  # stale scaffold snippet
     assert 'listview("World")' not in README
 
 
@@ -124,7 +125,9 @@ def test_badges_match_declared_floors_and_gates():
     thresholds = re.findall(r"(?:statements|branches|functions|lines):\s*(\d+)", vitest)
     assert len(thresholds) == 4, "vitest coverage thresholds not found"
     for threshold in thresholds:
-        assert threshold == fail_under, "vitest coverage gate diverges from the README badge"
+        assert threshold == fail_under, (
+            "vitest coverage gate diverges from the README badge"
+        )
 
     license_id = _first(r'(?m)^license\s*=\s*"([^"]+)"', PYPROJECT)
     # shields.io renders "_" as a space, so "Apache-2.0" is written "Apache_2.0"
@@ -144,4 +147,4 @@ def test_notes_markdown_and_theming():
     assert "Markdown" in README
     # LaTeX/KaTeX intentionally unsupported (spec decision)
     assert "LaTeX" in README or "KaTeX" in README
-    assert "--st-" in README              # theming via Streamlit CSS variables
+    assert "--st-" in README  # theming via Streamlit CSS variables

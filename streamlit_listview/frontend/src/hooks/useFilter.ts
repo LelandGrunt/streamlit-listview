@@ -51,7 +51,9 @@ export function useFilter({ items, query }: UseFilterArgs): UseFilterResult {
     if (foldedLabels === null) {
       return items;
     }
-    return items.filter((_item, index) => foldedLabels[index].includes(normalized));
+    return items.filter((_item, index) =>
+      foldedLabels[index].includes(normalized),
+    );
   }, [items, foldedLabels, normalized]);
 
   return { visibleItems, isFiltering };

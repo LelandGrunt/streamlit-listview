@@ -20,6 +20,7 @@ Set ``LISTVIEW_SKIP_NPM_BUILD=1`` to skip the npm step — useful when the bundl
 was already built in a previous step (e.g. CI builds it once for the test run,
 then installs the package editable).
 """
+
 from __future__ import annotations
 
 import os
@@ -33,7 +34,7 @@ _FRONTEND = Path(__file__).resolve().parent / "streamlit_listview" / "frontend"
 
 def _backend():
     """Return setuptools' build backend (imported lazily; present at build time)."""
-    from setuptools import build_meta
+    from setuptools import build_meta  # ty: ignore[unresolved-import]
 
     return build_meta
 
@@ -50,7 +51,9 @@ def _npm(*args: str) -> None:
     """
     npm = shutil.which("npm") or ("npm.cmd" if os.name == "nt" else "npm")
     argv = [npm, *args]
-    print(f"[listview build] running `{' '.join(argv)}` in {_FRONTEND}", file=sys.stderr)
+    print(
+        f"[listview build] running `{' '.join(argv)}` in {_FRONTEND}", file=sys.stderr
+    )
     # A non-zero exit (e.g. a typecheck or vite error) raises CalledProcessError,
     # which propagates so the real build failure is surfaced. npm's presence is
     # checked up front in _run_npm_build.
@@ -122,6 +125,7 @@ def _run_npm_build() -> None:
 # Pass-through hooks delegate straight to setuptools. The three build_* hooks
 # compile the frontend bundle first.
 
+
 def get_requires_for_build_wheel(config_settings=None):
     return _backend().get_requires_for_build_wheel(config_settings)
 
@@ -135,11 +139,15 @@ def get_requires_for_build_editable(config_settings=None):
 
 
 def prepare_metadata_for_build_wheel(metadata_directory, config_settings=None):
-    return _backend().prepare_metadata_for_build_wheel(metadata_directory, config_settings)
+    return _backend().prepare_metadata_for_build_wheel(
+        metadata_directory, config_settings
+    )
 
 
 def prepare_metadata_for_build_editable(metadata_directory, config_settings=None):
-    return _backend().prepare_metadata_for_build_editable(metadata_directory, config_settings)
+    return _backend().prepare_metadata_for_build_editable(
+        metadata_directory, config_settings
+    )
 
 
 def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
@@ -154,4 +162,6 @@ def build_sdist(sdist_directory, config_settings=None):
 
 def build_editable(wheel_directory, config_settings=None, metadata_directory=None):
     _run_npm_build()
-    return _backend().build_editable(wheel_directory, config_settings, metadata_directory)
+    return _backend().build_editable(
+        wheel_directory, config_settings, metadata_directory
+    )

@@ -39,10 +39,26 @@ describe("listview.css base theming", () => {
     // Table-driven so a shade added to the root block is covered by this test
     // rather than needing its own copy of it.
     const shades = [
-      { token: "--listview-faded-text-60", source: "--st-text-color", pct: "60%" },
-      { token: "--listview-faded-text-70", source: "--st-text-color", pct: "70%" },
-      { token: "--listview-faded-text-40", source: "--st-text-color", pct: "40%" },
-      { token: "--listview-faded-text-50", source: "--st-text-color", pct: "50%" },
+      {
+        token: "--listview-faded-text-60",
+        source: "--st-text-color",
+        pct: "60%",
+      },
+      {
+        token: "--listview-faded-text-70",
+        source: "--st-text-color",
+        pct: "70%",
+      },
+      {
+        token: "--listview-faded-text-40",
+        source: "--st-text-color",
+        pct: "40%",
+      },
+      {
+        token: "--listview-faded-text-50",
+        source: "--st-text-color",
+        pct: "50%",
+      },
       {
         token: "--listview-faded-border-50",
         source: "--st-border-color",
@@ -84,7 +100,10 @@ describe("listview.css base theming", () => {
         token: "--listview-inset-surface",
         source: "var\\(--st-secondary-background-color",
       },
-      { token: "--listview-group-surface", source: "var\\(--listview-bg-mix\\)" },
+      {
+        token: "--listview-group-surface",
+        source: "var\\(--listview-bg-mix\\)",
+      },
     ];
     for (const { token, source } of surfaces) {
       // defined on the container root, from the main-body token
@@ -430,9 +449,7 @@ describe("listview.css markdown — inline tier (label + help)", () => {
   });
 
   it("collapses the markdown wrapper's own block margins so the label stays inline", () => {
-    expect(css).toMatch(
-      /\.listview-markdown\s+p\b[^{]*\{[^}]*margin:\s*0/,
-    );
+    expect(css).toMatch(/\.listview-markdown\s+p\b[^{]*\{[^}]*margin:\s*0/);
   });
 });
 
@@ -539,7 +556,9 @@ describe("listview.css markdown — Streamlit extras (colors, badge, shimmer, ma
   it("animates the shimmer span with a keyframed mask", () => {
     expect(css).toContain(".listview-md-shimmer");
     expect(css).toMatch(/@keyframes\s+listview-shimmer/);
-    expect(css).toMatch(/\.listview-md-shimmer\b[^{]*\{[^}]*animation[^}]*listview-shimmer/);
+    expect(css).toMatch(
+      /\.listview-md-shimmer\b[^{]*\{[^}]*animation[^}]*listview-shimmer/,
+    );
   });
 
   it("renders :small[] text smaller via .listview-md-small", () => {
@@ -561,9 +580,7 @@ describe("listview.css help tooltip popover", () => {
   });
 
   it("uses the theme font at the small size and theme text color", () => {
-    expect(css).toMatch(
-      /\.listview-help-popover\b[^{]*\{[^}]*var\(--st-font/,
-    );
+    expect(css).toMatch(/\.listview-help-popover\b[^{]*\{[^}]*var\(--st-font/);
     expect(css).toMatch(
       /\.listview-help-popover\b[^{]*\{[^}]*calc\(var\(--st-base-font-size/,
     );
@@ -762,7 +779,9 @@ describe("Milestone C feature styling", () => {
     );
     // Padded only when filled: the live region stays in the DOM, and an empty
     // one must add no height below the add row.
-    expect(css).toMatch(/\.listview-new-option__hint:not\(:empty\)\s*\{[^}]*padding:/);
+    expect(css).toMatch(
+      /\.listview-new-option__hint:not\(:empty\)\s*\{[^}]*padding:/,
+    );
     expect(css).not.toMatch(/\.listview-new-option__hint\s*\{[^}]*padding:/);
   });
 

@@ -5,6 +5,7 @@ Off means gone: no Theme pill, so no picker and no callback that could re-theme
 the server. The variable is read by the server process, so this module boots a
 server of its own through EXTRA_ENV (see ``_servers`` in e2e/conftest.py).
 """
+
 from playwright.sync_api import Page, expect
 
 EXTRA_ENV = {"LISTVIEW_DEMO_THEME_SWITCHER": "0"}

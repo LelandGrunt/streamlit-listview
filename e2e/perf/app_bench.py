@@ -15,6 +15,7 @@ Measures the checkout it runs from: Streamlit registers the component's assets
 from the installed distribution at server start, so this script imports
 ``streamlit_listview`` the ordinary way and never touches its resolution.
 """
+
 import json
 import sys
 import time
@@ -24,9 +25,8 @@ import streamlit as st
 
 # `streamlit run` does not put demo/ on sys.path (it is not a package).
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "demo"))
-from data import make_large_dataset  # noqa: E402
-
-from streamlit_listview import listview  # noqa: E402
+from data import make_large_dataset
+from streamlit_listview import listview
 
 qp = st.query_params
 n = int(qp.get("n", "1000"))

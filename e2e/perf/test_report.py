@@ -1,5 +1,6 @@
 # e2e/perf/test_report.py
 """Unit tests for the results report. Synthetic records; no browser, no server."""
+
 import json
 import os
 import subprocess
@@ -38,9 +39,13 @@ def test_flatten_ignores_metadata_and_booleans():
 
 
 def test_summarize_takes_median_low_high_and_count_per_cell_scenario_metric():
-    records = [rec(rep=i, mount={"painted_ms": v}) for i, v in enumerate([30.0, 10.0, 20.0])]
+    records = [
+        rec(rep=i, mount={"painted_ms": v}) for i, v in enumerate([30.0, 10.0, 20.0])
+    ]
     assert report.summarize(records) == {
-        (100, True, "mount", "painted_ms"): Stats(median=20.0, low=10.0, high=30.0, count=3)
+        (100, True, "mount", "painted_ms"): Stats(
+            median=20.0, low=10.0, high=30.0, count=3
+        )
     }
 
 
@@ -99,8 +104,26 @@ def test_render_summary_plain_lists_median_low_high_and_reps():
         {(1000, False, "scroll", "p95_ms"): Stats(24.5, 20.0, 31.0, 3)}, markdown=False
     )
     header, row = text.splitlines()
-    assert header.split() == ["n", "shape", "scenario", "metric", "median", "low", "high", "reps"]
-    assert row.split() == ["1000", "ungrouped", "scroll", "p95_ms", "24.5", "20.0", "31.0", "3"]
+    assert header.split() == [
+        "n",
+        "shape",
+        "scenario",
+        "metric",
+        "median",
+        "low",
+        "high",
+        "reps",
+    ]
+    assert row.split() == [
+        "1000",
+        "ungrouped",
+        "scroll",
+        "p95_ms",
+        "24.5",
+        "20.0",
+        "31.0",
+        "3",
+    ]
 
 
 def test_report_compare_with_cp1252_stdout(tmp_path):
@@ -117,8 +140,11 @@ def test_report_compare_with_cp1252_stdout(tmp_path):
         capture_output=True,
         cwd=repo_root,
         env=env,
+        check=False,  # the assert below reports stderr
     )
-    assert result.returncode == 0, f"stderr: {result.stderr.decode('utf-8', errors='replace')}"
+    assert result.returncode == 0, (
+        f"stderr: {result.stderr.decode('utf-8', errors='replace')}"
+    )
     output = result.stdout.decode("utf-8")
     assert "Δ" in output, "Delta symbol should be in output"
 

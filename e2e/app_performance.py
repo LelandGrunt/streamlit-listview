@@ -11,10 +11,9 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "demo"))
 sys.path.insert(0, str(ROOT))
-from data import make_large_dataset  # noqa: E402
-
-from e2e.perf_dataset import N  # noqa: E402
-from streamlit_listview import listview  # noqa: E402
+from data import make_large_dataset
+from e2e.perf_dataset import N
+from streamlit_listview import listview
 
 OPTIONS = make_large_dataset(N)
 

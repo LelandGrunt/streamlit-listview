@@ -18,6 +18,7 @@ Per-module contract:
 * define a module-level ``go_to_app`` fixture to override the shared navigation
   (test_performance.py does: it times ``page.goto`` itself).
 """
+
 import contextlib
 
 import pytest

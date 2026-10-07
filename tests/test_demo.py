@@ -1,4 +1,5 @@
 """Unit tests for the demo's pure logic modules (demo/ is not a package)."""
+
 import ast
 import json
 import math
@@ -11,11 +12,11 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "demo"))
 
-import data  # noqa: E402
-import parsing  # noqa: E402
-import codegen  # noqa: E402
-import dataset  # noqa: E402
-import themes  # noqa: E402
+import codegen
+import data
+import dataset
+import parsing
+import themes
 
 
 def test_dataset_shape():
@@ -50,7 +51,7 @@ def test_group_names_orders_dedupes_and_skips_groupless():
 def test_dataset_accepted_by_listview_normalizer():
     from streamlit_listview._options import normalize_options
 
-    items, id_to_original = normalize_options(data.CITIES, str)
+    items, _id_to_original = normalize_options(data.CITIES, str)
     assert len(items) == len(data.CITIES)
 
 
@@ -113,8 +114,7 @@ def test_fmt_type_badge_never_raises_on_unexpected_shapes():
     # absent — fall back to the id, never render the literal "None".
     assert data.fmt_type_badge({"id": "orders", "text": None}) == "orders 👓"
     assert (
-        data.fmt_type_badge({"id": "orders", "text": None, "type": "Table"})
-        == "orders"
+        data.fmt_type_badge({"id": "orders", "text": None, "type": "Table"}) == "orders"
     )
 
 
@@ -141,8 +141,12 @@ def test_format_probe_counts_only_the_options_listview_formats():
 
     mixed = data.FormatProbe(data.fmt_upper)
     normalize_options(
-        [{"id": "berlin"}, {"id": "paris", "label": "Paris"}, "rome",
-         {"id": "oslo", "label": None}],
+        [
+            {"id": "berlin"},
+            {"id": "paris", "label": "Paris"},
+            "rome",
+            {"id": "oslo", "label": None},
+        ],
         mixed,
     )
     assert mixed.calls == 3
@@ -186,7 +190,9 @@ def test_make_on_change_callback_bumps_counter_and_toasts(monkeypatch):
     state = {}
     toasts = []
     monkeypatch.setattr(st, "session_state", state, raising=False)
-    monkeypatch.setattr(st, "toast", lambda *a, **k: toasts.append((a, k)), raising=False)
+    monkeypatch.setattr(
+        st, "toast", lambda *a, **k: toasts.append((a, k)), raising=False
+    )
 
     cb = data.make_on_change()
     cb()
@@ -197,9 +203,9 @@ def test_make_on_change_callback_bumps_counter_and_toasts(monkeypatch):
 
 def test_fmt_truncate_boundary():
     trunc = data.fmt_truncate
-    assert trunc("1234567890") == "1234567890"   # exactly 10 — kept
+    assert trunc("1234567890") == "1234567890"  # exactly 10 — kept
     assert trunc("12345678901") == "123456789…"  # 11 — truncated to 10
-    assert trunc("short") == "short"             # under limit
+    assert trunc("short") == "short"  # under limit
 
 
 def test_parse_empty_returns_empty_list():
@@ -423,7 +429,9 @@ def test_snippet_without_a_known_preset_emits_no_format_func(preset_name):
 
 
 def test_snippet_format_preset_emits_def_and_kwarg():
-    code = codegen.build_snippet(_cfg(format_preset="UPPERCASE"), _OPTS, builtin_dataset=False)
+    code = codegen.build_snippet(
+        _cfg(format_preset="UPPERCASE"), _OPTS, builtin_dataset=False
+    )
     assert "def fmt_upper(option):" in code
     assert "format_func=fmt_upper," in code
 
@@ -437,12 +445,16 @@ def test_snippet_format_preset_def_is_self_contained():
     Executing every def in an empty namespace proves the snippet a user copies out
     actually runs.
     """
-    code = codegen.build_snippet(_cfg(format_preset="UPPERCASE"), _OPTS, builtin_dataset=False)
+    code = codegen.build_snippet(
+        _cfg(format_preset="UPPERCASE"), _OPTS, builtin_dataset=False
+    )
     tree = ast.parse(code)
     namespace = {}
     for node in tree.body:
         if isinstance(node, ast.FunctionDef):
-            exec(ast.get_source_segment(code, node), namespace)
+            source = ast.get_source_segment(code, node)
+            assert source is not None
+            exec(source, namespace)
     assert namespace["fmt_upper"]("berlin") == "BERLIN"
 
 
@@ -462,7 +474,9 @@ def test_every_emitted_preset_runs_standalone(preset_name):
     namespace = {}
     for node in ast.parse(code).body:
         if isinstance(node, ast.FunctionDef):
-            exec(ast.get_source_segment(code, node), namespace)
+            source = ast.get_source_segment(code, node)
+            assert source is not None
+            exec(source, namespace)
     emitted = namespace[func.__name__]
     # Both option shapes listview can hand a formatter, run from the snippet's
     # own namespace — no import from demo.data involved.
@@ -485,7 +499,9 @@ def test_snippet_builtin_default_beyond_first_three_is_emitted():
     # option the configured default references MUST still be emitted — otherwise
     # the snippet shown to the user raises
     # ValueError("default id 'tokyo' is not present in options") when run.
-    code = codegen.build_snippet(_cfg(default="tokyo"), data.CITIES, builtin_dataset=True)
+    code = codegen.build_snippet(
+        _cfg(default="tokyo"), data.CITIES, builtin_dataset=True
+    )
     options_block = code.split("selected = listview")[0]
     assert '"tokyo"' in options_block
     assert "# …" in code  # still abbreviated
@@ -506,7 +522,9 @@ def test_snippet_builtin_multi_defaults_beyond_first_three_are_emitted():
 
 def test_snippet_builtin_first_three_default_does_not_duplicate():
     # A default among the first three must not be emitted twice.
-    code = codegen.build_snippet(_cfg(default="berlin"), data.CITIES, builtin_dataset=True)
+    code = codegen.build_snippet(
+        _cfg(default="berlin"), data.CITIES, builtin_dataset=True
+    )
     options_block = code.split("selected = listview")[0]
     assert options_block.count('"berlin"') == 1
 
@@ -523,7 +541,9 @@ def test_snippet_custom_data_renders_all_options_not_truncated():
     )
     options_block = code.split("selected = listview")[0]
     for i in range(5):
-        assert f'"o{i}"' in options_block, f"option o{i} missing from generated options block"
+        assert f'"o{i}"' in options_block, (
+            f"option o{i} missing from generated options block"
+        )
     assert "# …" not in code  # no built-in elision marker for custom data
     compile(code, "<snippet>", "exec")
 
@@ -542,11 +562,13 @@ def test_snippet_omits_empty_strings_and_empty_lists():
 def test_snippet_renders_unicode_and_literal_tokens():
     opts = [{"id": "sp", "label": "São Paulo: true", "group": "g: null"}]
     code = codegen.build_snippet(
-        _cfg(enable_search=True, search_placeholder="Find…"), opts, builtin_dataset=False
+        _cfg(enable_search=True, search_placeholder="Find…"),
+        opts,
+        builtin_dataset=False,
     )
     assert '"São Paulo: true"' in code  # string content not corrupted, not escaped
     assert '"g: null"' in code
-    assert '"Find…",' in code           # non-ASCII kwarg rendered literally
+    assert '"Find…",' in code  # non-ASCII kwarg rendered literally
     compile(code, "<snippet>", "exec")
 
 
@@ -630,9 +652,7 @@ def test_snippet_emits_content_font_size_only_when_set():
     # Default None is omitted; an int is emitted.
     off = codegen.build_snippet(_cfg(), _OPTS, builtin_dataset=False)
     assert "content_font_size" not in off
-    on = codegen.build_snippet(
-        _cfg(content_font_size=12), _OPTS, builtin_dataset=False
-    )
+    on = codegen.build_snippet(_cfg(content_font_size=12), _OPTS, builtin_dataset=False)
     assert "content_font_size=12," in on
     compile(on, "<snippet>", "exec")
 
@@ -640,18 +660,18 @@ def test_snippet_emits_content_font_size_only_when_set():
 def test_snippet_sidebar_wraps_call_in_with_block():
     code = codegen.build_snippet(_cfg(sidebar=True), _OPTS, builtin_dataset=False)
     assert "with st.sidebar:\n" in code
-    assert "\n    selected = listview(\n" in code      # call indented one level
-    assert '        key="demo_listview",\n' in code     # kwargs land at 8 spaces
-    assert "\n    )\n" in code                           # closing paren indented one level
-    assert "\nst.write(selected)\n" in code             # result stays top-level
-    assert "sidebar=" not in code                        # never emitted as a kwarg
+    assert "\n    selected = listview(\n" in code  # call indented one level
+    assert '        key="demo_listview",\n' in code  # kwargs land at 8 spaces
+    assert "\n    )\n" in code  # closing paren indented one level
+    assert "\nst.write(selected)\n" in code  # result stays top-level
+    assert "sidebar=" not in code  # never emitted as a kwarg
     compile(code, "<snippet>", "exec")
 
 
 def test_snippet_no_sidebar_keeps_call_top_level():
     code = codegen.build_snippet(_cfg(), _OPTS, builtin_dataset=False)
     assert "with st.sidebar:" not in code
-    assert "\nselected = listview(\n" in code            # top-level, unindented
+    assert "\nselected = listview(\n" in code  # top-level, unindented
     compile(code, "<snippet>", "exec")
 
 
@@ -674,12 +694,12 @@ def test_app_compiles():
 
 def test_app_wires_large_data_source():
     src = (ROOT / "demo" / "app.py").read_text(encoding="utf-8")
-    assert '"large_size"' in src            # config key
-    assert "select_slider(" in src          # size control
+    assert '"large_size"' in src  # config key
+    assert "select_slider(" in src  # size control
     assert "options=data.LARGE_SIZES" in src  # its choices
     ds = (ROOT / "demo" / "dataset.py").read_text(encoding="utf-8")
-    assert '"Large"' in ds                  # registry key (data-source segment)
-    assert "make_large_dataset(" in ds      # options resolution
+    assert '"Large"' in ds  # registry key (data-source segment)
+    assert "make_large_dataset(" in ds  # options resolution
 
 
 def test_snippet_includes_select_all_in_multi():
@@ -830,7 +850,9 @@ def test_resolve_builtin_returns_cities_with_groups():
 
 
 def test_resolve_empty_source():
-    options, ids, groups, builtin = dataset.resolve_dataset(_data_cfg(data_source="Empty"))
+    options, ids, groups, builtin = dataset.resolve_dataset(
+        _data_cfg(data_source="Empty")
+    )
     assert options == []
     assert ids == []
     assert groups == []
@@ -885,8 +907,17 @@ def test_app_uses_pills_section_switcher():
     src = (ROOT / "demo" / "app.py").read_text(encoding="utf-8")
     assert "st.pills(" in src
     # all nine section names appear as pill labels
-    for name in ("Basic", "Data", "Appearance", "Layout", "Behavior",
-                 "Search", "Groups", "Sorting", "Formatting"):
+    for name in (
+        "Basic",
+        "Data",
+        "Appearance",
+        "Layout",
+        "Behavior",
+        "Search",
+        "Groups",
+        "Sorting",
+        "Formatting",
+    ):
         assert f'"{name}"' in src, f"missing section {name!r}"
 
 
@@ -955,7 +986,9 @@ def _documented_param_names(app_source):
     for entry in params.elts:  # each entry is a dict literal
         for key, value in zip(entry.keys, entry.values):
             if isinstance(key, ast.Constant) and key.value == "Parameter":
-                names.update(part.strip() for part in ast.literal_eval(value).split("/"))
+                names.update(
+                    part.strip() for part in ast.literal_eval(value).split("/")
+                )
     return names
 
 
@@ -1284,7 +1317,9 @@ def test_server_theme_switch_drops_what_the_previous_theme_set(theme_config):
     config, baseline = theme_config
     server = themes.ServerTheme()
 
-    server.apply("a", {"theme.textColor": "#aaaaaa", "theme.primaryColor": "#a00000"}, now=_T0)
+    server.apply(
+        "a", {"theme.textColor": "#aaaaaa", "theme.primaryColor": "#a00000"}, now=_T0
+    )
     server.apply("b", {"theme.primaryColor": "#b00000"}, now=_T0)
 
     assert config.get_option("theme.primaryColor") == "#b00000"
@@ -1303,7 +1338,10 @@ def test_server_theme_reset_restores_the_boot_config(theme_config):
     server.reset()
 
     assert config.get_option("theme.primaryColor") == "#abcdef"
-    assert config.get_config_options()["theme.primaryColor"].where_defined == "a config.toml"
+    assert (
+        config.get_config_options()["theme.primaryColor"].where_defined
+        == "a config.toml"
+    )
     assert server.active is None
     assert server.applied_at is None
 

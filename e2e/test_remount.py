@@ -8,6 +8,7 @@ the frontend. The remounted frontend must re-seed from the persisted selection
 existed, the rows re-seeded from `default` while listview() kept returning the
 old value — desynced rows, and the next click silently overwrote the value.
 """
+
 from pathlib import Path
 
 from playwright.sync_api import Page, expect
@@ -44,9 +45,7 @@ def test_selection_survives_container_move(page: Page):
     # state survives. Await the move itself first, so the assertions below
     # cannot race the rerun and pass against the pre-move DOM.
     _toggle_placement(page)
-    expect(
-        page.get_by_test_id("stSidebar").get_by_role("listbox")
-    ).to_have_count(1)
+    expect(page.get_by_test_id("stSidebar").get_by_role("listbox")).to_have_count(1)
 
     # The remount re-seeded from the persisted selection, NOT from default=:
     # banana (the user's pick) is still the one selected row, the echoed value
@@ -58,9 +57,7 @@ def test_selection_survives_container_move(page: Page):
 
     # And back to the main body: the reverse move preserves it just the same.
     _toggle_placement(page)
-    expect(
-        page.get_by_test_id("stSidebar").get_by_role("listbox")
-    ).to_have_count(0)
+    expect(page.get_by_test_id("stSidebar").get_by_role("listbox")).to_have_count(0)
     expect(page.get_by_role("listbox")).to_have_count(1)
     expect(_option(page, "banana")).to_have_attribute("aria-selected", "true")
     expect(echo(page, "remount")).to_contain_text("'id': 'banana'")

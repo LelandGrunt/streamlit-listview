@@ -18,7 +18,7 @@ APP_FILE = Path(__file__).with_name("app_performance.py")
 # as literals here drifts the moment the generator changes. demo/ is not a
 # package, so it goes on sys.path first (the import the harness itself does).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "demo"))
-from data import make_large_dataset  # noqa: E402
+from data import make_large_dataset
 
 _ROWS = make_large_dataset(N)
 FIRST_ID = _ROWS[0]["id"]
@@ -51,7 +51,9 @@ def test_large_list_renders_all_rows_within_budget(page: Page, app: StreamlitRun
     last = root.get_by_test_id(f"stListviewOption-{LAST_ID}")
     expect(last).to_have_count(1, timeout=30000)
     elapsed = time.perf_counter() - start
-    assert elapsed < RENDER_BUDGET_S, f"render took {elapsed:.1f}s (budget {RENDER_BUDGET_S}s)"
+    assert elapsed < RENDER_BUDGET_S, (
+        f"render took {elapsed:.1f}s (budget {RENDER_BUDGET_S}s)"
+    )
 
 
 def test_large_list_stays_responsive(page: Page, app: StreamlitRunner):

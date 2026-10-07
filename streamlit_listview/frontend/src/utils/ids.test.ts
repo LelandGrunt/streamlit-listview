@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { sameIds, disabledIdSet, idKey, itemIdByKey, parseNewIntId } from "./ids";
+import {
+  sameIds,
+  disabledIdSet,
+  idKey,
+  itemIdByKey,
+  parseNewIntId,
+} from "./ids";
 
 describe("sameIds", () => {
   it("is true for element-wise equal lists (same order)", () => {

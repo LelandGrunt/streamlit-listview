@@ -9,6 +9,35 @@ permissions:
   contents: read
 
 jobs:
+  # The checks the local pre-commit hook runs, on every file: ruff (lint +
+  # format), ty and uv audit for Python; tsc, oxlint, Prettier and npm audit for
+  # the frontend. The hook is opt-in per clone and `--no-verify` skips it, so
+  # this job is the gate. It also catches an advisory published against an
+  # unchanged lockfile. The frontend hooks need node_modules, not the bundle.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: streamlit_listview/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: streamlit_listview/frontend
+        run: npm ci
+
+      - name: Set up uv + Python
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Lint, format, type-check, audit (pre-commit)
+        run: uvx pre-commit run --all-files --show-diff-on-failure
+
   test-build-verify:
     runs-on: ubuntu-latest
     steps:

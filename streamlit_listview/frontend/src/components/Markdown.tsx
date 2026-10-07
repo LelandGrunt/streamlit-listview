@@ -67,7 +67,10 @@ const COMPONENTS: Components = {
  * re-rendering the child; only a bail-out does). Both props here are primitives,
  * so the shallow comparison is exact and the parse happens once per label.
  */
-export const Markdown = memo(function Markdown({ source, tier }: MarkdownProps) {
+export const Markdown = memo(function Markdown({
+  source,
+  tier,
+}: MarkdownProps) {
   const isLabel = tier === "label";
   // Material-icon rewrite runs for BOTH tiers; in the label tier it is applied
   // AFTER escapeLabelSource (escaping leading block markers does not touch the

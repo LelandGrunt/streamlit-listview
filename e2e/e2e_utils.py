@@ -6,13 +6,13 @@ import socket
 import subprocess
 import sys
 import time
-import typing
 from contextlib import closing
 from tempfile import TemporaryFile
 
 import requests
+from typing_extensions import Self
 
-LOGGER = logging.getLogger(__file__)
+LOGGER = logging.getLogger(__name__)
 
 
 def _find_free_port() -> int:
@@ -33,10 +33,10 @@ class StreamlitRunner:
     def __init__(
         self,
         script_path: os.PathLike,
-        server_port: typing.Optional[int] = None,
-        extra_args: typing.Optional[typing.List[str]] = None,
+        server_port: int | None = None,
+        extra_args: list[str] | None = None,
         startup_timeout: int = 60,
-        extra_env: typing.Optional[typing.Dict[str, str]] = None,
+        extra_env: dict[str, str] | None = None,
     ):
         self._proc = None
         self._stdout_file = None
@@ -52,7 +52,7 @@ class StreamlitRunner:
         # cold component bundle.
         self.startup_timeout = startup_timeout
 
-    def __enter__(self) -> "StreamlitRunner":
+    def __enter__(self) -> Self:
         self.start()
         return self
 
@@ -61,7 +61,8 @@ class StreamlitRunner:
 
     def start(self) -> None:
         self.server_port = self.server_port or _find_free_port()
-        self._stdout_file = TemporaryFile("w+")
+        # Stays open for the server's lifetime; stop() closes it.
+        self._stdout_file = TemporaryFile("w+")  # noqa: SIM115
         args = [
             sys.executable,
             "-m",
@@ -110,6 +111,7 @@ class StreamlitRunner:
                             ["taskkill", "/F", "/T", "/PID", str(self._proc.pid)],
                             stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL,
+                            check=False,  # the tree may already be gone
                         )
                     else:
                         self._proc.terminate()

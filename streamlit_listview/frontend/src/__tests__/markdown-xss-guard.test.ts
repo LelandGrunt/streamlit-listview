@@ -37,7 +37,7 @@ function productionSources(dir: string): string[] {
     }
     if (!/\.tsx?$/.test(entry.name)) continue;
     if (/\.test\.tsx?$/.test(entry.name)) continue;
-    if (/\.d\.ts$/.test(entry.name)) continue;
+    if (entry.name.endsWith(".d.ts")) continue;
     out.push(full);
   }
   return out;
@@ -92,8 +92,8 @@ describe("markdown XSS guard — dependencies", () => {
   it("does not declare rehype-raw or html-react-parser as dependencies", () => {
     const pkg = JSON.parse(readFileSync(PACKAGE_JSON, "utf8"));
     const declared = Object.keys({
-      ...(pkg.dependencies ?? {}),
-      ...(pkg.devDependencies ?? {}),
+      ...pkg.dependencies,
+      ...pkg.devDependencies,
     });
     expect(declared).not.toContain("rehype-raw");
     expect(declared).not.toContain("html-react-parser");

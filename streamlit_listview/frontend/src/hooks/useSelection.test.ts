@@ -160,7 +160,10 @@ describe("add()", () => {
   // with an unknown id — and reconciliation drops unknown ids when it is off.
   it("single mode: add replaces the current selection", () => {
     const { result, setStateValue } = renderSelection({
-      items: [{ id: "a", label: "A" }, { id: "b", label: "B" }],
+      items: [
+        { id: "a", label: "A" },
+        { id: "b", label: "B" },
+      ],
       acceptNewOptions: true,
       initialSelection: ["a"],
     });
@@ -183,7 +186,10 @@ describe("add()", () => {
 
   it("multi mode: add is a no-op at the cap", () => {
     const { result, setStateValue } = renderSelection({
-      items: [{ id: "a", label: "A" }, { id: "b", label: "B" }],
+      items: [
+        { id: "a", label: "A" },
+        { id: "b", label: "B" },
+      ],
       selectionMode: "multi",
       maxSelections: 2,
       initialSelection: ["a", "b"],
@@ -296,7 +302,11 @@ describe("useSelection (bulk visible ops)", () => {
     });
     act(() => result.current.selectAllVisible(["a", "b", "c"]));
     expect(setStateValue).toHaveBeenCalledTimes(1);
-    expect(setStateValue).toHaveBeenLastCalledWith("selection", ["a", "b", "c"]);
+    expect(setStateValue).toHaveBeenLastCalledWith("selection", [
+      "a",
+      "b",
+      "c",
+    ]);
     expect(result.current.selection).toEqual(["a", "b", "c"]);
   });
 
@@ -309,7 +319,11 @@ describe("useSelection (bulk visible ops)", () => {
     // pass all four including disabled 'd' and already-selected 'a'
     act(() => result.current.selectAllVisible(["a", "b", "c", "d"]));
     expect(setStateValue).toHaveBeenCalledTimes(1);
-    expect(setStateValue).toHaveBeenLastCalledWith("selection", ["a", "b", "c"]);
+    expect(setStateValue).toHaveBeenLastCalledWith("selection", [
+      "a",
+      "b",
+      "c",
+    ]);
   });
 
   it("selectAllVisible stops at max_selections counting the whole selection (worked example)", () => {
@@ -323,7 +337,11 @@ describe("useSelection (bulk visible ops)", () => {
     });
     act(() => result.current.selectAllVisible(["a", "b", "c"]));
     expect(setStateValue).toHaveBeenCalledTimes(1);
-    expect(setStateValue).toHaveBeenLastCalledWith("selection", ["z", "a", "b"]);
+    expect(setStateValue).toHaveBeenLastCalledWith("selection", [
+      "z",
+      "a",
+      "b",
+    ]);
     expect(result.current.selection).toHaveLength(3);
   });
 
@@ -531,7 +549,9 @@ describe("useSelection (reconciliation)", () => {
       selectionMode: "multi",
       initialSelection: ["a"],
     });
-    rerender({ items: [{ id: "a", label: "A", disabled: true }, abc[1], abc[2]] });
+    rerender({
+      items: [{ id: "a", label: "A", disabled: true }, abc[1], abc[2]],
+    });
     expect(result.current.selection).toEqual(["a"]);
     expect(setStateValue).not.toHaveBeenCalled();
   });

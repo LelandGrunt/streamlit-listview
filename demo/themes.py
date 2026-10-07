@@ -10,6 +10,7 @@ Streamlit watches the file, reparses it and reruns — minus the file write.
 ``streamlit.config.set_option`` is internal API (the public ``st.set_option``
 refuses theme options), which is why it is confined to this module.
 """
+
 import json
 import threading
 from datetime import timedelta
@@ -154,7 +155,9 @@ class ServerTheme:
         on each rerun changes what anyone sees no later than a timer would.
         """
         with self._lock:
-            if self.applied_at is None or (enabled and now < self.applied_at + self.ttl):
+            if self.applied_at is None or (
+                enabled and now < self.applied_at + self.ttl
+            ):
                 return False
             self._clear()
             return True

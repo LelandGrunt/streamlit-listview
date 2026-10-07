@@ -1,5 +1,7 @@
 """Basic single selection over a plain list of strings."""
+
 import streamlit as st
+
 from streamlit_listview import listview
 
 selected = listview(

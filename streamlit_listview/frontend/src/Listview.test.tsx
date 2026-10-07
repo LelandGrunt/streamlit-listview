@@ -131,7 +131,9 @@ describe("Listview", () => {
     expect(listbox.getAttribute("aria-activedescendant")).toBeNull();
     await user.click(screen.getByText("Carrot"));
     // Focus now tracks the clicked row, so a subsequent ArrowUp/Down resumes here.
-    expect(listbox.getAttribute("aria-activedescendant")).toBe("listview-opt-c");
+    expect(listbox.getAttribute("aria-activedescendant")).toBe(
+      "listview-opt-c",
+    );
   });
 
   it("multi mode marks the listbox aria-multiselectable and toggles members", async () => {
@@ -162,7 +164,10 @@ describe("Listview", () => {
     const setStateValue = vi.fn();
     const user = userEvent.setup();
     const { container } = render(
-      <Listview data={makeData({ disabled: true })} setStateValue={setStateValue} />,
+      <Listview
+        data={makeData({ disabled: true })}
+        setStateValue={setStateValue}
+      />,
     );
     const root = container.querySelector(
       '[data-testid="stListview"]',
@@ -189,9 +194,7 @@ describe("Listview", () => {
     expect(screen.getByText("Loose")).toBeInTheDocument();
     expect(screen.getByText("Fruit")).toBeInTheDocument();
     // exactly one group header (Fruit); the loose item has none
-    expect(
-      screen.getAllByTestId("stListviewGroup"),
-    ).toHaveLength(1);
+    expect(screen.getAllByTestId("stListviewGroup")).toHaveLength(1);
   });
 
   it("applies layout via inline CSS variables", () => {
@@ -250,12 +253,17 @@ describe("Listview", () => {
       '[data-testid="stListview"]',
     ) as HTMLElement;
     // No inline var: listview.css falls back to calc(var(--st-base-font-size)*0.875).
-    expect(root.style.getPropertyValue("--listview-content-font-size")).toBe("");
+    expect(root.style.getPropertyValue("--listview-content-font-size")).toBe(
+      "",
+    );
   });
 
   it("sets width to 100% when width is 'stretch'", () => {
     const { container } = render(
-      <Listview data={makeData({ width: "stretch" })} setStateValue={vi.fn()} />,
+      <Listview
+        data={makeData({ width: "stretch" })}
+        setStateValue={vi.fn()}
+      />,
     );
     const root = container.querySelector(
       '[data-testid="stListview"]',
@@ -280,13 +288,19 @@ describe("Listview", () => {
 
   it("adds the listview--no-grid class only when show_grid_lines is false", () => {
     const { container, rerender } = render(
-      <Listview data={makeData({ show_grid_lines: true })} setStateValue={vi.fn()} />,
+      <Listview
+        data={makeData({ show_grid_lines: true })}
+        setStateValue={vi.fn()}
+      />,
     );
     const root = () =>
       container.querySelector('[data-testid="stListview"]') as HTMLElement;
     expect(root().classList.contains("listview--no-grid")).toBe(false);
     rerender(
-      <Listview data={makeData({ show_grid_lines: false })} setStateValue={vi.fn()} />,
+      <Listview
+        data={makeData({ show_grid_lines: false })}
+        setStateValue={vi.fn()}
+      />,
     );
     expect(root().classList.contains("listview--no-grid")).toBe(true);
   });
@@ -324,7 +338,12 @@ describe("search", () => {
 
   it("filters items as the user types", async () => {
     const user = userEvent.setup();
-    render(<Listview data={baseData({ enable_search: true })} setStateValue={vi.fn()} />);
+    render(
+      <Listview
+        data={baseData({ enable_search: true })}
+        setStateValue={vi.fn()}
+      />,
+    );
     await user.type(screen.getByTestId("stListviewSearch"), "car");
     expect(screen.getByText("Carrot")).toBeInTheDocument();
     expect(screen.queryByText("Apple")).toBeNull();
@@ -332,25 +351,40 @@ describe("search", () => {
 
   it("pin_search renders the field in a non-scrolling header strip", () => {
     const { container } = render(
-      <Listview data={baseData({ enable_search: true, pin_search: true })} setStateValue={vi.fn()} />,
+      <Listview
+        data={baseData({ enable_search: true, pin_search: true })}
+        setStateValue={vi.fn()}
+      />,
     );
     const header = container.querySelector(".listview-header");
     expect(header).not.toBeNull();
-    expect(header!.querySelector('[data-testid="stListviewSearch"]')).not.toBeNull();
+    expect(
+      header!.querySelector('[data-testid="stListviewSearch"]'),
+    ).not.toBeNull();
   });
 
   it("in-flow search (pin_search=false) places the field inside the scroll body, not the header", () => {
     const { container } = render(
-      <Listview data={baseData({ enable_search: true, pin_search: false })} setStateValue={vi.fn()} />,
+      <Listview
+        data={baseData({ enable_search: true, pin_search: false })}
+        setStateValue={vi.fn()}
+      />,
     );
     expect(container.querySelector(".listview-header")).toBeNull();
     expect(
-      container.querySelector('.listview-body [data-testid="stListviewSearch"]'),
+      container.querySelector(
+        '.listview-body [data-testid="stListviewSearch"]',
+      ),
     ).not.toBeNull();
   });
 
   it('pressing "/" in the listbox focuses the search field', () => {
-    render(<Listview data={baseData({ enable_search: true })} setStateValue={vi.fn()} />);
+    render(
+      <Listview
+        data={baseData({ enable_search: true })}
+        setStateValue={vi.fn()}
+      />,
+    );
     const listbox = screen.getByRole("listbox");
     const search = screen.getByTestId("stListviewSearch");
     expect(document.activeElement).not.toBe(search);
@@ -379,7 +413,10 @@ describe("collapsible groups", () => {
   it("collapsed_groups seeds the initial collapsed state", () => {
     render(
       <Listview
-        data={baseData({ collapsible_groups: true, collapsed_groups: ["Fruit"] })}
+        data={baseData({
+          collapsible_groups: true,
+          collapsed_groups: ["Fruit"],
+        })}
         setStateValue={vi.fn()}
       />,
     );
@@ -391,7 +428,11 @@ describe("collapsible groups", () => {
     const user = userEvent.setup();
     render(
       <Listview
-        data={baseData({ enable_search: true, collapsible_groups: true, collapsed_groups: "all" })}
+        data={baseData({
+          enable_search: true,
+          collapsible_groups: true,
+          collapsed_groups: "all",
+        })}
         setStateValue={vi.fn()}
       />,
     );
@@ -407,7 +448,12 @@ describe("accept_new_options", () => {
       <Listview data={baseData()} setStateValue={vi.fn()} />,
     );
     expect(screen.queryByTestId("stListviewNewOption")).toBeNull();
-    rerender(<Listview data={baseData({ accept_new_options: true })} setStateValue={vi.fn()} />);
+    rerender(
+      <Listview
+        data={baseData({ accept_new_options: true })}
+        setStateValue={vi.fn()}
+      />,
+    );
     expect(screen.getByTestId("stListviewNewOption")).toBeInTheDocument();
   });
 
@@ -744,9 +790,9 @@ describe("accept_new_options", () => {
     ).toBeTruthy();
     // keyboard order follows the rendered order: End lands on the added row
     fireEvent.keyDown(screen.getByRole("listbox"), { key: "End" });
-    expect(screen.getByRole("listbox").getAttribute("aria-activedescendant")).toBe(
-      "listview-opt-new",
-    );
+    expect(
+      screen.getByRole("listbox").getAttribute("aria-activedescendant"),
+    ).toBe("listview-opt-new");
   });
 
   it("at the cap, adding a new option neither selects it nor leaves a phantom row", async () => {
@@ -813,7 +859,11 @@ describe("accept_new_options", () => {
     const rows = () => screen.getAllByRole("option").map((o) => o.textContent);
     const { rerender } = render(
       <Listview
-        data={baseData({ items, accept_new_options: true, selection_mode: "multi" })}
+        data={baseData({
+          items,
+          accept_new_options: true,
+          selection_mode: "multi",
+        })}
         setStateValue={vi.fn()}
       />,
     );
@@ -864,14 +914,19 @@ describe("accept_new_options", () => {
       await user.type(screen.getByTestId("stListviewNewOption"), "abc");
       await user.keyboard("{Enter}");
       expect(setStateValue).toHaveBeenLastCalledWith("selection", ["abc"]);
-      expect(screen.getByTestId("stListviewNewOptionHint")).toBeEmptyDOMElement();
+      expect(
+        screen.getByTestId("stListviewNewOptionHint"),
+      ).toBeEmptyDOMElement();
     },
   );
 
   it("a payload without new_option_kind accepts any text, as before", async () => {
     const user = userEvent.setup();
     const setStateValue = vi.fn();
-    const data = baseData({ accept_new_options: true, selection_mode: "multi" });
+    const data = baseData({
+      accept_new_options: true,
+      selection_mode: "multi",
+    });
     delete (data as Partial<ListviewData>).new_option_kind;
     render(<Listview data={data} setStateValue={setStateValue} />);
     await user.type(screen.getByTestId("stListviewNewOption"), "abc");
@@ -905,7 +960,9 @@ describe("accept_new_options", () => {
         "aria-selected",
         "true",
       );
-      expect(screen.getByTestId("stListviewNewOptionHint")).toBeEmptyDOMElement();
+      expect(
+        screen.getByTestId("stListviewNewOptionHint"),
+      ).toBeEmptyDOMElement();
     });
 
     it("adds a negative whole number as a number too", async () => {
@@ -919,7 +976,9 @@ describe("accept_new_options", () => {
         "aria-selected",
         "true",
       );
-      expect(screen.getByTestId("stListviewNewOptionHint")).toBeEmptyDOMElement();
+      expect(
+        screen.getByTestId("stListviewNewOptionHint"),
+      ).toBeEmptyDOMElement();
     });
 
     it("refuses text that is not a whole number, keeps it, and shows the hint", async () => {
@@ -933,7 +992,9 @@ describe("accept_new_options", () => {
       expect(screen.getAllByRole("option")).toHaveLength(2); // no row added
       expect(input).toHaveValue("abc");
       expect(input).toHaveAttribute("aria-invalid", "true");
-      expect(screen.getByTestId("stListviewNewOptionHint")).toHaveTextContent(HINT);
+      expect(screen.getByTestId("stListviewNewOptionHint")).toHaveTextContent(
+        HINT,
+      );
     });
 
     it("still selects an existing row by its visible label", async () => {
@@ -955,7 +1016,9 @@ describe("accept_new_options", () => {
       await user.type(screen.getByTestId("stListviewNewOption"), "apple");
       await user.keyboard("{Enter}");
       expect(setStateValue).toHaveBeenLastCalledWith("selection", [1]);
-      expect(screen.getByTestId("stListviewNewOptionHint")).toBeEmptyDOMElement();
+      expect(
+        screen.getByTestId("stListviewNewOptionHint"),
+      ).toBeEmptyDOMElement();
     });
 
     it("explains a refused value even at the cap", async () => {
@@ -971,7 +1034,9 @@ describe("accept_new_options", () => {
       await user.type(screen.getByTestId("stListviewNewOption"), "abc");
       await user.keyboard("{Enter}");
       expect(setStateValue).not.toHaveBeenCalled();
-      expect(screen.getByTestId("stListviewNewOptionHint")).toHaveTextContent(HINT);
+      expect(screen.getByTestId("stListviewNewOptionHint")).toHaveTextContent(
+        HINT,
+      );
     });
 
     it("scrolls only the list body to its end on a refusal, never the page", async () => {
@@ -981,7 +1046,10 @@ describe("accept_new_options", () => {
         <Listview data={intData()} setStateValue={vi.fn()} />,
       );
       const body = container.querySelector(".listview-body") as HTMLElement;
-      Object.defineProperty(body, "scrollHeight", { value: 500, configurable: true });
+      Object.defineProperty(body, "scrollHeight", {
+        value: 500,
+        configurable: true,
+      });
       await user.type(screen.getByTestId("stListviewNewOption"), "abc");
       await user.keyboard("{Enter}");
       expect(body.scrollTop).toBe(500);
@@ -997,7 +1065,9 @@ describe("accept_new_options", () => {
       await user.type(screen.getByTestId("stListviewNewOption"), "  42  ");
       await user.keyboard("{Enter}");
       expect(setStateValue).toHaveBeenLastCalledWith("selection", [42]);
-      expect(screen.getByTestId("stListviewNewOptionHint")).toBeEmptyDOMElement();
+      expect(
+        screen.getByTestId("stListviewNewOptionHint"),
+      ).toBeEmptyDOMElement();
     });
 
     it("clears the hint once the text changes, then adds the corrected number", async () => {
@@ -1008,9 +1078,13 @@ describe("accept_new_options", () => {
       const input = screen.getByTestId("stListviewNewOption");
       await user.type(input, "007");
       await user.keyboard("{Enter}");
-      expect(screen.getByTestId("stListviewNewOptionHint")).toHaveTextContent(HINT);
+      expect(screen.getByTestId("stListviewNewOptionHint")).toHaveTextContent(
+        HINT,
+      );
       await user.clear(input);
-      expect(screen.getByTestId("stListviewNewOptionHint")).toBeEmptyDOMElement();
+      expect(
+        screen.getByTestId("stListviewNewOptionHint"),
+      ).toBeEmptyDOMElement();
       expect(input).not.toHaveAttribute("aria-invalid");
       await user.type(input, "7");
       await user.keyboard("{Enter}");
@@ -1056,7 +1130,9 @@ describe("Escape", () => {
     );
     const search = screen.getByTestId("stListviewSearch") as HTMLInputElement;
     await user.type(search, "   ");
-    expect(screen.getByRole("button", { name: "Clear search" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Clear search" }),
+    ).toBeInTheDocument();
     fireEvent.keyDown(search, { key: "Escape" });
     expect(search.value).toBe("");
     expect(setStateValue).not.toHaveBeenCalled();
@@ -1079,15 +1155,18 @@ function stubGeometry(
   row: HTMLElement,
   { frame = 100, top = 0, height = 20, scrollTop = 0, header = 0 } = {},
 ): void {
-  Object.defineProperty(body, "clientHeight", { value: frame, configurable: true });
+  Object.defineProperty(body, "clientHeight", {
+    value: frame,
+    configurable: true,
+  });
   body.scrollTop = scrollTop; // jsdom stores the assignment
-  body.getBoundingClientRect = () =>
-    ({ top: 0, height: frame }) as DOMRect;
+  body.getBoundingClientRect = () => ({ top: 0, height: frame }) as DOMRect;
   row.getBoundingClientRect = () =>
     ({ top: top - body.scrollTop, height }) as DOMRect;
   const headerEl = row.parentElement?.querySelector(".listview-group-header");
   if (headerEl) {
-    headerEl.getBoundingClientRect = () => ({ top: 0, height: header }) as DOMRect;
+    headerEl.getBoundingClientRect = () =>
+      ({ top: 0, height: header }) as DOMRect;
   }
 }
 
@@ -1169,7 +1248,11 @@ describe("jump to default", () => {
         />,
       );
       const body = container.querySelector(".listview-body") as HTMLElement;
-      stubGeometry(body, rowFor("Tricky"), { frame: 100, top: 300, height: 20 });
+      stubGeometry(body, rowFor("Tricky"), {
+        frame: 100,
+        top: 300,
+        height: 20,
+      });
       rerender(
         <Listview
           data={baseData({ items, default_ids: [trickyId] })}
@@ -1185,17 +1268,28 @@ describe("jump to default", () => {
 describe("group item counts", () => {
   it("shows each group's item count in its header", () => {
     render(<Listview data={baseData()} setStateValue={vi.fn()} />);
-    const fruit = screen.getByText("Fruit").closest('[data-testid="stListviewGroup"]')!;
-    const veg = screen.getByText("Veg").closest('[data-testid="stListviewGroup"]')!;
+    const fruit = screen
+      .getByText("Fruit")
+      .closest('[data-testid="stListviewGroup"]')!;
+    const veg = screen
+      .getByText("Veg")
+      .closest('[data-testid="stListviewGroup"]')!;
     expect(fruit).toHaveTextContent("(2)");
     expect(veg).toHaveTextContent("(1)");
   });
 
   it("counts only the matching items while a search filter is active", async () => {
     const user = userEvent.setup();
-    render(<Listview data={baseData({ enable_search: true })} setStateValue={vi.fn()} />);
+    render(
+      <Listview
+        data={baseData({ enable_search: true })}
+        setStateValue={vi.fn()}
+      />,
+    );
     await user.type(screen.getByTestId("stListviewSearch"), "apple");
-    const fruit = screen.getByText("Fruit").closest('[data-testid="stListviewGroup"]')!;
+    const fruit = screen
+      .getByText("Fruit")
+      .closest('[data-testid="stListviewGroup"]')!;
     expect(fruit).toHaveTextContent("(1)"); // only Apple matches
     expect(screen.queryByText("Veg")).toBeNull(); // no matches → group not rendered
   });
@@ -1203,7 +1297,10 @@ describe("group item counts", () => {
   it("shows the full count for a collapsed group", () => {
     render(
       <Listview
-        data={baseData({ collapsible_groups: true, collapsed_groups: ["Fruit"] })}
+        data={baseData({
+          collapsible_groups: true,
+          collapsed_groups: ["Fruit"],
+        })}
         setStateValue={vi.fn()}
       />,
     );
@@ -1215,7 +1312,12 @@ describe("group item counts", () => {
 
 describe("Listview select_all toggle", () => {
   it("renders no toggle when select_all is off", () => {
-    render(<Listview data={makeData({ selection_mode: "multi" })} setStateValue={vi.fn()} />);
+    render(
+      <Listview
+        data={makeData({ selection_mode: "multi" })}
+        setStateValue={vi.fn()}
+      />,
+    );
     expect(screen.queryByTestId("stListviewSelectAllToggle")).toBeNull();
   });
 
@@ -1228,7 +1330,9 @@ describe("Listview select_all toggle", () => {
     );
     const header = container.querySelector(".listview-header") as HTMLElement;
     expect(header).not.toBeNull();
-    expect(within(header).getByTestId("stListviewSelectAllToggle")).toBeInTheDocument();
+    expect(
+      within(header).getByTestId("stListviewSelectAllToggle"),
+    ).toBeInTheDocument();
     // seam: header is immediately followed by the body (the
     // `.listview-header + .listview-body` CSS rule flattens the body top radius).
     const body = header.nextElementSibling as HTMLElement;
@@ -1272,7 +1376,11 @@ describe("Listview select_all toggle", () => {
     );
     await user.click(screen.getByTestId("stListviewSelectAllToggle"));
     // a,b,c selectable; d disabled excluded; collapsed groups still in scope.
-    expect(setStateValue).toHaveBeenLastCalledWith("selection", ["a", "b", "c"]);
+    expect(setStateValue).toHaveBeenLastCalledWith("selection", [
+      "a",
+      "b",
+      "c",
+    ]);
   });
 
   it("targetIds includes accept_new_options synthetic rows in scope", async () => {
@@ -1293,7 +1401,12 @@ describe("Listview select_all toggle", () => {
     await user.click(screen.getByTestId("stListviewSelectAllToggle"));
     // the synthetic 'zeta' row is part of the visible scope and stays selected
     // alongside the known selectable rows.
-    expect(setStateValue).toHaveBeenLastCalledWith("selection", ["zeta", "a", "b", "c"]);
+    expect(setStateValue).toHaveBeenLastCalledWith("selection", [
+      "zeta",
+      "a",
+      "b",
+      "c",
+    ]);
   });
 
   it("label flips to Deselect all when all visible selectable rows are selected", () => {
@@ -1332,7 +1445,11 @@ describe("Listview select_all toggle", () => {
   it("toggle is disabled and reads Select all when the widget is disabled", () => {
     render(
       <Listview
-        data={makeData({ selection_mode: "multi", select_all: true, disabled: true })}
+        data={makeData({
+          selection_mode: "multi",
+          select_all: true,
+          disabled: true,
+        })}
         setStateValue={vi.fn()}
       />,
     );
@@ -1345,7 +1462,11 @@ describe("Listview select_all toggle", () => {
     const user = userEvent.setup();
     render(
       <Listview
-        data={makeData({ selection_mode: "multi", select_all: true, enable_search: true })}
+        data={makeData({
+          selection_mode: "multi",
+          select_all: true,
+          enable_search: true,
+        })}
         setStateValue={vi.fn()}
       />,
     );
@@ -1594,7 +1715,8 @@ describe("group blocks", () => {
         />,
       );
       const search = screen.getByTestId("stListviewSearch");
-      const row150 = () => screen.getByText("Row 150").closest('[role="option"]');
+      const row150 = () =>
+        screen.getByText("Row 150").closest('[role="option"]');
       const node = row150();
       for (const query of ["5", "Row 15", "Row 150", ""]) {
         fireEvent.change(search, { target: { value: query } });
@@ -1682,8 +1804,9 @@ describe("listbox accessible name", () => {
     // and the visible copy is aria-hidden too, so neither is loose text.
     expect(span.getAttribute("aria-hidden")).toBe("true");
     expect(
-      (container.querySelector(".listview-widget-label__text") as HTMLElement)
-        .getAttribute("aria-hidden"),
+      (
+        container.querySelector(".listview-widget-label__text") as HTMLElement
+      ).getAttribute("aria-hidden"),
     ).toBe("true");
   });
 });
@@ -1697,9 +1820,17 @@ describe("keyboard scroll stays inside the list body", () => {
     top: number,
     { header = 0, data = baseData() } = {},
   ) {
-    const { container } = render(<Listview data={data} setStateValue={vi.fn()} />);
+    const { container } = render(
+      <Listview data={data} setStateValue={vi.fn()} />,
+    );
     const body = container.querySelector(".listview-body") as HTMLElement;
-    stubGeometry(body, rowFor(row), { frame: 100, top, height: 20, scrollTop, header });
+    stubGeometry(body, rowFor(row), {
+      frame: 100,
+      top,
+      height: 20,
+      scrollTop,
+      header,
+    });
     return body;
   }
 
@@ -1742,15 +1873,25 @@ describe("keyboard scroll stays inside the list body", () => {
     // document and getElementById answers with the FIRST instance's row. The
     // lookup must notice that hit is outside this body and fall back to this
     // body's own rows, rather than measuring — or skipping — the wrong widget.
-    const first = render(<Listview data={baseData()} setStateValue={vi.fn()} />);
-    const second = render(<Listview data={baseData()} setStateValue={vi.fn()} />);
-    const firstBody = first.container.querySelector(".listview-body") as HTMLElement;
-    const secondBody = second.container.querySelector(".listview-body") as HTMLElement;
+    const first = render(
+      <Listview data={baseData()} setStateValue={vi.fn()} />,
+    );
+    const second = render(
+      <Listview data={baseData()} setStateValue={vi.fn()} />,
+    );
+    const firstBody = first.container.querySelector(
+      ".listview-body",
+    ) as HTMLElement;
+    const secondBody = second.container.querySelector(
+      ".listview-body",
+    ) as HTMLElement;
     const secondRow = within(second.container)
       .getByText("Carrot")
       .closest('[role="option"]') as HTMLElement;
     stubGeometry(secondBody, secondRow, { frame: 100, top: 260, height: 20 });
-    fireEvent.keyDown(within(second.container).getByRole("listbox"), { key: "End" });
+    fireEvent.keyDown(within(second.container).getByRole("listbox"), {
+      key: "End",
+    });
     expect(secondBody.scrollTop).toBe(180); // 260 + 20 - 100
     expect(firstBody.scrollTop).toBe(0);
   });

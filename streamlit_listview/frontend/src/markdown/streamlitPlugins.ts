@@ -173,7 +173,7 @@ export function createRemarkColoringAndSmall() {
       const data = node.data || (node.data = {});
       const setSpan = (className: string) => {
         data.hName = "span";
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- hast element properties are untyped
         const props: any = data.hProperties || {};
         props.className = className;
         data.hProperties = props;
@@ -405,7 +405,10 @@ export function createRemarkStreamlitLogo() {
 // Built once from the module sentinel constants and reused across invocations.
 // Both are only ever passed to String.prototype.replace, which resets the
 // global regex's lastIndex per call, so sharing them is safe.
-const RESTORE_MATERIAL_RE = new RegExp(ICON_OPEN + "([\\w-]+)" + ICON_CLOSE, "g");
+const RESTORE_MATERIAL_RE = new RegExp(
+  ICON_OPEN + "([\\w-]+)" + ICON_CLOSE,
+  "g",
+);
 const RESTORE_STREAMLIT_RE = new RegExp(STREAMLIT_MARK, "g");
 
 export function createRemarkRestoreIconSentinels() {

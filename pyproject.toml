@@ -69,6 +69,32 @@ show_missing = true
 # is exhaustively covered; keep it that way.
 fail_under = 100
 
+# Ruff lints with its default rule set and formats with its default style
+# (line length 88). The pre-commit hook and CI run the version pinned in
+# .pre-commit-config.yaml.
+[tool.ruff]
+# demo/ and scripts/ modules are imported by name after a sys.path insert
+# (`import data`), so the import sorter counts them as first-party. Keep in
+# step with [tool.ty.environment] extra-paths.
+src = [".", "demo", "scripts", "scripts/gif"]
+
+[tool.ruff.lint.per-file-ignores]
+# listview() reports every invalid argument as a ValueError, wrong types
+# included: the suite matches on the messages, and a TypeError would break
+# callers that catch ValueError.
+"streamlit_listview/**" = ["TRY004"]
+# The demo's snippet generator is tested by executing the code it emits.
+"tests/test_demo.py" = ["S102"]
+
+[tool.ty.environment]
+# demo/ and scripts/ hold top-level modules that the tests and e2e harnesses
+# import after putting the directory on sys.path (`import data`). Keep in step
+# with [tool.ruff] src.
+extra-paths = ["demo", "scripts", "scripts/gif"]
+# Check every platform's branches, so the hook on Windows and CI on Linux
+# report the same diagnostics.
+python-platform = "all"
+
 [tool.setuptools.packages.find]
 include = ["streamlit_listview*"]
 

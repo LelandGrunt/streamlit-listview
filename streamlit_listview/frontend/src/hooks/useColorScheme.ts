@@ -43,7 +43,9 @@ function resolveScheme(colorScheme: string): ColorScheme {
   return "light";
 }
 
-export function useColorScheme(ref: RefObject<HTMLElement | null>): ColorScheme {
+export function useColorScheme(
+  ref: RefObject<HTMLElement | null>,
+): ColorScheme {
   const [scheme, setScheme] = useState<ColorScheme>("light");
 
   useEffect(() => {

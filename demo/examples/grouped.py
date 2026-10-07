@@ -1,5 +1,7 @@
 """Multi-select with groups, search, a pinned + collapsible group UI, and a cap."""
+
 import streamlit as st
+
 from streamlit_listview import listview
 
 CITIES = [

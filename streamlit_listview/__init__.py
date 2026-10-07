@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Iterable, Literal
+from collections.abc import Callable, Iterable
+from typing import Any, Literal
 
 import streamlit as st
 
@@ -141,9 +142,7 @@ def _validate_params(
         )
 
     if width != "stretch" and not _is_int_at_least(width, 1):
-        raise ValueError(
-            f'width must be "stretch" or an int >= 1, got {width!r}.'
-        )
+        raise ValueError(f'width must be "stretch" or an int >= 1, got {width!r}.')
 
     _validate_int("height", height, minimum=100, allow_none=False)
     _validate_int("item_height", item_height, minimum=1, allow_none=True)
@@ -184,24 +183,25 @@ def _validate_params(
         raise ValueError('select_all=True not allowed for selection_mode="single"')
 
     if sort is not None and sort not in _SORT_MODES:
-        raise ValueError(
-            f"sort must be one of {_SORT_MODES!r} or None, got {sort!r}."
-        )
+        raise ValueError(f"sort must be one of {_SORT_MODES!r} or None, got {sort!r}.")
 
     # collapsed_groups: None | "all" | list[str]. Validate the shape here so a
     # common mistake (passing a bare group name instead of a one-element list,
     # e.g. collapsed_groups="Germany") is rejected at the boundary rather than
     # forwarded to the frontend, where it would reach `collapsedGroups.filter`
     # and throw, crashing the whole widget at render time.
-    if collapsed_groups is not None and collapsed_groups != "all":
-        if not (
+    if (
+        collapsed_groups is not None
+        and collapsed_groups != "all"
+        and not (
             isinstance(collapsed_groups, list)
             and all(isinstance(name, str) for name in collapsed_groups)
-        ):
-            raise ValueError(
-                'collapsed_groups must be None, "all", or a list of group-name '
-                f"strings, got {collapsed_groups!r}."
-            )
+        )
+    ):
+        raise ValueError(
+            'collapsed_groups must be None, "all", or a list of group-name '
+            f"strings, got {collapsed_groups!r}."
+        )
 
     if format_func is not None and not callable(format_func):
         raise ValueError("format_func must be callable or None.")
@@ -244,8 +244,7 @@ def _resolve_default_ids(
             default_ids = list(default)
         else:
             raise ValueError(
-                'default must be a list when selection_mode="multi"; '
-                f"got {default!r}."
+                f'default must be a list when selection_mode="multi"; got {default!r}.'
             )
 
     # The unhashable check runs BEFORE the shared gate so the natural way to hit
@@ -366,7 +365,7 @@ def _persisted_selection(key: str | None) -> list | None:
         return None
     try:
         state = st.session_state[key]
-    except Exception:
+    except Exception:  # noqa: BLE001
         # A missing key raises KeyError; session-state access can also raise
         # StreamlitAPIException for keys it refuses to serve. Every failure
         # means the same thing here: nothing persisted.
@@ -542,7 +541,7 @@ def listview(
     }
 
     if on_change is None:
-        on_selection_change = lambda: None  # noqa: E731
+        on_selection_change = lambda: None
     else:
         cb_args = args or ()
         cb_kwargs = kwargs or {}

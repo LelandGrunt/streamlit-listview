@@ -221,7 +221,16 @@ def test_sort_orders_groups_and_items(page: Page):
     rows = root.locator("[data-testid^='stListviewOption-']")
     # OPTIONS groups Fruit/Vegetable/Fish with out-of-order items; sort="both"
     # ascending => groups Fish, Fruit, Vegetable; items sorted within each.
-    expected = ["Salmon", "Tuna", "Apple", "Banana", "Cherry", "Carrot", "Onion", "Potato"]
+    expected = [
+        "Salmon",
+        "Tuna",
+        "Apple",
+        "Banana",
+        "Cherry",
+        "Carrot",
+        "Onion",
+        "Potato",
+    ]
     expect(rows).to_have_count(len(expected))
     for i, label in enumerate(expected):
         expect(rows.nth(i)).to_contain_text(label)

@@ -1,5 +1,7 @@
 """Behavior flags: cap selections, let users add their own, or lock the list."""
+
 import streamlit as st
+
 from streamlit_listview import listview
 
 LABELS = ["bug", "enhancement", "documentation", "question", "help wanted"]

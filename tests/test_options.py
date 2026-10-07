@@ -68,9 +68,7 @@ def test_normalize_none_options_returns_empty():
 
 
 def test_normalize_applies_format_func_to_simple_values():
-    items, id_to_original = normalize_options(
-        [1, 2], lambda v: f"#{v}"
-    )
+    items, id_to_original = normalize_options([1, 2], lambda v: f"#{v}")
     assert items == [
         {"id": 1, "label": "#1"},
         {"id": 2, "label": "#2"},
@@ -277,9 +275,7 @@ def test_normalize_dict_includes_group_and_disabled_when_set():
     items, _ = normalize_options(
         [{"id": 1, "label": "A", "group": "G1", "disabled": True}], None
     )
-    assert items == [
-        {"id": 1, "label": "A", "group": "G1", "disabled": True}
-    ]
+    assert items == [{"id": 1, "label": "A", "group": "G1", "disabled": True}]
 
 
 def test_normalize_dict_omits_group_and_disabled_when_absent():
@@ -316,7 +312,7 @@ def test_normalize_dict_non_bool_disabled_raises():
 
 def test_normalize_non_iterable_options_raises():
     with pytest.raises(ValueError) as excinfo:
-        normalize_options(123, None)  # int is not iterable
+        normalize_options(123, None)  # ty: ignore[invalid-argument-type]  # int is not iterable
     assert "iterable" in str(excinfo.value)
 
 
@@ -367,9 +363,7 @@ def test_normalize_duplicate_simple_ids_raises():
 
 def test_normalize_duplicate_dict_ids_raises():
     with pytest.raises(ValueError) as excinfo:
-        normalize_options(
-            [{"id": 1, "label": "A"}, {"id": 1, "label": "B"}], None
-        )
+        normalize_options([{"id": 1, "label": "A"}, {"id": 1, "label": "B"}], None)
     assert "duplicate" in str(excinfo.value).lower()
 
 
@@ -587,9 +581,7 @@ def test_map_multi_mixed_found_new_dropped_order_preserved():
     # accept_new True: found originals kept, unknowns become str(id),
     # all in the order the ids appear
     id_to_original = {"a": {"id": "a"}, "b": {"id": "b"}}
-    result = map_selection(
-        ["b", 5, "a"], id_to_original, "multi", kind="str"
-    )
+    result = map_selection(["b", 5, "a"], id_to_original, "multi", kind="str")
     assert result == [{"id": "b"}, "5", {"id": "a"}]
 
 
@@ -642,9 +634,7 @@ def test_map_multi_duplicate_keys_collapse_to_earliest_survivor():
     # A key seen twice is one row; the frontend's reconcileSelection collapses
     # it, so the mapping must too — otherwise the value holds the option twice.
     id_to_original = {"a": "A", "b": "B"}
-    result = map_selection(
-        ["a", "a", "b"], id_to_original, "multi", kind=None
-    )
+    result = map_selection(["a", "a", "b"], id_to_original, "multi", kind=None)
     assert result == ["A", "B"]
 
 
@@ -692,9 +682,7 @@ def test_map_multi_truncates_to_max_selections_keeping_earliest():
 
 def test_map_multi_under_max_selections_is_untouched():
     id_to_original = {1: "one", 2: "two"}
-    result = map_selection(
-        [1, 2], id_to_original, "multi", kind=None, max_selections=5
-    )
+    result = map_selection([1, 2], id_to_original, "multi", kind=None, max_selections=5)
     assert result == ["one", "two"]
 
 
@@ -739,9 +727,9 @@ def test_sort_items_within_groups_preserves_group_order():
 
 def test_sort_items_consolidates_ungrouped_at_first_appearance():
     items = [
-        {"id": "z", "label": "Zucchini"},                     # ungrouped, first
+        {"id": "z", "label": "Zucchini"},  # ungrouped, first
         {"id": "carrot", "label": "Carrot", "group": "Veg"},
-        {"id": "a", "label": "Avocado"},                      # ungrouped again
+        {"id": "a", "label": "Avocado"},  # ungrouped again
     ]
     result = sort_items(items, "items", True)
     # Ungrouped block consolidates at its first-appearance position (before Veg),
@@ -751,7 +739,7 @@ def test_sort_items_consolidates_ungrouped_at_first_appearance():
 
 def test_sort_groups_orders_named_groups_ungrouped_last():
     items = [
-        {"id": "u1", "label": "Ungrouped one"},               # ungrouped
+        {"id": "u1", "label": "Ungrouped one"},  # ungrouped
         {"id": "carrot", "label": "Carrot", "group": "Veg"},
         {"id": "beet", "label": "Beet", "group": "Veg"},
         {"id": "banana", "label": "Banana", "group": "Fruit"},
@@ -763,7 +751,7 @@ def test_sort_groups_orders_named_groups_ungrouped_last():
 
 def test_sort_both_sorts_groups_and_items_ungrouped_last():
     items = [
-        {"id": "u1", "label": "Umbrella"},                    # ungrouped
+        {"id": "u1", "label": "Umbrella"},  # ungrouped
         {"id": "carrot", "label": "Carrot", "group": "Veg"},
         {"id": "beet", "label": "Beet", "group": "Veg"},
         {"id": "cherry", "label": "Cherry", "group": "Fruit"},
@@ -775,7 +763,7 @@ def test_sort_both_sorts_groups_and_items_ungrouped_last():
 
 def test_sort_descending_reverses_items_and_groups_ungrouped_still_last():
     items = [
-        {"id": "u1", "label": "Umbrella"},                    # ungrouped
+        {"id": "u1", "label": "Umbrella"},  # ungrouped
         {"id": "banana", "label": "Banana", "group": "Fruit"},
         {"id": "cherry", "label": "Cherry", "group": "Fruit"},
         {"id": "beet", "label": "Beet", "group": "Veg"},
@@ -833,6 +821,7 @@ def test_sort_does_not_mutate_input():
 # accept_new_options: the canonical-integer rule and the kind rule
 # --------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize("text, expected", CANONICAL_INTS)
 def test_parse_new_int_id_accepts_a_canonical_whole_number(text, expected):
     assert _parse_new_int_id(text) == expected
@@ -866,6 +855,7 @@ def test_new_option_kind_follows_the_options(options, expected):
 # --------------------------------------------------------------------------
 # map_selection: an unknown id becomes a new entry in the options' kind
 # --------------------------------------------------------------------------
+
 
 def test_map_dict_kind_returns_the_rendered_row_as_a_dict():
     # The frontend renders an unknown id as the row {id, label: String(id)}, so
@@ -943,9 +933,7 @@ def test_map_str_kind_stringifies_a_tampered_id(value, text):
 def test_map_dict_kind_keeps_the_largest_safe_int_id():
     # 2**53 - 1 is the largest int the boundary admits, so it stays an int: an
     # unknown int default with dict options comes back this way.
-    result = map_selection(
-        [MAX_SAFE_JS_INT], {"a": {"id": "a"}}, "single", kind="dict"
-    )
+    result = map_selection([MAX_SAFE_JS_INT], {"a": {"id": "a"}}, "single", kind="dict")
     assert result == {"id": 9007199254740991, "label": "9007199254740991"}
 
 
@@ -961,4 +949,4 @@ def test_map_selection_refuses_a_positional_kind():
     # passing False positionally would read as a kind and KEEP unknown ids
     # instead of dropping them, so kind is keyword-only.
     with pytest.raises(TypeError):
-        map_selection([99], {1: 1}, "single", False)
+        map_selection([99], {1: 1}, "single", False)  # ty: ignore[missing-argument, too-many-positional-arguments]

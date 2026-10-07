@@ -12,6 +12,7 @@ Every color is resolved by the browser on both sides of a comparison — the
 theme file's hex and the listview's ``--st-*`` value run through the same probe —
 so the assertions never depend on how a color happens to be spelled.
 """
+
 import json
 from pathlib import Path
 
@@ -166,7 +167,9 @@ def test_switching_the_theme_rethemes_the_listview(page: Page):
     assert "Lato" not in font(page)
 
 
-def test_the_picker_shows_the_server_theme_to_other_sessions(page: Page, app: StreamlitRunner):
+def test_the_picker_shows_the_server_theme_to_other_sessions(
+    page: Page, app: StreamlitRunner
+):
     """A second tab is a second Streamlit session: it renders the theme the
     first one picked, and its picker says so instead of "Streamlit default"."""
     open_theme_section(page)

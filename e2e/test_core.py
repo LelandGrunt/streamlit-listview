@@ -60,7 +60,9 @@ def test_single_selection_updates_echoed_value(page: Page):
 
     # Clicking the selected option again deselects it -> None.
     _option(page, "single", "banana").click()
-    expect(_option(page, "single", "banana")).to_have_attribute("aria-selected", "false")
+    expect(_option(page, "single", "banana")).to_have_attribute(
+        "aria-selected", "false"
+    )
     expect(echo(page, "single")).to_have_text("single_echo=None")
 
 
@@ -106,9 +108,9 @@ def test_default_seeded_selection_and_highlight_agree(page: Page):
         "aria-selected", "true"
     )
     # Exactly one row is selected.
-    expect(
-        _listview(page, "default").locator('[aria-selected="true"]')
-    ).to_have_count(1)
+    expect(_listview(page, "default").locator('[aria-selected="true"]')).to_have_count(
+        1
+    )
     # The Python-echoed return value agrees with the highlighted row.
     expect(echo(page, "default")).to_contain_text("'id': 'banana'")
 
@@ -124,7 +126,7 @@ def test_theme_primary_color_is_applied(page: Page):
     # Normalize the resolved color (rgb/hex) and compare to the configured primary.
     r, g, b = _rgb(THEME_PRIMARY)
     normalized = value.replace(" ", "").lower()
-    hex_form = "#{:02x}{:02x}{:02x}".format(r, g, b)
+    hex_form = f"#{r:02x}{g:02x}{b:02x}"
     rgb_form = f"rgb({r},{g},{b})"
     assert normalized in (hex_form, rgb_form), (
         f"--st-primary-color={value!r} does not match configured {THEME_PRIMARY!r}"
@@ -148,7 +150,5 @@ def test_keyboard_arrowdown_enter_selects(page: Page):
     # fails loudly if a stray interaction pre-selected a different row.
     selected = listbox.locator('[role="option"][aria-selected="true"]')
     expect(selected).to_have_count(1)
-    expect(_option(page, "single", "apple")).to_have_attribute(
-        "aria-selected", "true"
-    )
+    expect(_option(page, "single", "apple")).to_have_attribute("aria-selected", "true")
     expect(echo(page, "single")).to_contain_text("'id': 'apple'")

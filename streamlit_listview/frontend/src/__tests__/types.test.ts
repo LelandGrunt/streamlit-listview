@@ -18,7 +18,9 @@ describe("types wire format", () => {
     expectTypeOf<Id>().toEqualTypeOf<string | number>();
     expectTypeOf<ListviewItem["id"]>().toEqualTypeOf<Id>();
     expectTypeOf<ListviewData["default_ids"]>().toEqualTypeOf<Id[]>();
-    expectTypeOf<ListviewData["state_selection"]>().toEqualTypeOf<Id[] | null>();
+    expectTypeOf<ListviewData["state_selection"]>().toEqualTypeOf<
+      Id[] | null
+    >();
     expectTypeOf<ListviewState["selection"]>().toEqualTypeOf<Id[]>();
   });
 
@@ -28,7 +30,9 @@ describe("types wire format", () => {
     expect(item.label).toBe("Apple");
     expectTypeOf<ListviewItem["id"]>().toEqualTypeOf<string | number>();
     expectTypeOf<ListviewItem["group"]>().toEqualTypeOf<string | undefined>();
-    expectTypeOf<ListviewItem["disabled"]>().toEqualTypeOf<boolean | undefined>();
+    expectTypeOf<ListviewItem["disabled"]>().toEqualTypeOf<
+      boolean | undefined
+    >();
   });
 
   it("SelectionMode / LabelVisibility are the documented literals", () => {
@@ -40,7 +44,9 @@ describe("types wire format", () => {
 
   it("NewOptionKind names the three kinds Python sends, null when adding is off", () => {
     expectTypeOf<NewOptionKind>().toEqualTypeOf<"dict" | "int" | "str">();
-    expectTypeOf<ListviewData["new_option_kind"]>().toEqualTypeOf<NewOptionKind | null>();
+    expectTypeOf<
+      ListviewData["new_option_kind"]
+    >().toEqualTypeOf<NewOptionKind | null>();
   });
 
   it("ListviewData uses the exact snake_case keys from the wire format", () => {

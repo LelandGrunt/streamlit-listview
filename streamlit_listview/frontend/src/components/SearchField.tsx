@@ -61,7 +61,14 @@ export const SearchField: FC<SearchFieldProps> = ({
         aria-hidden="true"
         focusable="false"
       >
-        <circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" strokeWidth="2" />
+        <circle
+          cx="10.5"
+          cy="10.5"
+          r="6.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        />
         <path
           d="M15.5 15.5L21 21"
           fill="none"
@@ -93,7 +100,13 @@ export const SearchField: FC<SearchFieldProps> = ({
           onClick={clearAndRefocus}
         >
           {/* inline glyph (no icon dependency) */}
-          <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true" focusable="false">
+          <svg
+            viewBox="0 0 24 24"
+            width="1em"
+            height="1em"
+            aria-hidden="true"
+            focusable="false"
+          >
             <path
               d="M6 6l12 12M18 6L6 18"
               fill="none"

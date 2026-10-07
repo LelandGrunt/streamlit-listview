@@ -29,13 +29,29 @@ describe("GroupHeader", () => {
 
 describe("collapsible mode", () => {
   it("renders a toggle button with aria-expanded reflecting open state", () => {
-    render(<GroupHeader name="Fruit" count={2} collapsible collapsed={false} onToggle={vi.fn()} />);
+    render(
+      <GroupHeader
+        name="Fruit"
+        count={2}
+        collapsible
+        collapsed={false}
+        onToggle={vi.fn()}
+      />,
+    );
     const btn = screen.getByRole("button", { name: /Fruit/ });
     expect(btn).toHaveAttribute("aria-expanded", "true");
   });
 
   it("aria-expanded is false when collapsed", () => {
-    render(<GroupHeader name="Fruit" count={2} collapsible collapsed onToggle={vi.fn()} />);
+    render(
+      <GroupHeader
+        name="Fruit"
+        count={2}
+        collapsible
+        collapsed
+        onToggle={vi.fn()}
+      />,
+    );
     expect(screen.getByRole("button", { name: /Fruit/ })).toHaveAttribute(
       "aria-expanded",
       "false",
@@ -44,7 +60,15 @@ describe("collapsible mode", () => {
 
   it("clicking the header calls onToggle", () => {
     const onToggle = vi.fn();
-    render(<GroupHeader name="Fruit" count={2} collapsible collapsed={false} onToggle={onToggle} />);
+    render(
+      <GroupHeader
+        name="Fruit"
+        count={2}
+        collapsible
+        collapsed={false}
+        onToggle={onToggle}
+      />,
+    );
     fireEvent.click(screen.getByRole("button", { name: /Fruit/ }));
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
@@ -68,7 +92,15 @@ describe("item count", () => {
   });
 
   it("renders the count in the collapsible variant alongside the chevron and name", () => {
-    render(<GroupHeader name="Fruit" count={3} collapsible collapsed={false} onToggle={vi.fn()} />);
+    render(
+      <GroupHeader
+        name="Fruit"
+        count={3}
+        collapsible
+        collapsed={false}
+        onToggle={vi.fn()}
+      />,
+    );
     const btn = screen.getByRole("button", { name: /Fruit/ });
     expect(btn).toHaveTextContent("(3)");
     expect(btn.querySelector(".listview-group-header__count")).not.toBeNull();

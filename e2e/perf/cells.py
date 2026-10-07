@@ -11,6 +11,7 @@ server starts, before any app script runs, so no script-level switch can point
 it at another checkout's bundle. A baseline is benchmarked by copying e2e/perf/
 into it and running there.
 """
+
 from __future__ import annotations
 
 import json
@@ -41,7 +42,9 @@ def parse_subset(name: str, raw: str | None, allowed: Sequence[T]) -> list[T]:
         text = entry.strip()
         match = next((value for value in allowed if str(value) == text), None)
         if match is None:
-            raise ValueError(f"{name}: {text!r} is not one of {', '.join(map(str, allowed))}")
+            raise ValueError(
+                f"{name}: {text!r} is not one of {', '.join(map(str, allowed))}"
+            )
         out.append(match)
     return out
 

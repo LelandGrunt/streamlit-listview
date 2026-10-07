@@ -4,7 +4,9 @@ import { SelectAllToggle } from "./SelectAllToggle";
 
 describe("SelectAllToggle", () => {
   it("renders a button (not a checkbox) whose text and accessible name are the label", () => {
-    render(<SelectAllToggle label="Select all" onClick={vi.fn()} disabled={false} />);
+    render(
+      <SelectAllToggle label="Select all" onClick={vi.fn()} disabled={false} />,
+    );
     const btn = screen.getByTestId("stListviewSelectAllToggle");
     expect(btn.tagName).toBe("BUTTON");
     expect(btn).toHaveTextContent("Select all");
@@ -12,7 +14,13 @@ describe("SelectAllToggle", () => {
   });
 
   it("renders the Deselect all label when passed", () => {
-    render(<SelectAllToggle label="Deselect all" onClick={vi.fn()} disabled={false} />);
+    render(
+      <SelectAllToggle
+        label="Deselect all"
+        onClick={vi.fn()}
+        disabled={false}
+      />,
+    );
     expect(screen.getByTestId("stListviewSelectAllToggle")).toHaveTextContent(
       "Deselect all",
     );
@@ -25,7 +33,9 @@ describe("SelectAllToggle", () => {
 
   it("calls onClick when clicked while enabled", () => {
     const onClick = vi.fn();
-    render(<SelectAllToggle label="Select all" onClick={onClick} disabled={false} />);
+    render(
+      <SelectAllToggle label="Select all" onClick={onClick} disabled={false} />,
+    );
     fireEvent.click(screen.getByTestId("stListviewSelectAllToggle"));
     expect(onClick).toHaveBeenCalledTimes(1);
   });

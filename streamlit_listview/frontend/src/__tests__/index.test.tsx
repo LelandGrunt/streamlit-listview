@@ -43,9 +43,7 @@ describe("index renderer glue", () => {
     const root = args.parentElement.querySelector(".listview-root")!;
     expect(root.childElementCount).toBeGreaterThan(0);
     // The placeholder renders the container root by its testid.
-    expect(
-      root.querySelector('[data-testid="stListview"]'),
-    ).not.toBeNull();
+    expect(root.querySelector('[data-testid="stListview"]')).not.toBeNull();
   });
 
   it("does not call setStateValue during initial render (default= seeds it)", async () => {
@@ -73,17 +71,13 @@ describe("index renderer glue", () => {
     // Reuse guarantee: dropping the WeakMap guard would create a SECOND React
     // root and append a duplicate tree. Exactly one container child must remain.
     expect(root.childElementCount).toBe(1);
-    expect(
-      root.querySelectorAll('[data-testid="stListview"]'),
-    ).toHaveLength(1);
+    expect(root.querySelectorAll('[data-testid="stListview"]')).toHaveLength(1);
     // Reconciliation into the SAME root: the re-render replaced the old option
     // with the new one (a fresh second mount would leave the stale "a" tree).
     expect(
       root.querySelector('[data-testid="stListviewOption-b"]'),
     ).not.toBeNull();
-    expect(
-      root.querySelector('[data-testid="stListviewOption-a"]'),
-    ).toBeNull();
+    expect(root.querySelector('[data-testid="stListviewOption-a"]')).toBeNull();
     // The first call returns a usable cleanup function.
     expect(typeof cleanup1!).toBe("function");
   });
@@ -132,7 +126,9 @@ describe("index renderer glue", () => {
     await act(async () => {
       renderListview(args);
     });
-    const root = args.parentElement.querySelector('[data-testid="stListview"]')!;
+    const root = args.parentElement.querySelector(
+      '[data-testid="stListview"]',
+    )!;
     expect(root.getAttribute("data-in-sidebar")).toBe("true");
   });
 
@@ -146,7 +142,9 @@ describe("index renderer glue", () => {
     await act(async () => {
       renderListview(args);
     });
-    const root = args.parentElement.querySelector('[data-testid="stListview"]')!;
+    const root = args.parentElement.querySelector(
+      '[data-testid="stListview"]',
+    )!;
     expect(root.hasAttribute("data-in-sidebar")).toBe(false);
   });
 

@@ -2,6 +2,7 @@
 """Unit tests for the browser-tier benchmark's pure helpers. No browser, no server,
 so they run under a plain ``pytest e2e/`` (e2e/perf/conftest.py's go_to_app
 override takes no page)."""
+
 import json
 
 import pytest
@@ -15,8 +16,13 @@ def test_parse_subset_returns_everything_when_unset_or_blank():
 
 
 def test_parse_subset_keeps_the_given_order_and_trims():
-    assert cells.parse_subset("--perf-sizes", " 50000, 100", cells.SIZES) == [50000, 100]
-    assert cells.parse_subset("--perf-shapes", "ungrouped", cells.SHAPES) == ["ungrouped"]
+    assert cells.parse_subset("--perf-sizes", " 50000, 100", cells.SIZES) == [
+        50000,
+        100,
+    ]
+    assert cells.parse_subset("--perf-shapes", "ungrouped", cells.SHAPES) == [
+        "ungrouped"
+    ]
 
 
 def test_parse_subset_refuses_unknown_or_blank_entries_naming_the_option():

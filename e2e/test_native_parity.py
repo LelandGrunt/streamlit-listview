@@ -14,6 +14,7 @@ hardcoded hex, so the module is theme-agnostic: test_native_parity_dark.py
 re-collects it under the dark theme, where the highlight formula takes its
 other branch (Streamlit lightens bgMix there instead of darkening it).
 """
+
 import re
 from pathlib import Path
 
@@ -95,7 +96,9 @@ def test_row_hover_is_the_selectbox_menus_highlight(page: Page):
 
 
 def test_a_selected_row_looks_like_an_active_pill(page: Page):
-    active = _style(page.get_by_test_id("stButtonGroup").locator("button", has_text="Banana"))
+    active = _style(
+        page.get_by_test_id("stButtonGroup").locator("button", has_text="Banana")
+    )
     row = _row(page, "banana")
     expect(row).to_have_attribute("aria-selected", "true")
     assert _close(_style(row, "::before")["bg"], active["bg"])
@@ -115,7 +118,9 @@ def test_a_click_below_the_last_row_focuses_the_list(page: Page):
     # The reference: the frame colour of a focused st.selectbox.
     page.get_by_test_id("stSelectbox").locator("input").click()
     _settle(page)
-    focused = _style(page.get_by_test_id("stSelectbox").locator(".react-aria-ComboBox > div"))["border"]
+    focused = _style(
+        page.get_by_test_id("stSelectbox").locator(".react-aria-ComboBox > div")
+    )["border"]
     page.keyboard.press("Escape")
     page.mouse.click(5, 360)  # page margin: moves focus nowhere
     _settle(page)
@@ -125,6 +130,7 @@ def test_a_click_below_the_last_row_focuses_the_list(page: Page):
     _body(page).scroll_into_view_if_needed()
     body = _body(page).bounding_box()
     rows = _listbox(page).bounding_box()
+    assert body is not None and rows is not None
     below = rows["y"] + rows["height"]
     # The harness list is shorter than its height; without that gap this test
     # would click a row and prove nothing.

@@ -90,6 +90,7 @@ st.write(choice)
 <details>
 <summary><strong>Full signature</strong></summary>
 
+<!-- fmt:off -->
 ```python
 def listview(
     label,
@@ -123,6 +124,7 @@ def listview(
     key=None,                         # strongly recommended (see Keying)
 ) -> dict | str | int | list | None: ...
 ```
+<!-- fmt:on -->
 
 </details>
 
@@ -179,7 +181,7 @@ Ids are validated at the boundary, because the frontend identifies each row by J
 listview(
     "Objects",
     options=[
-        {"id": 1, "text": "Orders",     "type": "Table"},
+        {"id": 1, "text": "Orders", "type": "Table"},
         {"id": 2, "text": "OrdersView", "type": "View"},
     ],
     format_func=lambda o: f"{o['text']}{'' if o['type'] == 'Table' else ' 👓'}",
@@ -303,6 +305,28 @@ On a clean clone this also triggers the frontend build via the build backend
 (Node.js ≥ 24 required). Set `LISTVIEW_SKIP_NPM_BUILD=1` to skip it when the
 bundle is already built — e.g. after a manual `npm run build` in
 `streamlit_listview/frontend/`.
+
+### Checks before each commit
+
+[pre-commit](https://pre-commit.com/) runs these checks before each commit, and
+CI runs them on every file:
+
+- Python: [ruff](https://docs.astral.sh/ruff/) (lint and format),
+  [ty](https://docs.astral.sh/ty/) (type check) and `uv audit` (known
+  vulnerabilities in `uv.lock`).
+- Frontend: `tsc` (type check), [oxlint](https://oxc.rs/) (lint),
+  [Prettier](https://prettier.io/) (format) and `npm audit` (known
+  vulnerabilities in `package-lock.json`).
+
+Set up the hook once per clone. The frontend checks also need `npm ci` in
+`streamlit_listview/frontend/`.
+
+```sh
+uv tool install pre-commit
+pre-commit install --allow-missing-config
+```
+
+`pre-commit run --all-files` runs every check on demand.
 
 ### Build a wheel
 

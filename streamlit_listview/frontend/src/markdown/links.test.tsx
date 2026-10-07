@@ -92,9 +92,7 @@ describe("LinkWithTargetBlank", () => {
   });
 
   it("renders a same-page #anchor without target/rel", () => {
-    render(
-      <LinkWithTargetBlank href="#section">jump</LinkWithTargetBlank>,
-    );
+    render(<LinkWithTargetBlank href="#section">jump</LinkWithTargetBlank>);
     const a = screen.getByRole("link", { name: "jump" }) as HTMLAnchorElement;
     expect(a).toHaveAttribute("href", "#section");
     expect(a).not.toHaveAttribute("target");
@@ -103,7 +101,11 @@ describe("LinkWithTargetBlank", () => {
 
   it("preserves an explicitly supplied target/rel", () => {
     render(
-      <LinkWithTargetBlank href="https://example.com" target="_self" rel="nofollow">
+      <LinkWithTargetBlank
+        href="https://example.com"
+        target="_self"
+        rel="nofollow"
+      >
         x
       </LinkWithTargetBlank>,
     );
@@ -122,7 +124,7 @@ describe("LinkWithTargetBlank", () => {
 
   it("does not forward the react-markdown `node` prop to the DOM", () => {
     render(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a stand-in for react-markdown's node prop
       <LinkWithTargetBlank href="https://example.com" node={{} as any}>
         n
       </LinkWithTargetBlank>,

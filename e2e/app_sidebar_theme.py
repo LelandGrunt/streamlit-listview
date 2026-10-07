@@ -9,6 +9,7 @@ with --st-background-color. Reading both from one page is what makes the
 comparison a real measurement rather than a hardcoded hex the test and the
 stylesheet could drift away from together.
 """
+
 import streamlit as st
 
 from streamlit_listview import listview

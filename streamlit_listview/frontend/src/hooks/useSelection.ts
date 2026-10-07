@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type {
-  FrontendRendererArgs,
-} from "@streamlit/component-v2-lib";
+import type { FrontendRendererArgs } from "@streamlit/component-v2-lib";
 import type { Id, ListviewItem, SelectionMode, ListviewState } from "../types";
 import { disabledIdSet, idKey, itemIdByKey, sameIds } from "../utils/ids";
 
@@ -181,6 +179,7 @@ export function useSelection({
     if (selection === committed) {
       return;
     }
+    // eslint-disable-next-line react/set-state-in-effect -- the write-back described above
     setCommitted(selection);
     setStateValue("selection", selection);
   }, [selection, committed, setStateValue]);

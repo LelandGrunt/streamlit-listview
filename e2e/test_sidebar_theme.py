@@ -21,6 +21,7 @@ background tokens, so under a dark theme it is correctly LIGHTER than the rows
 would fail it against a widget that is behaving exactly as designed — flip
 the comparison, don't "fix" the stylesheet.
 """
+
 from pathlib import Path
 
 from playwright.sync_api import Page

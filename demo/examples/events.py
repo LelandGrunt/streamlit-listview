@@ -1,5 +1,7 @@
 """format_func transforms the displayed label; on_change fires before the rerun."""
+
 import streamlit as st
+
 from streamlit_listview import listview
 
 

@@ -96,7 +96,8 @@ export function useKeyboardNav({
   );
 
   const indexOfId = useCallback(
-    (id: Id | null): number => (id === null ? -1 : (indexByRawId.get(id) ?? -1)),
+    (id: Id | null): number =>
+      id === null ? -1 : (indexByRawId.get(id) ?? -1),
     [indexByRawId],
   );
 

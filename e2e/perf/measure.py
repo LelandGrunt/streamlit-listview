@@ -19,6 +19,7 @@ id-map lookup the component uses for aria-activedescendant.
 
 Graduated from the 2026-10-03 virtualization spike's throwaway harness.
 """
+
 from __future__ import annotations
 
 import re
@@ -32,7 +33,7 @@ from e2e.perf.cells import REPO_ROOT, Cell
 # The ids and search text this module drives come from the SAME generator, at
 # the same n, the harness renders — the pattern e2e/test_performance.py uses.
 sys.path.insert(0, str(REPO_ROOT / "demo"))
-from data import make_large_dataset  # noqa: E402
+from data import make_large_dataset
 
 INIT_JS = r"""
 window.__bench = {
@@ -216,7 +217,12 @@ SCROLL_JS = """async () => {
   return { p50_ms: deltas[steps >> 1], p95_ms: deltas[Math.floor(steps * 0.95)], max_ms: deltas[steps - 1] };
 }"""
 
-METRIC_KEYS = ("ScriptDuration", "LayoutDuration", "RecalcStyleDuration", "TaskDuration")
+METRIC_KEYS = (
+    "ScriptDuration",
+    "LayoutDuration",
+    "RecalcStyleDuration",
+    "TaskDuration",
+)
 
 
 @dataclass(frozen=True)
@@ -238,13 +244,17 @@ def cell_ids(n: int) -> CellIds:
 
 
 def _metrics(cdp: CDPSession) -> dict[str, float]:
-    return {m["name"]: m["value"] for m in cdp.send("Performance.getMetrics")["metrics"]}
+    return {
+        m["name"]: m["value"] for m in cdp.send("Performance.getMetrics")["metrics"]
+    }
 
 
 def _busy(before: dict[str, float], after: dict[str, float]) -> dict[str, float]:
     """Main-thread time between two metric snapshots, per CDP duration counter."""
     return {
-        key.replace("Duration", "").lower() + "_ms": round((after[key] - before[key]) * 1000, 1)
+        key.replace("Duration", "").lower() + "_ms": round(
+            (after[key] - before[key]) * 1000, 1
+        )
         for key in METRIC_KEYS
     }
 
@@ -275,7 +285,9 @@ def _open(browser: Browser, throttle: int) -> tuple[Page, CDPSession, list[int]]
     return page, cdp, ws_bytes
 
 
-def _show(page: Page, cdp: CDPSession, ws_bytes: list[int], url: str, last_id: str) -> dict:
+def _show(
+    page: Page, cdp: CDPSession, ws_bytes: list[int], url: str, last_id: str
+) -> dict:
     """Navigate, wait for the harness, mount the list via "show"; returns the mount record.
 
     The CDP window and the websocket count open after the page has loaded and
@@ -286,11 +298,15 @@ def _show(page: Page, cdp: CDPSession, ws_bytes: list[int], url: str, last_id: s
     page.wait_for_function(
         "() => window.__bench.status().includes('hidden rerun=1') && window.__bench.button('show') !== null"
     )
-    page.wait_for_timeout(800)  # let Streamlit's first run settle before anything is timed
+    page.wait_for_timeout(
+        800
+    )  # let Streamlit's first run settle before anything is timed
     before, ws_bytes[0] = _metrics(cdp), 0
     timings = page.evaluate(MOUNT_JS, [last_id])
     page.wait_for_function("() => window.__bench.status().includes('py_ms=')")
-    page.wait_for_timeout(1200)  # let the post-mount work and any trailing rerun settle before the next scenario
+    page.wait_for_timeout(
+        1200
+    )  # let the post-mount work and any trailing rerun settle before the next scenario
     timings.update(_busy(before, _metrics(cdp)), ws_bytes=ws_bytes[0])
     return timings
 
@@ -313,7 +329,8 @@ def run_cell(browser: Browser, server_url: str, cell: Cell, throttle: int) -> di
         # 2) search: narrow N -> 1, then clear 1 -> N.
         before = _metrics(cdp)
         record["search_narrow"] = page.evaluate(
-            SEARCH_JS, [ids.needle, ids.first, ids.last, "the needle to leave the last row"]
+            SEARCH_JS,
+            [ids.needle, ids.first, ids.last, "the needle to leave the last row"],
         )
         record["search_clear"] = page.evaluate(
             SEARCH_JS, ["", None, ids.first, "the first row to return after clearing"]
@@ -323,14 +340,20 @@ def run_cell(browser: Browser, server_url: str, cell: Cell, throttle: int) -> di
 
         # 3) rerun with the options unchanged (an unrelated button).
         before, ws_bytes[0] = _metrics(cdp), 0
-        record["rerun_unchanged"] = page.evaluate(RERUN_JS, ["rerun", "rerun", None, False])
+        record["rerun_unchanged"] = page.evaluate(
+            RERUN_JS, ["rerun", "rerun", None, False]
+        )
         page.wait_for_timeout(1500)
-        record["rerun_unchanged"].update(_busy(before, _metrics(cdp)), ws_bytes=ws_bytes[0])
+        record["rerun_unchanged"].update(
+            _busy(before, _metrics(cdp)), ws_bytes=ws_bytes[0]
+        )
         record["py_rerun"] = {"py_ms": _status_fields(page)["py_ms"]}
 
         # 4) rerun with one option changed: the first "edit" flips row N/2's label on.
         before = _metrics(cdp)
-        record["rerun_one_changed"] = page.evaluate(RERUN_JS, ["edit", "edit", ids.mid, True])
+        record["rerun_one_changed"] = page.evaluate(
+            RERUN_JS, ["edit", "edit", ids.mid, True]
+        )
         page.wait_for_timeout(1500)
         record["rerun_one_changed"].update(_busy(before, _metrics(cdp)))
 

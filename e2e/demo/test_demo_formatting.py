@@ -111,9 +111,9 @@ def test_loading_the_example_with_basic_open_drops_the_stale_default(page: Page)
     expect(page.get_by_test_id("stException")).to_have_count(0)
 
     pick_default(page, "orders_view")
-    expect(
-        listview.get_by_test_id("stListviewOption-orders_view")
-    ).to_have_attribute("aria-selected", "true", timeout=10000)
+    expect(listview.get_by_test_id("stListviewOption-orders_view")).to_have_attribute(
+        "aria-selected", "true", timeout=10000
+    )
 
     # "No default" is the picker's own clear action now, not a list entry.
     page.locator(DEFAULT_SELECTBOX).get_by_role(

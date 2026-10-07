@@ -4,6 +4,7 @@ Side-effect-free apart from the ``st.cache_data`` memo below, so it can be
 unit-tested and reused while the Data section is off-screen in the demo's section
 switcher.
 """
+
 from collections.abc import Callable
 from dataclasses import dataclass
 
