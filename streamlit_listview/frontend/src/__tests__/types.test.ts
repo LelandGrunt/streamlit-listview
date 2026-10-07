@@ -6,6 +6,7 @@ import type {
   LabelVisibility,
   ListviewData,
   ListviewState,
+  NewOptionKind,
 } from "../types";
 
 describe("types wire format", () => {
@@ -37,6 +38,11 @@ describe("types wire format", () => {
     >();
   });
 
+  it("NewOptionKind names the three kinds Python sends, null when adding is off", () => {
+    expectTypeOf<NewOptionKind>().toEqualTypeOf<"dict" | "int" | "str">();
+    expectTypeOf<ListviewData["new_option_kind"]>().toEqualTypeOf<NewOptionKind | null>();
+  });
+
   it("ListviewData uses the exact snake_case keys from the wire format", () => {
     const data: ListviewData = {
       label: "Fruit",
@@ -51,6 +57,7 @@ describe("types wire format", () => {
       collapsible_groups: false,
       collapsed_groups: null,
       accept_new_options: false,
+      new_option_kind: null,
       max_selections: null,
       placeholder: null,
       height: 300,
@@ -79,6 +86,7 @@ describe("types wire format", () => {
         "label",
         "label_visibility",
         "max_selections",
+        "new_option_kind",
         "pin_search",
         "placeholder",
         "search_placeholder",

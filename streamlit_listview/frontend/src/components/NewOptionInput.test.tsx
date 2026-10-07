@@ -11,7 +11,7 @@ describe("NewOptionInput", () => {
   });
 
   it("adds the trimmed value and clears on Enter", () => {
-    const onAdd = vi.fn();
+    const onAdd = vi.fn(() => null);
     render(<NewOptionInput disabled={false} onAdd={onAdd} />);
     const input = screen.getByTestId("stListviewNewOption") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "  Mango  " } });
@@ -21,7 +21,7 @@ describe("NewOptionInput", () => {
   });
 
   it("ignores the Enter that commits an IME candidate, but not a plain Enter", () => {
-    const onAdd = vi.fn();
+    const onAdd = vi.fn(() => null);
     render(<NewOptionInput disabled={false} onAdd={onAdd} />);
     const input = screen.getByTestId("stListviewNewOption") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "みかん" } });
@@ -56,5 +56,56 @@ describe("NewOptionInput", () => {
   it("is disabled when disabled=true", () => {
     render(<NewOptionInput disabled onAdd={vi.fn()} />);
     expect(screen.getByTestId("stListviewNewOption")).toBeDisabled();
+  });
+
+  it("keeps an empty status region in the DOM and marks nothing invalid at rest", () => {
+    render(<NewOptionInput disabled={false} onAdd={vi.fn(() => null)} />);
+    const hint = screen.getByTestId("stListviewNewOptionHint");
+    expect(hint).toHaveAttribute("role", "status");
+    expect(hint).toBeEmptyDOMElement();
+    const input = screen.getByTestId("stListviewNewOption");
+    expect(input).not.toHaveAttribute("aria-invalid");
+    expect(input).not.toHaveAttribute("aria-describedby");
+  });
+
+  it("keeps a refused value and shows the caller's hint, linked to the input", () => {
+    const onAdd = vi.fn(() => "Enter a whole number");
+    render(<NewOptionInput disabled={false} onAdd={onAdd} />);
+    const input = screen.getByTestId("stListviewNewOption") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "abc" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onAdd).toHaveBeenCalledWith("abc");
+    expect(input.value).toBe("abc");
+    const hint = screen.getByTestId("stListviewNewOptionHint");
+    expect(hint).toHaveTextContent("Enter a whole number");
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAttribute("aria-describedby", hint.id);
+  });
+
+  it("clears the hint and the invalid mark as soon as the text changes", () => {
+    render(<NewOptionInput disabled={false} onAdd={vi.fn(() => "Nope.")} />);
+    const input = screen.getByTestId("stListviewNewOption");
+    fireEvent.change(input, { target: { value: "abc" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.change(input, { target: { value: "ab" } });
+    expect(screen.getByTestId("stListviewNewOptionHint")).toBeEmptyDOMElement();
+    expect(input).not.toHaveAttribute("aria-invalid");
+    expect(input).not.toHaveAttribute("aria-describedby");
+  });
+
+  it("replaces the hint's node on a repeated refusal, so a screen reader announces it again", () => {
+    // A live region announces a change. Setting the same text again changed
+    // nothing in the DOM, so a second Enter on the same refused value stayed
+    // silent for a screen-reader user while a sighted user saw the hint.
+    render(<NewOptionInput disabled={false} onAdd={vi.fn(() => "Nope.")} />);
+    const input = screen.getByTestId("stListviewNewOption");
+    fireEvent.change(input, { target: { value: "abc" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    const hint = screen.getByTestId("stListviewNewOptionHint");
+    const first = hint.firstChild;
+    expect(first).not.toBeNull();
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(hint).toHaveTextContent("Nope.");
+    expect(hint.firstChild).not.toBe(first);
   });
 });

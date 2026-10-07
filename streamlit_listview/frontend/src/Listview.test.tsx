@@ -845,6 +845,178 @@ describe("accept_new_options", () => {
     );
     expect(rows()).toEqual(["A", "B", "c"]);
   });
+
+  it.each([{ kind: "dict" as const }, { kind: "str" as const }])(
+    "with new_option_kind $kind, any text is a new entry",
+    async ({ kind }) => {
+      const user = userEvent.setup();
+      const setStateValue = vi.fn();
+      render(
+        <Listview
+          data={baseData({
+            accept_new_options: true,
+            new_option_kind: kind,
+            selection_mode: "multi",
+          })}
+          setStateValue={setStateValue}
+        />,
+      );
+      await user.type(screen.getByTestId("stListviewNewOption"), "abc");
+      await user.keyboard("{Enter}");
+      expect(setStateValue).toHaveBeenLastCalledWith("selection", ["abc"]);
+      expect(screen.getByTestId("stListviewNewOptionHint")).toBeEmptyDOMElement();
+    },
+  );
+
+  it("a payload without new_option_kind accepts any text, as before", async () => {
+    const user = userEvent.setup();
+    const setStateValue = vi.fn();
+    const data = baseData({ accept_new_options: true, selection_mode: "multi" });
+    delete (data as Partial<ListviewData>).new_option_kind;
+    render(<Listview data={data} setStateValue={setStateValue} />);
+    await user.type(screen.getByTestId("stListviewNewOption"), "abc");
+    await user.keyboard("{Enter}");
+    expect(setStateValue).toHaveBeenLastCalledWith("selection", ["abc"]);
+  });
+
+  describe("with int options", () => {
+    // Anchored: toHaveTextContent with a string only checks a substring.
+    const HINT = /^Enter a whole number$/;
+    const intData = (overrides: Partial<ListviewData> = {}) =>
+      baseData({
+        items: [
+          { id: 1, label: "1" },
+          { id: 2, label: "2" },
+        ],
+        accept_new_options: true,
+        new_option_kind: "int",
+        selection_mode: "multi",
+        ...overrides,
+      });
+
+    it("adds a new whole number as a number, so Python returns an int", async () => {
+      const user = userEvent.setup();
+      const setStateValue = vi.fn();
+      render(<Listview data={intData()} setStateValue={setStateValue} />);
+      await user.type(screen.getByTestId("stListviewNewOption"), "42");
+      await user.keyboard("{Enter}");
+      expect(setStateValue).toHaveBeenLastCalledWith("selection", [42]);
+      expect(screen.getByTestId("stListviewOption-42")).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      expect(screen.getByTestId("stListviewNewOptionHint")).toBeEmptyDOMElement();
+    });
+
+    it("adds a negative whole number as a number too", async () => {
+      const user = userEvent.setup();
+      const setStateValue = vi.fn();
+      render(<Listview data={intData()} setStateValue={setStateValue} />);
+      await user.type(screen.getByTestId("stListviewNewOption"), "-5");
+      await user.keyboard("{Enter}");
+      expect(setStateValue).toHaveBeenLastCalledWith("selection", [-5]);
+      expect(screen.getByTestId("stListviewOption--5")).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      expect(screen.getByTestId("stListviewNewOptionHint")).toBeEmptyDOMElement();
+    });
+
+    it("refuses text that is not a whole number, keeps it, and shows the hint", async () => {
+      const user = userEvent.setup();
+      const setStateValue = vi.fn();
+      render(<Listview data={intData()} setStateValue={setStateValue} />);
+      const input = screen.getByTestId("stListviewNewOption");
+      await user.type(input, "abc");
+      await user.keyboard("{Enter}");
+      expect(setStateValue).not.toHaveBeenCalled();
+      expect(screen.getAllByRole("option")).toHaveLength(2); // no row added
+      expect(input).toHaveValue("abc");
+      expect(input).toHaveAttribute("aria-invalid", "true");
+      expect(screen.getByTestId("stListviewNewOptionHint")).toHaveTextContent(HINT);
+    });
+
+    it("still selects an existing row by its visible label", async () => {
+      // format_func can label int options with names. Resolving against the rows
+      // runs before the whole-number rule, so typing a name still works.
+      const user = userEvent.setup();
+      const setStateValue = vi.fn();
+      render(
+        <Listview
+          data={intData({
+            items: [
+              { id: 1, label: "Apple" },
+              { id: 2, label: "Banana" },
+            ],
+          })}
+          setStateValue={setStateValue}
+        />,
+      );
+      await user.type(screen.getByTestId("stListviewNewOption"), "apple");
+      await user.keyboard("{Enter}");
+      expect(setStateValue).toHaveBeenLastCalledWith("selection", [1]);
+      expect(screen.getByTestId("stListviewNewOptionHint")).toBeEmptyDOMElement();
+    });
+
+    it("explains a refused value even at the cap", async () => {
+      const user = userEvent.setup();
+      const setStateValue = vi.fn();
+      render(
+        <Listview
+          data={intData({ max_selections: 1, default_ids: [1] })}
+          setStateValue={setStateValue}
+        />,
+      );
+      setStateValue.mockClear();
+      await user.type(screen.getByTestId("stListviewNewOption"), "abc");
+      await user.keyboard("{Enter}");
+      expect(setStateValue).not.toHaveBeenCalled();
+      expect(screen.getByTestId("stListviewNewOptionHint")).toHaveTextContent(HINT);
+    });
+
+    it("scrolls only the list body to its end on a refusal, never the page", async () => {
+      const user = userEvent.setup();
+      const intoView = vi.spyOn(Element.prototype, "scrollIntoView");
+      const { container } = render(
+        <Listview data={intData()} setStateValue={vi.fn()} />,
+      );
+      const body = container.querySelector(".listview-body") as HTMLElement;
+      Object.defineProperty(body, "scrollHeight", { value: 500, configurable: true });
+      await user.type(screen.getByTestId("stListviewNewOption"), "abc");
+      await user.keyboard("{Enter}");
+      expect(body.scrollTop).toBe(500);
+      expect(intoView).not.toHaveBeenCalled();
+      intoView.mockRestore();
+    });
+
+    it("trims a pasted value and adds it without a hint", async () => {
+      // Review focus 4.
+      const user = userEvent.setup();
+      const setStateValue = vi.fn();
+      render(<Listview data={intData()} setStateValue={setStateValue} />);
+      await user.type(screen.getByTestId("stListviewNewOption"), "  42  ");
+      await user.keyboard("{Enter}");
+      expect(setStateValue).toHaveBeenLastCalledWith("selection", [42]);
+      expect(screen.getByTestId("stListviewNewOptionHint")).toBeEmptyDOMElement();
+    });
+
+    it("clears the hint once the text changes, then adds the corrected number", async () => {
+      // Review focus 5.
+      const user = userEvent.setup();
+      const setStateValue = vi.fn();
+      render(<Listview data={intData()} setStateValue={setStateValue} />);
+      const input = screen.getByTestId("stListviewNewOption");
+      await user.type(input, "007");
+      await user.keyboard("{Enter}");
+      expect(screen.getByTestId("stListviewNewOptionHint")).toHaveTextContent(HINT);
+      await user.clear(input);
+      expect(screen.getByTestId("stListviewNewOptionHint")).toBeEmptyDOMElement();
+      expect(input).not.toHaveAttribute("aria-invalid");
+      await user.type(input, "7");
+      await user.keyboard("{Enter}");
+      expect(setStateValue).toHaveBeenLastCalledWith("selection", [7]);
+    });
+  });
 });
 
 describe("Escape", () => {

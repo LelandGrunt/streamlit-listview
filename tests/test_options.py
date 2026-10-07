@@ -5,10 +5,40 @@ import pytest
 
 from streamlit_listview._options import (
     MAX_SAFE_JS_INT,
+    _parse_new_int_id,
     map_selection,
+    new_option_kind,
     normalize_options,
     sort_items,
 )
+
+# The canonical-integer rule's input table. parseNewIntId's test in
+# streamlit_listview/frontend/src/utils/ids.test.ts runs the same table: Python
+# and the frontend each hold one copy of the rule, so keep the two in step.
+CANONICAL_INTS = [
+    ("0", 0),
+    ("42", 42),
+    ("-5", -5),
+    ("9007199254740991", 9007199254740991),
+    ("-9007199254740991", -9007199254740991),
+]
+NON_CANONICAL_INTS = [
+    pytest.param("007", id="leading-zero"),
+    pytest.param("-0", id="negative-zero"),
+    pytest.param("+5", id="plus-sign"),
+    pytest.param(" 5", id="whitespace"),
+    pytest.param("42\n", id="trailing-newline"),
+    pytest.param("1_000", id="digit-separator"),
+    pytest.param("1.5", id="fraction"),
+    pytest.param("1e3", id="exponent"),
+    pytest.param("abc", id="letters"),
+    pytest.param("²", id="superscript-digit"),
+    pytest.param("١", id="arabic-indic-digit"),
+    pytest.param("４２", id="fullwidth-digits"),
+    pytest.param("9007199254740992", id="past-the-safe-range"),
+    pytest.param("1" * 5000, id="thousands-of-digits"),
+    pytest.param("", id="empty"),
+]
 
 
 def test_normalize_simple_string_values():
@@ -497,59 +527,59 @@ def test_max_safe_js_int_matches_javascript():
 
 def test_map_single_found_returns_original():
     id_to_original = {1: {"id": 1, "label": "A"}, 2: {"id": 2, "label": "B"}}
-    result = map_selection([1], id_to_original, "single", accept_new_options=False)
+    result = map_selection([1], id_to_original, "single", kind=None)
     assert result == {"id": 1, "label": "A"}
 
 
 def test_map_single_empty_returns_none():
-    result = map_selection([], {1: 1}, "single", accept_new_options=False)
+    result = map_selection([], {1: 1}, "single", kind=None)
     assert result is None
 
 
 def test_map_single_unknown_id_dropped_returns_none():
     # id not in map and accept_new_options False -> dropped -> None
-    result = map_selection([99], {1: 1}, "single", accept_new_options=False)
+    result = map_selection([99], {1: 1}, "single", kind=None)
     assert result is None
 
 
 def test_map_single_unknown_id_accept_new_returns_str():
-    result = map_selection([99], {1: 1}, "single", accept_new_options=True)
+    result = map_selection([99], {1: 1}, "single", kind="str")
     assert result == "99"
 
 
 def test_map_single_returns_first_mapped_when_multiple_ids():
     id_to_original = {1: "one", 2: "two"}
-    result = map_selection([2, 1], id_to_original, "single", accept_new_options=False)
+    result = map_selection([2, 1], id_to_original, "single", kind=None)
     assert result == "two"
 
 
 def test_map_multi_found_returns_list_of_originals():
     id_to_original = {1: "one", 2: "two", 3: "three"}
-    result = map_selection([1, 3], id_to_original, "multi", accept_new_options=False)
+    result = map_selection([1, 3], id_to_original, "multi", kind=None)
     assert result == ["one", "three"]
 
 
 def test_map_multi_empty_returns_empty_list():
-    result = map_selection([], {1: "one"}, "multi", accept_new_options=False)
+    result = map_selection([], {1: "one"}, "multi", kind=None)
     assert result == []
 
 
 def test_map_multi_preserves_selection_order():
     id_to_original = {1: "one", 2: "two", 3: "three"}
     # ids arrive in selection order 3,1,2 -> originals must follow
-    result = map_selection([3, 1, 2], id_to_original, "multi", accept_new_options=False)
+    result = map_selection([3, 1, 2], id_to_original, "multi", kind=None)
     assert result == ["three", "one", "two"]
 
 
 def test_map_multi_unknown_ids_dropped_when_not_accept_new():
     id_to_original = {1: "one"}
-    result = map_selection([1, 99, 2], id_to_original, "multi", accept_new_options=False)
+    result = map_selection([1, 99, 2], id_to_original, "multi", kind=None)
     assert result == ["one"]
 
 
 def test_map_multi_unknown_ids_kept_as_str_when_accept_new():
     id_to_original = {1: "one"}
-    result = map_selection([1, 99, "new"], id_to_original, "multi", accept_new_options=True)
+    result = map_selection([1, 99, "new"], id_to_original, "multi", kind="str")
     assert result == ["one", "99", "new"]
 
 
@@ -558,14 +588,14 @@ def test_map_multi_mixed_found_new_dropped_order_preserved():
     # all in the order the ids appear
     id_to_original = {"a": {"id": "a"}, "b": {"id": "b"}}
     result = map_selection(
-        ["b", 5, "a"], id_to_original, "multi", accept_new_options=True
+        ["b", 5, "a"], id_to_original, "multi", kind="str"
     )
     assert result == [{"id": "b"}, "5", {"id": "a"}]
 
 
 def test_map_single_accept_new_int_id_stringified():
     # an int id not in the map, accept_new True -> plain str
-    result = map_selection([7], {}, "single", accept_new_options=True)
+    result = map_selection([7], {}, "single", kind="str")
     assert result == "7"
     assert isinstance(result, str)
 
@@ -576,7 +606,7 @@ def test_map_unhashable_selected_id_does_not_crash():
     # (a str) exists for any object, so it simply matches no row and is dropped.
     id_to_original = {1: "one"}
     # not accepting new -> the unknown id is simply dropped
-    result = map_selection([[99], 1], id_to_original, "multi", accept_new_options=False)
+    result = map_selection([[99], 1], id_to_original, "multi", kind=None)
     assert result == ["one"]
 
 
@@ -586,7 +616,7 @@ def test_map_single_resolves_dtype_flipped_str_id_to_int_original():
     # row selected because it keys rows by String(id). A raw-== lookup called
     # the stored "7" unknown and returned None while the UI showed the row
     # selected; resolution by _id_key row identity maps it to the option.
-    result = map_selection(["7"], {7: 7}, "single", accept_new_options=False)
+    result = map_selection(["7"], {7: 7}, "single", kind=None)
     assert result == 7
     assert isinstance(result, int)
 
@@ -594,7 +624,7 @@ def test_map_single_resolves_dtype_flipped_str_id_to_int_original():
 def test_map_single_resolves_dtype_flipped_int_id_to_str_original():
     # The reverse flip: the stored int 7 names the row of the str option "7".
     id_to_original = {"7": {"id": "7", "label": "Seven"}}
-    result = map_selection([7], id_to_original, "single", accept_new_options=False)
+    result = map_selection([7], id_to_original, "single", kind=None)
     assert result == {"id": "7", "label": "Seven"}
 
 
@@ -603,7 +633,7 @@ def test_map_accept_new_id_matching_option_row_returns_option_immediately():
     # resolves by row identity on the way out, so the caller gets the option
     # object on the same rerun — not a plain "7" until the frontend's
     # "7" -> 7 reconciliation write-back lands one rerun later.
-    result = map_selection(["7"], {7: 7}, "single", accept_new_options=True)
+    result = map_selection(["7"], {7: 7}, "single", kind="str")
     assert result == 7
     assert isinstance(result, int)
 
@@ -613,7 +643,7 @@ def test_map_multi_duplicate_keys_collapse_to_earliest_survivor():
     # it, so the mapping must too — otherwise the value holds the option twice.
     id_to_original = {"a": "A", "b": "B"}
     result = map_selection(
-        ["a", "a", "b"], id_to_original, "multi", accept_new_options=False
+        ["a", "a", "b"], id_to_original, "multi", kind=None
     )
     assert result == ["A", "B"]
 
@@ -628,7 +658,7 @@ def test_map_multi_duplicate_collapse_happens_before_truncation():
         ["a", "a", "b"],
         id_to_original,
         "multi",
-        accept_new_options=False,
+        kind=None,
         max_selections=2,
     )
     assert result == ["A", "B"]
@@ -637,14 +667,14 @@ def test_map_multi_duplicate_collapse_happens_before_truncation():
 def test_map_multi_cross_spelling_duplicate_collapses():
     # 1 and "1" spell the same row; earliest survivor wins, mapped to the
     # original option.
-    result = map_selection([1, "1"], {1: "one"}, "multi", accept_new_options=False)
+    result = map_selection([1, "1"], {1: "one"}, "multi", kind=None)
     assert result == ["one"]
 
 
 def test_map_multi_unknown_duplicate_collapses_under_accept_new():
     # Duplicate collapse applies to synthetic (typed) rows too, matching the
     # frontend, which renders one row for the typed value.
-    result = map_selection(["x", "x"], {}, "multi", accept_new_options=True)
+    result = map_selection(["x", "x"], {}, "multi", kind="str")
     assert result == ["x"]
 
 
@@ -655,7 +685,7 @@ def test_map_multi_truncates_to_max_selections_keeping_earliest():
     # keeping the earliest-selected ids — exactly the survivors the frontend keeps.
     id_to_original = {1: "one", 2: "two", 3: "three"}
     result = map_selection(
-        [3, 1, 2], id_to_original, "multi", accept_new_options=False, max_selections=2
+        [3, 1, 2], id_to_original, "multi", kind=None, max_selections=2
     )
     assert result == ["three", "one"]
 
@@ -663,7 +693,7 @@ def test_map_multi_truncates_to_max_selections_keeping_earliest():
 def test_map_multi_under_max_selections_is_untouched():
     id_to_original = {1: "one", 2: "two"}
     result = map_selection(
-        [1, 2], id_to_original, "multi", accept_new_options=False, max_selections=5
+        [1, 2], id_to_original, "multi", kind=None, max_selections=5
     )
     assert result == ["one", "two"]
 
@@ -673,7 +703,7 @@ def test_map_multi_max_selections_counts_only_survivors():
     # frontend's reconcile counts only the ids it keeps, and the two must agree.
     id_to_original = {1: "one", 2: "two"}
     result = map_selection(
-        [99, 1, 2], id_to_original, "multi", accept_new_options=False, max_selections=2
+        [99, 1, 2], id_to_original, "multi", kind=None, max_selections=2
     )
     assert result == ["one", "two"]
 
@@ -682,7 +712,7 @@ def test_map_single_ignores_max_selections():
     # single mode is already a cap of one; max_selections there is None or 1.
     id_to_original = {1: "one", 2: "two"}
     result = map_selection(
-        [2, 1], id_to_original, "single", accept_new_options=False, max_selections=1
+        [2, 1], id_to_original, "single", kind=None, max_selections=1
     )
     assert result == "two"
 
@@ -797,3 +827,102 @@ def test_sort_does_not_mutate_input():
     snapshot = [dict(it) for it in items]
     sort_items(items, "both", True)
     assert items == snapshot  # original list order + dict contents unchanged
+
+
+# --------------------------------------------------------------------------
+# accept_new_options: the canonical-integer rule and the kind rule
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("text, expected", CANONICAL_INTS)
+def test_parse_new_int_id_accepts_a_canonical_whole_number(text, expected):
+    assert _parse_new_int_id(text) == expected
+
+
+@pytest.mark.parametrize("text", NON_CANONICAL_INTS)
+def test_parse_new_int_id_rejects_everything_else(text):
+    # "42\n" would pass a ^...$ pattern ($ matches before a trailing newline),
+    # "\u0661" a \d pattern (int() reads it as 1), and 5,000 digits would make
+    # int() raise past its 4,300-digit limit — each case pins one of those.
+    assert _parse_new_int_id(text) is None
+
+
+@pytest.mark.parametrize(
+    "options, expected",
+    [
+        pytest.param([{"id": "a"}, {"id": 1}], "dict", id="all-dicts"),
+        pytest.param([1, 2, 3], "int", id="all-ints"),
+        pytest.param(["a", "b"], "str", id="all-strs"),
+        pytest.param([1, "a"], "str", id="int-and-str"),
+        pytest.param([{"id": 1}, "b"], "str", id="dict-and-scalar"),
+        pytest.param([], "str", id="empty"),
+        pytest.param(None, "str", id="none"),
+    ],
+)
+def test_new_option_kind_follows_the_options(options, expected):
+    _items, id_to_original = normalize_options(options, None)
+    assert new_option_kind(id_to_original) == expected
+
+
+# --------------------------------------------------------------------------
+# map_selection: an unknown id becomes a new entry in the options' kind
+# --------------------------------------------------------------------------
+
+def test_map_dict_kind_returns_the_rendered_row_as_a_dict():
+    # The frontend renders an unknown id as the row {id, label: String(id)}, so
+    # that is the dict that comes back; the id keeps its own type.
+    id_to_original = {"a": {"id": "a"}, "b": {"id": "b"}}
+    result = map_selection(["b", "Mango", 5, "a"], id_to_original, "multi", kind="dict")
+    assert result == [
+        {"id": "b"},
+        {"id": "Mango", "label": "Mango"},
+        {"id": 5, "label": "5"},
+        {"id": "a"},
+    ]
+
+
+def test_map_dict_kind_single_returns_one_dict():
+    result = map_selection(["Mango"], {"a": {"id": "a"}}, "single", kind="dict")
+    assert result == {"id": "Mango", "label": "Mango"}
+
+
+def test_map_int_kind_keeps_an_int():
+    result = map_selection([42], {1: 1}, "single", kind="int")
+    assert result == 42
+    assert type(result) is int
+
+
+@pytest.mark.parametrize("text, expected", CANONICAL_INTS)
+def test_map_int_kind_converts_a_canonical_int_string(text, expected):
+    result = map_selection([text], {1: 1}, "single", kind="int")
+    assert result == expected
+    assert type(result) is int
+
+
+@pytest.mark.parametrize("text", NON_CANONICAL_INTS)
+def test_map_int_kind_leaves_any_other_string_a_str(text):
+    # An entry made while the options had another type still renders as a row,
+    # so it comes back as its text rather than being dropped or raising.
+    assert map_selection([text], {1: 1}, "single", kind="int") == text
+
+
+@pytest.mark.parametrize("value, expected", [(True, "True"), (42.5, "42.5")])
+def test_map_int_kind_stringifies_a_bool_or_float_from_a_tampered_frontend(
+    value, expected
+):
+    # JSON true arrives as True, an int subclass: it must not pass as an int.
+    assert map_selection([value], {1: 1}, "single", kind="int") == expected
+
+
+def test_map_int_kind_collapses_two_spellings_of_one_entry():
+    # Review focus 3: "42" (a seed) and 42 (a later commit) are one row, so
+    # they are one entry, and it comes back as an int.
+    result = map_selection(["42", 42], {1: 1}, "multi", kind="int")
+    assert result == [42]
+
+
+def test_map_selection_refuses_a_positional_kind():
+    # kind replaced the old positional accept_new_options bool. A stale call
+    # passing False positionally would read as a kind and KEEP unknown ids
+    # instead of dropping them, so kind is keyword-only.
+    with pytest.raises(TypeError):
+        map_selection([99], {1: 1}, "single", False)

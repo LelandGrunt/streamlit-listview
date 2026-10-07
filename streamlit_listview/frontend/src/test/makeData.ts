@@ -28,6 +28,7 @@ export function makeData(overrides: Partial<ListviewData> = {}): ListviewData {
     collapsible_groups: false,
     collapsed_groups: null,
     accept_new_options: false,
+    new_option_kind: null,
     max_selections: null,
     placeholder: null,
     height: 300,

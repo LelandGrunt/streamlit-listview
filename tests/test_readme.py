@@ -18,6 +18,22 @@ def _first(pattern: str, text: str) -> str:
     return m.group(1)
 
 
+def test_readme_does_not_promise_added_entries_come_back_as_strings():
+    """Drift guard: an entry added via accept_new_options comes back in the
+    type of the other options — a dict, an int, or the typed str. The feature
+    list once still said "returned as the typed string", which contradicted
+    the Return value section on the very page PyPI shows."""
+    assert "returned as the typed string" not in README
+
+
+def test_readme_does_not_say_unknown_ids_are_always_dropped():
+    """Drift guard: under accept_new_options, an id that matches no option is
+    kept as a new entry in the options' type, not dropped. The consequences
+    paragraph under "Changing options later" once said it was dropped
+    unconditionally, which contradicted the bullet list right above it."""
+    assert "ids matching no option are dropped," not in README
+
+
 def test_documents_core_new_api():
     for token in [
         "selection_mode",

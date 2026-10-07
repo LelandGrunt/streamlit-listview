@@ -14,7 +14,7 @@ import { useFilter } from "./hooks/useFilter";
 import { useCollapse } from "./hooks/useCollapse";
 import { useScrollToItem } from "./hooks/useScrollToItem";
 import { useColorScheme } from "./hooks/useColorScheme";
-import { disabledIdSet, idKey, itemIdByKey } from "./utils/ids";
+import { disabledIdSet, idKey, itemIdByKey, parseNewIntId } from "./utils/ids";
 import { reuseUnchangedItems, runsByKey } from "./utils/items";
 import { foldForMatch } from "./utils/text";
 
@@ -173,6 +173,12 @@ function findRowNode(body: HTMLElement, domId: string): Element | null {
   }
   return null;
 }
+
+/**
+ * The hint NewOptionInput shows when int options refuse a typed value that is
+ * not a whole number (see parseNewIntId).
+ */
+const NOT_A_WHOLE_NUMBER = "Enter a whole number";
 
 /**
  * The id of the row a typed `accept_new_options` value refers to, or undefined
@@ -673,12 +679,30 @@ export const Listview: FC<ListviewProps> = ({
     toggle(id);
   }, []);
 
+  // On a refused add, NewOptionInput shows a hint below the add row — the last
+  // content of the scroll frame — so the frame scrolls to its end to keep the
+  // hint in view. The body only, never Element.scrollIntoView(), which would
+  // scroll the Streamlit page too (see scrollToId). rAF, so the hint has
+  // committed before scrollHeight is read.
+  const revealHint = useCallback(() => {
+    requestAnimationFrame(() => {
+      const body = bodyRef.current;
+      // Unreachable in practice: the body renders unconditionally. It guards an
+      // unmount racing the rAF.
+      /* v8 ignore next 3 */
+      if (!body) {
+        return;
+      }
+      body.scrollTop = body.scrollHeight;
+    });
+  }, []);
+
   const onAddNewOption = useCallback(
-    (value: string) => {
+    (value: string): string | null => {
       // Defense-in-depth: NewOptionInput is disabled then, so this never fires.
       /* v8 ignore next 3 */
       if (widgetDisabled) {
-        return;
+        return null;
       }
       // Resolve a typed value against ALL rendered rows (known options + synthetic
       // ones) by row identity AND by visible label, so it matches an existing row
@@ -691,14 +715,24 @@ export const Listview: FC<ListviewProps> = ({
         // user can actually see): select that option rather than spawn a
         // duplicate row.
         selection.add(existingId);
-        return;
+        return null;
       }
-      // Genuinely new. In multi mode at the cap the add would be rejected by
-      // useSelection, so do NOT persist a phantom row that was never actually
-      // selected (and that the user then cannot easily remove). Single mode
-      // always replaces, so atCap is never set there.
+      // Genuinely new. With int options (Python's new_option_kind) the entry must
+      // be a whole number, added as a NUMBER: the selection, its synthetic row and
+      // the persisted state then hold a real int, and listview() returns 42, not
+      // "42". Checked before the cap below, so a refused value is explained even
+      // when nothing more could be added.
+      const newId = data.new_option_kind === "int" ? parseNewIntId(value) : value;
+      if (newId === undefined) {
+        revealHint();
+        return NOT_A_WHOLE_NUMBER;
+      }
+      // In multi mode at the cap the add would be rejected by useSelection, so do
+      // NOT persist a phantom row that was never actually selected (and that the
+      // user then cannot easily remove). Single mode always replaces, so atCap is
+      // never set there.
       if (selection.atCap) {
-        return;
+        return null;
       }
       // Remember it so it persists as a row after deselection, then select it.
       setAddedItems((prev) => {
@@ -708,14 +742,15 @@ export const Listview: FC<ListviewProps> = ({
         // allItems within a single React batch. Marked as a guard (condition +
         // early return) so the append below stays measured.
         /* v8 ignore next 3 */
-        if (prev.some((it) => it.id === value)) {
+        if (prev.some((it) => it.id === newId)) {
           return prev;
         }
-        return [...prev, newOptionRow(value)];
+        return [...prev, newOptionRow(newId)];
       });
-      selection.add(value);
+      selection.add(newId);
+      return null;
     },
-    [widgetDisabled, allItems, selection],
+    [widgetDisabled, allItems, selection, data.new_option_kind, revealHint],
   );
 
   useScrollToItem({

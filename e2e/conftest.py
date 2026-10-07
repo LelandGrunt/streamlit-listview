@@ -33,7 +33,7 @@ from e2e.e2e_utils import StreamlitRunner
 # add itself fails loudly with a KeyError instead of silently skipping the wait.
 LISTVIEW_COUNTS = {
     "app.py": 4,  # single, multi, default-seeded single, markdown
-    "app_features.py": 7,  # search, pinned, collapsible, jump, newopt, selectall, sorted
+    "app_features.py": 8,  # search, pinned, collapsible, jump, newopt, newopt_int, selectall, sorted
     "app_remount.py": 1,  # keyed single that moves between sidebar and main
     "app_sidebar_theme.py": 2,  # the same list in the sidebar and the main body
     "app_native_parity.py": 1,  # one list beside the native widgets it mirrors

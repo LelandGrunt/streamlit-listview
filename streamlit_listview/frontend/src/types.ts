@@ -18,6 +18,13 @@ export interface ListviewItem {
 export type SelectionMode = "single" | "multi";
 export type LabelVisibility = "visible" | "hidden" | "collapsed";
 
+/**
+ * The type a new `accept_new_options` entry comes back as in Python, decided by
+ * `_options.new_option_kind` from the options as passed. The frontend acts on
+ * "int" only: the add field then accepts only whole numbers.
+ */
+export type NewOptionKind = "dict" | "int" | "str";
+
 export interface ListviewData {
   label: string;
   help: string | null;
@@ -31,6 +38,7 @@ export interface ListviewData {
   collapsible_groups: boolean;
   collapsed_groups: string[] | "all" | null;
   accept_new_options: boolean;
+  new_option_kind: NewOptionKind | null; // the type a new entry comes back as; null when accept_new_options is off
   max_selections: number | null;
   placeholder: string | null;
   height: number;

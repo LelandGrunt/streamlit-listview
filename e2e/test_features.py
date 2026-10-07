@@ -17,6 +17,7 @@ _INSTANCE_NAME = {
     "collapsible": "Collapse me",
     "jump": "Jump",
     "newopt": "Add your own",
+    "newopt_int": "Add a number",
     "selectall": "Bulk select",
     "sorted": "Sorted",
 }
@@ -129,7 +130,40 @@ def test_accept_new_options_adds_and_selects(page: Page):
     inp.fill("Mango")
     inp.press("Enter")
     expect(root.get_by_text("Mango")).to_be_visible()
-    expect(echo(page, "newopt")).to_contain_text("Mango")
+    # Dict options: the new entry comes back as a dict, like every other option.
+    expect(echo(page, "newopt")).to_contain_text("{'id': 'Mango', 'label': 'Mango'}")
+
+
+def test_accept_new_options_with_int_options_returns_an_int(page: Page):
+    root = _root(page, "newopt_int")
+    inp = root.get_by_test_id("stListviewNewOption")
+    inp.fill("42")
+    inp.press("Enter")
+    expect(root.get_by_test_id("stListviewOption-42")).to_have_attribute(
+        "aria-selected", "true"
+    )
+    # An int, like every other option — not the string "42".
+    expect(echo(page, "newopt_int")).to_contain_text("newopt_int_echo=[42]")
+
+
+def test_accept_new_options_with_int_options_refuses_text_with_a_hint(page: Page):
+    root = _root(page, "newopt_int")
+    inp = root.get_by_test_id("stListviewNewOption")
+    inp.fill("abc")
+    inp.press("Enter")
+    expect(root.get_by_test_id("stListviewNewOptionHint")).to_have_text(
+        "Enter a whole number"
+    )
+    expect(inp).to_have_value("abc")
+    expect(inp).to_have_attribute("aria-invalid", "true")
+    expect(echo(page, "newopt_int")).to_contain_text("newopt_int_echo=[]")
+    # The hint is the last content of the 100 px scroll frame, so the frame must
+    # have scrolled to its end for the hint to be seen.
+    body = root.locator(".listview-body")
+    page.wait_for_function(
+        "el => el.scrollTop + el.clientHeight >= el.scrollHeight - 1",
+        arg=body.element_handle(),
+    )
 
 
 def test_select_all_selects_all_visible_and_flips_label(page: Page):

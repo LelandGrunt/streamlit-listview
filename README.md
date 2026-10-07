@@ -31,12 +31,12 @@ A selectable, scrollable **list widget** for Streamlit — with grouping, search
 - **Live search** — filters by label as you type, optionally **pinned** (stays put while the list scrolls).
 - **Sorting** — order items, group headers, or both alphabetically (ascending or descending).
 - **Select all / Deselect all** toggle for multi-select, scoped to the rows matching the current search — including rows inside collapsed groups (collapse is visual, not a filter) — excluding disabled rows.
-- **Add new options** — let users enter values that aren't in the list (returned as the typed string). Typing the visible text of an option that is already there selects that option instead of adding a duplicate row.
+- **Add new options** — let users enter values that aren't in the list; each comes back in the type of the other options (see [Return value](#return-value)). Typing the visible text of an option that is already there selects that option instead of adding a duplicate row.
 - **Jump to default** — auto-scrolls the default selection into view on first render, and again whenever `default` changes (the list scrolls, never the surrounding page).
 - **Native theming** — pure `--st-*` CSS variables, so light, dark, and custom themes apply automatically. No Bootstrap, no hardcoded palette.
 - **Markdown labels & help** — Streamlit-parity Markdown (GFM + Streamlit directives like `:red[…]`, badges, `:material/icon:`, `:streamlit:`, emoji).
 - **Keyboard & screen-reader friendly** — `role="listbox"`/`option`, named `role="group"` per group header, the listbox named after your `label` (also when it is hidden or collapsed), arrow-key navigation, `/` to jump to the search field, and `aria-*` state.
-- **Returns what you passed in** — select a dict, get that dict back (metadata and all).
+- **Returns what you passed in** — select a dict, get that dict back (metadata and all); an entry the user adds comes back in the same type.
 
 Built on [**Streamlit Components V2**](https://docs.streamlit.io/develop/concepts/custom-components/components-v2): the widget renders inline in the host page (inside a Shadow DOM), not in an iframe.
 
@@ -142,7 +142,7 @@ def listview(
 | `collapsed_groups`   | Groups that start collapsed: `["GroupA", ...]` or `"all"` (see [Collapsible groups](#collapsible-groups)).                           |
 | `sort`               | Alphabetical ordering: `"items"`, `"groups"`, `"both"`, or `None` for input order (see [Sorting](#sorting)).                         |
 | `sort_ascending`     | `True` = A→Z (the default), `False` = Z→A; only meaningful when `sort` is set.                                                       |
-| `accept_new_options` | Lets users add values not in the list; returned as the typed string.                                                                 |
+| `accept_new_options` | Lets users add values not in the list; each comes back in the type of the other options (see [Return value](#return-value)).         |
 | `max_selections`     | Cap on the multi-mode selection (single mode accepts `None` or `1`).                                                                 |
 | `select_all`         | Multi mode only: adds the Select all / Deselect all toggle.                                                                          |
 | `placeholder`        | Text shown instead of the list when `options` is empty.                                                                              |
@@ -171,7 +171,7 @@ def listview(
 
 Ids are validated at the boundary, because the frontend identifies each row by JavaScript `String(id)`: they must be **unique as rendered** (`1` and `"1"` collide, and so would a `bool`), and an `int` id must fit JavaScript's safe-integer range (`abs(id) <= 2**53 - 1`) since the payload travels as JSON and larger ints lose precision as doubles — use the string form for BIGINT or snowflake keys.
 
-`default` ids are validated exactly like option ids: `str` or `int` only (`bool` is rejected), an `int` must satisfy `abs(id) <= 2**53 - 1`, and — unless `accept_new_options=True` — each must name an option by its rendered `String(id)` identity.
+`default` ids are validated exactly like option ids: `str` or `int` only (`bool` is rejected), an `int` must satisfy `abs(id) <= 2**53 - 1`, and — unless `accept_new_options=True` — each must name an option by its rendered `String(id)` identity. With `accept_new_options=True` and int options, an unknown `default` must be a whole number (`42` or `"42"`), because it comes back as an int; anything else raises `ValueError`.
 
 `format_func` runs server-side, receives the **option as passed** — the dict for dict options, the scalar itself for simple values — and returns its display label. An explicit `label` always wins, so you can format some rows and hand-write the rest. Because the whole option arrives, the label can be built from fields the widget never renders:
 
@@ -216,13 +216,25 @@ You get back what you passed in:
 
 - **single** → the selected option exactly as passed (dict or scalar), or `None`.
 - **multi** → a list of the selected options, in selection order; `[]` if none.
-- Entries added via `accept_new_options` come back as the **plain string** the user typed.
+
+An entry the user adds via `accept_new_options` comes back in the type of the other options:
+
+| `options` are …           | The user adds | You get back                        |
+| ------------------------- | ------------- | ----------------------------------- |
+| all dicts                 | `Mango`       | `{"id": "Mango", "label": "Mango"}` |
+| all `int`                 | `42`          | `42`                                |
+| all `str`, mixed, or none | `Mango`       | `"Mango"`                           |
+
+- With int options the add field accepts only a whole number written plainly — `42` or `-5`, not `007`, `+5` or `1.5` — and shows a hint below the field for anything else. Text that matches an existing row, by id or by visible label, still selects that row.
+- With dict options the added entry's `id` is the typed text, even when your own ids are ints, so `entry["id"] not in my_ids` tells added entries apart.
+- An unknown `default`, and a selected id that a keyed widget keeps after you remove it from `options`, follow the same rule.
+- One exception: an entry added while the options had another type — `"abc"`, added before int options arrived — still shows as a row, so it comes back as the typed string.
 
 ### Changing `options`, `max_selections` or `selection_mode` later
 
 On a **keyed** widget the selection survives a rerun (an unkeyed one remounts and resets), so it can outlive the data it was made against. When that happens the widget re-derives the selection from the current data and **commits the correction**, so the rows you see and the value `listview()` returns cannot disagree. In selection order, it drops:
 
-- ids that are no longer in `options` (kept as typed strings when `accept_new_options=True`);
+- ids that are no longer in `options` (kept as new entries when `accept_new_options=True`, in the type of the current options — see [Return value](#return-value));
 - everything past a freshly lowered `max_selections` — the earliest-selected survive;
 - everything past the first entry when `selection_mode` flips from `"multi"` to `"single"`.
 
@@ -231,7 +243,7 @@ A selected option that merely became `disabled` is **not** dropped — a disable
 Two consequences to plan for:
 
 - **`on_change` fires once** on that rerun. A correction is written back through the same channel a click uses, and Components V2 offers no second one for it, so the callback cannot tell them apart. If yours must run for real user input only, compare against the previous selection yourself.
-- **The returned value never shows the uncorrected selection.** The write-back is what triggers the rerun that carries the correction, so it arrives one rerun late — but `listview()` applies the same rules on the way out (ids are matched to options by their rendered `String(id)` identity, ids matching no option are dropped, duplicate spellings of one row collapse, and the multi list is truncated to `max_selections`, keeping the same earliest-selected survivors), so it cannot hand back more options than you allow, an option you removed, or one row twice. Nothing lags: a typed `"7"` after you promote the int `7` into `options` comes back as that option immediately.
+- **The returned value never shows the uncorrected selection.** The write-back is what triggers the rerun that carries the correction, so it arrives one rerun late — but `listview()` applies the same rules on the way out (ids are matched to options by their rendered `String(id)` identity, ids matching no option are dropped — or, with `accept_new_options=True`, kept as new entries in the type of the other options — duplicate spellings of one row collapse, and the multi list is truncated to `max_selections`, keeping the same earliest-selected survivors), so it cannot hand back more options than you allow, an option you removed, or one row twice. Nothing lags: a typed `"7"` after you promote the int `7` into `options` comes back as that option immediately.
 
 ### Markdown (label & help)
 

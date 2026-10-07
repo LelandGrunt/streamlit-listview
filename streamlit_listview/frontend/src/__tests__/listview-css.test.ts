@@ -751,6 +751,21 @@ describe("Milestone C feature styling", () => {
     expect(css).toContain(".listview-new-option__input");
   });
 
+  it("styles the add row's refusal hint like st.caption, with no box while empty", () => {
+    // st.caption: fadedText60 at the small size. No red and no frame change —
+    // st.text_input has no error state.
+    expect(css).toMatch(
+      /\.listview-new-option__hint\s*\{[^}]*color:\s*var\(--listview-faded-text-60\)/,
+    );
+    expect(css).toMatch(
+      /\.listview-new-option__hint\s*\{[^}]*font-size:\s*calc\(var\(--st-base-font-size, 1rem\) \* 0\.875\)/,
+    );
+    // Padded only when filled: the live region stays in the DOM, and an empty
+    // one must add no height below the add row.
+    expect(css).toMatch(/\.listview-new-option__hint:not\(:empty\)\s*\{[^}]*padding:/);
+    expect(css).not.toMatch(/\.listview-new-option__hint\s*\{[^}]*padding:/);
+  });
+
   it("sizes the collapse chevron via --listview-content-font-size, defaulting to 1rem", () => {
     expect(css).toMatch(
       /\.listview-group-header__chevron\s*\{[^}]*width:\s*var\(\s*--listview-content-font-size\s*,\s*1rem/,

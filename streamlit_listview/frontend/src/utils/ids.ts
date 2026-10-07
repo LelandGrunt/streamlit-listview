@@ -56,3 +56,26 @@ export function disabledIdSet(items: ListviewItem[]): Set<Id> {
   }
   return set;
 }
+
+// An optional leading minus, no leading zero, no "-0", and at most 16 ASCII
+// digits — the same pattern as Python's `_options._CANONICAL_INT`.
+const CANONICAL_INT = /^(0|-?[1-9][0-9]{0,15})$/;
+
+/**
+ * The number a typed `accept_new_options` value spells, or undefined when it is
+ * not a canonical whole number within `Number.isSafeInteger`.
+ *
+ * Canonical means `String(n)` gives the typed text back, so the row the new
+ * entry renders as (keyed by `idKey`) spells exactly what the user typed, and
+ * Python receives an int. This is the frontend copy of Python's
+ * `_options._parse_new_int_id`; both test suites run the same input table. A
+ * rule changed on one side only would let the add field accept a value that
+ * Python's `default` check refuses, or the reverse.
+ */
+export function parseNewIntId(value: string): number | undefined {
+  if (!CANONICAL_INT.test(value)) {
+    return undefined;
+  }
+  const number = Number(value);
+  return Number.isSafeInteger(number) ? number : undefined;
+}

@@ -250,7 +250,7 @@ PARAMS = [
         "Parameter": "accept_new_options",
         "Type": "bool",
         "Default": "False",
-        "Description": "Let users add entries not in options; returned as the plain typed string.",
+        "Description": "Let users add entries not in options; each comes back in the type of the other options: a dict, an int, or the typed string.",
     },
     {
         "Parameter": "max_selections",
@@ -343,7 +343,7 @@ RETURNS_MD = """\
 
 - **single** → the selected option exactly as passed (dict or scalar), or `None`.
 - **multi** → a list of the selected options in selection order; `[]` if none.
-- Entries added via `accept_new_options` come back as the plain string the user typed.
+- Entries added via `accept_new_options` come back in the type of the other options: a dict for dict options, an int for int options, the typed string otherwise.
 """
 
 # Seed shown in the Custom-data text area placeholder and inserted by the
@@ -749,7 +749,7 @@ def render_behavior(cfg, ids, groups):
     cfg["accept_new_options"] = st.toggle(
         "Accept new options",
         cfg["accept_new_options"],
-        help="Let users add entries not in the list; they come back as the typed string.",
+        help="Let users add entries not in the list; each comes back in the type of the other options — a dict for the built-in cities.",
         key="cfg_accept_new",
     )
     if cfg["selection_mode"] == "multi":
@@ -1137,10 +1137,10 @@ def render_demo():
             if isinstance(selected, (dict, list)):
                 st.json(selected)
             else:
-                # Single mode returns the option itself; a new option (added via
-                # accept_new_options) comes back as the plain typed string.
-                # st.json() treats a bare string as serialized JSON and tries to
-                # parse it on the frontend, so render scalars with st.write.
+                # Single mode returns the option itself. With str options a new
+                # entry (accept_new_options) comes back as the plain typed string,
+                # and st.json() treats a bare string as serialized JSON and tries
+                # to parse it on the frontend, so render scalars with st.write.
                 st.write(selected)
             # Reset sits with the result so it reads as an action on the current
             # selection, and only shows once something is selected.

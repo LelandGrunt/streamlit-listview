@@ -4,8 +4,9 @@ from streamlit_listview import listview
 
 LABELS = ["bug", "enhancement", "documentation", "question", "help wanted"]
 
-# accept_new_options lets users add entries that aren't in the list (each comes
-# back as the plain typed string); max_selections caps how many can be picked.
+# accept_new_options lets users add entries that aren't in the list (with these
+# str labels, each comes back as the typed string); max_selections caps how many
+# can be picked.
 labels = listview(
     "Tag this issue (up to 3 — or type your own)",
     LABELS,

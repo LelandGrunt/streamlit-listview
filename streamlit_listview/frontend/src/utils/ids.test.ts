@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sameIds, disabledIdSet, idKey, itemIdByKey } from "./ids";
+import { sameIds, disabledIdSet, idKey, itemIdByKey, parseNewIntId } from "./ids";
 
 describe("sameIds", () => {
   it("is true for element-wise equal lists (same order)", () => {
@@ -62,5 +62,40 @@ describe("disabledIdSet", () => {
 
   it("returns an empty set when nothing is disabled", () => {
     expect(disabledIdSet([{ id: "a", label: "A" }]).size).toBe(0);
+  });
+});
+
+// The same table as tests/test_options.py (CANONICAL_INTS, NON_CANONICAL_INTS):
+// Python and the frontend each hold one copy of the canonical-integer rule, so
+// keep the two in step.
+describe("parseNewIntId", () => {
+  it.each([
+    { text: "0", expected: 0 },
+    { text: "42", expected: 42 },
+    { text: "-5", expected: -5 },
+    { text: "9007199254740991", expected: 9007199254740991 },
+    { text: "-9007199254740991", expected: -9007199254740991 },
+  ])("accepts the canonical whole number $text", ({ text, expected }) => {
+    expect(parseNewIntId(text)).toBe(expected);
+  });
+
+  it.each([
+    { text: "007", why: "a leading zero" },
+    { text: "-0", why: "negative zero" },
+    { text: "+5", why: "a plus sign" },
+    { text: " 5", why: "whitespace" },
+    { text: "42\n", why: "a trailing newline" },
+    { text: "1_000", why: "a digit separator" },
+    { text: "1.5", why: "a fraction" },
+    { text: "1e3", why: "an exponent" },
+    { text: "abc", why: "letters" },
+    { text: "\u00b2", why: "a superscript digit" },
+    { text: "\u0661", why: "an Arabic-Indic digit" },
+    { text: "\uff14\uff12", why: "fullwidth digits" },
+    { text: "9007199254740992", why: "a value past the safe-integer range" },
+    { text: "1".repeat(5000), why: "thousands of digits" },
+    { text: "", why: "an empty string" },
+  ])("rejects $why", ({ text }) => {
+    expect(parseNewIntId(text)).toBeUndefined();
   });
 });

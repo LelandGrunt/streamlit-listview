@@ -616,18 +616,19 @@ def test_default_is_canonicalized_to_the_option_spelling_with_accept_new_options
     listview_mod,
 ):
     # Same canonicalization when accept_new_options is on: "7" names the row of
-    # the int option 7, so it ships as 7; the genuinely unknown "new" stays as
-    # given (it is the synthetic row's id and label).
+    # the int option 7, so it ships as 7; the genuinely unknown "9" ships as
+    # given (it is the synthetic row's id and label) and comes back as the int 9.
     mod, fake = listview_mod
-    call(
+    result = call(
         mod,
         options=[7, 8],
         selection_mode="multi",
-        default=["7", "new"],
+        default=["7", "9"],
         accept_new_options=True,
     )
-    assert fake.last["data"]["default_ids"] == [7, "new"]
-    assert fake.last["default"] == {"selection": [7, "new"]}
+    assert fake.last["data"]["default_ids"] == [7, "9"]
+    assert fake.last["default"] == {"selection": [7, "9"]}
+    assert result == [7, 9]
 
 
 # --------------------------------------------------------------------------
@@ -759,6 +760,27 @@ def test_payload_default_ids_unknown_when_accept_new(listview_mod):
     mod, fake = listview_mod
     call(mod, selection_mode="single", default="zzz", accept_new_options=True)
     assert fake.last["data"]["default_ids"] == ["zzz"]
+
+
+@pytest.mark.parametrize(
+    "options, expected",
+    [
+        ([{"id": "a", "label": "A"}], "dict"),
+        ([1, 2], "int"),
+        (["a", "b"], "str"),
+        ([], "str"),
+    ],
+)
+def test_payload_new_option_kind_follows_the_options(listview_mod, options, expected):
+    mod, fake = listview_mod
+    call(mod, options=options, accept_new_options=True)
+    assert fake.last["data"]["new_option_kind"] == expected
+
+
+def test_payload_new_option_kind_is_none_when_adding_is_off(listview_mod):
+    mod, fake = listview_mod
+    call(mod, options=[1, 2])
+    assert fake.last["data"]["new_option_kind"] is None
 
 
 # --------------------------------------------------------------------------
@@ -955,7 +977,7 @@ def test_data_payload_has_exact_listview_data_keys(listview_mod):
         "label", "help", "items", "selection_mode", "default_ids",
         "state_selection",
         "enable_search", "pin_search", "search_placeholder", "collapsible_groups",
-        "collapsed_groups", "accept_new_options", "max_selections",
+        "collapsed_groups", "accept_new_options", "new_option_kind", "max_selections",
         "placeholder", "height", "item_height", "content_font_size",
         "width", "show_grid_lines", "select_all", "disabled", "label_visibility",
     }
@@ -1088,6 +1110,120 @@ def test_return_unknown_id_as_string_when_accept_new(listview_mod):
         "Pick", ["a", "b"], selection_mode="multi", accept_new_options=True
     )
     assert result == ["typed", "a"]
+
+
+# --------------------------------------------------------------------------
+# accept_new_options: a new entry comes back in the type of the other options
+# --------------------------------------------------------------------------
+
+def test_new_entry_with_dict_options_comes_back_as_a_dict(listview_mod):
+    mod, fake = listview_mod
+    opts = [{"id": "a", "label": "Apple"}, {"id": "b", "label": "Banana"}]
+    fake.return_value = {"selection": ["b", "Mango"]}
+    result = mod.listview(
+        "Pick", opts, selection_mode="multi", accept_new_options=True
+    )
+    assert result == [opts[1], {"id": "Mango", "label": "Mango"}]
+
+
+def test_new_entry_with_int_id_dict_options_keeps_the_typed_str_id(listview_mod):
+    # Review focus 1: database rows with int keys. The user typed a label, not a
+    # key, so the id stays the typed text — which also marks the entry as new.
+    mod, fake = listview_mod
+    opts = [{"id": 1, "label": "Orders"}, {"id": 2, "label": "Customers"}]
+    fake.return_value = {"selection": ["Invoices"]}
+    result = mod.listview(
+        "Pick", opts, selection_mode="single", accept_new_options=True
+    )
+    assert result == {"id": "Invoices", "label": "Invoices"}
+
+
+def test_new_entry_with_int_options_comes_back_as_an_int(listview_mod):
+    # 42 is what the frontend commits for a typed "42"; "43" is a string
+    # persisted before this change. Both come back as ints.
+    mod, fake = listview_mod
+    fake.return_value = {"selection": [42, "43"]}
+    result = mod.listview(
+        "Pick", [1, 2, 3], selection_mode="multi", accept_new_options=True
+    )
+    assert result == [42, 43]
+
+
+def test_entry_from_another_kind_stays_a_str_with_int_options(listview_mod):
+    # Review focus 2: "abc" was added while the list was empty, and the keyed
+    # widget kept it after int options arrived. It still renders as a row, so
+    # it comes back as the typed string rather than vanishing or raising.
+    mod, fake = listview_mod
+    fake.return_value = {"selection": ["abc"]}
+    result = mod.listview(
+        "Pick", [1, 2, 3], selection_mode="multi", accept_new_options=True
+    )
+    assert result == ["abc"]
+
+
+def test_unknown_default_with_dict_options_comes_back_as_a_dict(listview_mod):
+    mod, fake = listview_mod
+    result = mod.listview(
+        "Pick",
+        [{"id": "a", "label": "Apple"}],
+        selection_mode="single",
+        default="Mango",
+        accept_new_options=True,
+    )
+    assert result == {"id": "Mango", "label": "Mango"}
+
+
+def test_unknown_int_default_with_int_options_comes_back_as_an_int(listview_mod):
+    # Before this change it came back as the string "42".
+    mod, fake = listview_mod
+    result = mod.listview(
+        "Pick", [1, 2], selection_mode="single", default=42, accept_new_options=True
+    )
+    assert result == 42
+
+
+def test_unknown_whole_number_default_with_int_options_comes_back_as_an_int(
+    listview_mod,
+):
+    mod, fake = listview_mod
+    result = mod.listview(
+        "Pick", [1, 2], selection_mode="single", default="42", accept_new_options=True
+    )
+    # Shipped as given; map_selection converts it on the way out.
+    assert fake.last["data"]["default_ids"] == ["42"]
+    assert result == 42
+
+
+@pytest.mark.parametrize("bad", ["abc", "007", "+5", "1.5"])
+def test_unknown_default_that_is_not_a_whole_number_raises_with_int_options(
+    listview_mod, bad
+):
+    mod, fake = listview_mod
+    with pytest.raises(ValueError, match="not a whole number"):
+        mod.listview(
+            "Pick", [1, 2], selection_mode="single", default=bad, accept_new_options=True
+        )
+
+
+def test_whole_number_default_error_names_the_plain_spelling_rule(listview_mod):
+    # "007" and "+5" are whole numbers to a reader, so the message has to say
+    # what the rule means here: written plainly, within the safe range.
+    mod, fake = listview_mod
+    with pytest.raises(
+        ValueError, match=r"no leading zero, plus sign or separator.*2\*\*53 - 1"
+    ):
+        mod.listview(
+            "Pick", [1, 2], selection_mode="single", default="007", accept_new_options=True
+        )
+
+
+def test_known_default_needs_no_whole_number_check_with_int_options(listview_mod):
+    # "1" names the int option 1's row, so it is no new entry at all.
+    mod, fake = listview_mod
+    result = mod.listview(
+        "Pick", [1, 2], selection_mode="single", default="1", accept_new_options=True
+    )
+    assert result == 1
 
 
 def test_return_non_list_selection_ignored_multi(listview_mod):

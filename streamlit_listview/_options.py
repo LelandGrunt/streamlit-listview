@@ -1,10 +1,22 @@
+import re
 from collections.abc import Mapping
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Literal
 
 # JavaScript's Number.MAX_SAFE_INTEGER. The payload crosses a JSON boundary, so
 # every number arrives on the frontend as an IEEE-754 double; ints beyond this
 # magnitude are silently rounded (see the guard in normalize_options).
 MAX_SAFE_JS_INT = 2**53 - 1
+
+# The type a new accept_new_options entry comes back as; see new_option_kind.
+NewOptionKind = Literal["dict", "int", "str"]
+
+# A canonical integer: an optional leading minus, no leading zero, no "-0", and
+# at most 16 ASCII digits. 2**53 - 1 has 16 digits, so the bound admits every
+# safe integer while it keeps a string of thousands of digits away from int(),
+# which raises past 4,300 digits (Python 3.11+). [0-9], never \d: \d matches
+# every Unicode decimal digit, and int("١") is 1. Matched with fullmatch,
+# never ^...$, because $ also matches before a trailing newline.
+_CANONICAL_INT = re.compile(r"0|-?[1-9][0-9]{0,15}")
 
 
 def _id_key(item_id: Any) -> str:
@@ -235,22 +247,95 @@ def normalize_options(
     return items, id_to_original
 
 
+def _parse_new_int_id(value: str) -> int | None:
+    """The int a new entry's text spells, or None if the text is not canonical.
+
+    Canonical means ``str(int(value)) == value``, so the int names the same row
+    as the text the frontend holds (it keys rows by ``String(id)``): "42" and
+    "-5" qualify; "007", "-0", "+5", " 5", "1_000" and "1.5" do not, nor does
+    anything past ``MAX_SAFE_JS_INT``. The frontend's ``parseNewIntId``
+    (utils/ids.ts) is the other copy of this rule; both test suites run the same
+    input table.
+    """
+    if not _CANONICAL_INT.fullmatch(value):
+        return None
+    number = int(value)
+    return number if abs(number) <= MAX_SAFE_JS_INT else None
+
+
+def new_option_kind(id_to_original: dict[Any, Any]) -> NewOptionKind:
+    """The type a new ``accept_new_options`` entry comes back as.
+
+    "dict" when every option is a dict, "int" when every option is an int
+    scalar, and "str" otherwise: str options, a mix of types, or no options at
+    all (there is no type to match). ``id_to_original`` maps each id to the
+    option as passed, so its values are exactly what the caller handed in. A
+    bool needs no arm of its own: ``normalize_options`` rejects a bool id.
+    ``listview()`` asks only when adding is on, so the common call pays no pass
+    over the options.
+    """
+    if not id_to_original:
+        return "str"
+    originals = id_to_original.values()
+    if all(isinstance(original, dict) for original in originals):
+        return "dict"
+    if all(isinstance(original, int) for original in originals):
+        return "int"
+    return "str"
+
+
+def _new_entry(selected_id: Any, kind: NewOptionKind) -> Any:
+    """The value a selected id that names no option comes back as.
+
+    It takes the type of the other options (``kind``, from
+    ``new_option_kind``):
+      * "dict" -> ``{"id": selected_id, "label": str(selected_id)}``, the
+        synthetic row the frontend renders for the id (``newOptionRow``:
+        ``{ id, label: idKey(id) }``). ``str()`` is the display spelling here,
+        as in ``_label_for``, not row identity.
+      * "int" -> the id itself when it is an int, the int a canonical integer
+        string spells (``_parse_new_int_id``), and ``str(selected_id)`` for
+        anything else. That last case is an entry made while the options had
+        another type — it still renders as a row, so dropping it would make the
+        rows and the value disagree — or a tampered frontend. bool is excluded
+        explicitly: JSON ``true`` arrives as ``True``, an int subclass.
+      * "str" -> ``str(selected_id)``.
+    """
+    if kind == "dict":
+        return {"id": selected_id, "label": str(selected_id)}
+    if kind == "int":
+        if isinstance(selected_id, int) and not isinstance(selected_id, bool):
+            return selected_id
+        if isinstance(selected_id, str):
+            number = _parse_new_int_id(selected_id)
+            if number is not None:
+                return number
+    return str(selected_id)
+
+
 def map_selection(
     selected_ids: list[Any],
     id_to_original: dict[Any, Any],
     selection_mode: str,
-    accept_new_options: bool,
+    *,
+    kind: NewOptionKind | None,
     max_selections: int | None = None,
 ) -> Any:
     """Turn the ids the frontend returned into the value ``listview()`` returns.
+
+    ``kind`` is keyword-only: it replaced a positional ``accept_new_options``
+    bool, and a stale positional ``False`` would read as a kind and keep the
+    unknown ids it was meant to drop.
 
     Ids are resolved by rendered row identity (``_id_key``), not by raw Python
     equality: the frontend keys rows by ``String(id)``, so a selected id that
     spells an option's row differently — a typed ``"7"`` against the int option
     ``7``, or a stored selection surviving a dtype flip of the options column —
     maps back to that option object immediately, on the same rerun. An id
-    matching no row becomes its string form when ``accept_new_options`` is on
-    and is dropped otherwise. Duplicate row keys collapse to one entry (earliest
+    matching no row becomes a new entry in the type of the other options when
+    ``kind`` is set (see ``_new_entry``; ``kind`` is None when
+    ``accept_new_options`` is off) and is dropped otherwise. Duplicate row keys
+    collapse to one entry (earliest
     survivor) *before* any truncation, mirroring the frontend's
     ``reconcileSelection``, so a duplicate never consumes a cap slot. single
     mode returns the first survivor (or None), multi mode the list in selection
@@ -288,8 +373,8 @@ def map_selection(
             seen_keys.add(key)
             if key in original_by_key:
                 mapped.append(original_by_key[key])
-            elif accept_new_options:
-                mapped.append(str(selected_id))
+            elif kind is not None:
+                mapped.append(_new_entry(selected_id, kind))
             # else: drop silently
 
     if selection_mode == "single":

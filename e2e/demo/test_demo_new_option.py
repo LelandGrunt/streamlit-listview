@@ -7,12 +7,15 @@ from playwright.sync_api import Page, expect
 def test_single_mode_new_option_renders_without_json_error(page: Page):
     """Regression for the st.json bare-string crash.
 
-    The demo defaults to single selection mode. Adding a new option there makes
-    listview() return the typed string (e.g. "Atlantis"). Passing a bare string
-    to st.json() makes Streamlit's frontend JSON.parse() it, which throws
-    "JSON.parse: unexpected character at line 1 column 1". The result panel must
-    render the scalar without that error.
+    With str options a new entry comes back as the typed string (e.g.
+    "Atlantis"). Passing a bare string to st.json() makes Streamlit's frontend
+    JSON.parse() it, which throws "JSON.parse: unexpected character at line 1
+    column 1". The result panel must render the scalar without that error. The
+    built-in cities are dicts, whose new entries come back as dicts, so this
+    test switches to the Empty data source, whose new entries stay strings.
     """
+    page.get_by_role("radio", name="Data", exact=True).click()
+    page.get_by_role("radio", name="Empty", exact=True).click()
     # Enable accept_new_options (single selection mode is the demo default).
     # The native checkbox input is visually hidden behind the BaseWeb switch, so
     # click the associated label text, which Streamlit toggles respond to.
@@ -35,6 +38,22 @@ def test_single_mode_new_option_renders_without_json_error(page: Page):
     ).to_have_count(0)
     # The typed value is surfaced (synthetic row + result panel).
     expect(page.get_by_text("Atlantis").first).to_be_visible()
+
+
+def test_single_mode_new_option_with_dict_options_renders_as_json(page: Page):
+    """The built-in cities are dict options, so a new entry comes back as a
+    dict, which the result panel renders with st.json."""
+    page.get_by_role("radio", name="Behavior", exact=True).click()
+    page.get_by_text("Accept new options", exact=True).click()
+
+    new_option = page.get_by_test_id("stListviewNewOption")
+    expect(new_option).to_be_visible(timeout=10000)
+    new_option.fill("Atlantis")
+    new_option.press("Enter")
+
+    expect(page.get_by_text("1 selected")).to_be_visible(timeout=10000)
+    expect(page.get_by_test_id("stException")).to_have_count(0)
+    expect(page.get_by_test_id("stJson")).to_contain_text("Atlantis")
 
 
 def test_added_option_persists_after_picking_another_single_mode(page: Page):

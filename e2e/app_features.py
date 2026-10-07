@@ -75,6 +75,19 @@ created = listview(
 )
 st.text(f"newopt_echo={created!r}")
 
+st.subheader("Accept new options (int)")
+# height=100 (the minimum) makes the frame overflow, so the refusal hint can
+# only be seen if the frame scrolls to it.
+created_int = listview(
+    "Add a number",
+    [1, 2, 3],
+    selection_mode="multi",
+    accept_new_options=True,
+    height=100,
+    key="newopt_int",
+)
+st.text(f"newopt_int_echo={created_int!r}")
+
 st.subheader("Select all")
 if "selectall_runs" not in st.session_state:
     st.session_state.selectall_runs = 0

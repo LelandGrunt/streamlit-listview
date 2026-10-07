@@ -1025,3 +1025,16 @@
 }
 /* Its input + plus glyph are styled by the shared themed-input recipe above
    (.listview-new-option__input / __icon), so nothing field-specific is left. */
+
+/* The hint below the add row when a typed value is refused (int options accept
+   only whole numbers): st.caption's colour and size, aligned with the field's
+   left edge. No red and no frame change — st.text_input has no error state.
+   It is a role="status" live region that stays in the DOM, so it is padded
+   only when filled: empty, it adds no height below the row. */
+.listview-new-option__hint {
+  color: var(--listview-faded-text-60);
+  font-size: calc(var(--st-base-font-size, 1rem) * 0.875);
+}
+.listview-new-option__hint:not(:empty) {
+  padding: 0 0.5rem 0.375rem;
+}

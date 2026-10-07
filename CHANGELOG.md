@@ -2,6 +2,22 @@
 
 Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **An entry the user adds via `accept_new_options` comes back in the type of the other options.** Before, it always came back as the typed string, so code had to test each returned value with `isinstance`. Now:
+
+  | `options` are …           | The user adds | Before    | Now                                 |
+  | ------------------------- | ------------- | --------- | ----------------------------------- |
+  | all dicts                 | `Mango`       | `"Mango"` | `{"id": "Mango", "label": "Mango"}` |
+  | all `int`                 | `42`          | `"42"`    | `42`                                |
+  | all `str`, mixed, or none | `Mango`       | `"Mango"` | `"Mango"`                           |
+
+  The same rule covers an unknown `default` and a selected id that a keyed widget keeps after you remove it from `options`. If your code tested a returned value for `str` to find added entries, test for the option's type instead: with dict options an added entry is a dict whose `id` is the typed text.
+- **With int options, the add field accepts only whole numbers.** It takes `42` or `-5` and refuses `abc`, `1.5`, `007` and `+5`, with the hint "Enter a whole number" below the field. Text that matches an existing row's id or label still selects that row, but users can no longer add free text to a list of int options.
+- **With int options, an unknown `default` must be a whole number.** `default="abc"` raises `ValueError`; `default=42` and `default="42"` both come back as `42`.
+
 ## [1.0.1] - 2026-10-04
 
 Faster large lists. The API and behaviour are unchanged, so upgrading needs no edits.
@@ -22,5 +38,6 @@ The first render, scrolling, and the data sent per rerun are unchanged. A rerun 
 
 First stable release.
 
+[Unreleased]: https://github.com/LelandGrunt/streamlit-listview/compare/v1.0.1...HEAD
 [1.0.1]: https://github.com/LelandGrunt/streamlit-listview/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/LelandGrunt/streamlit-listview/releases/tag/v1.0.0

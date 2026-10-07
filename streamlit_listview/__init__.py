@@ -5,9 +5,12 @@ from typing import Any, Callable, Iterable, Literal
 import streamlit as st
 
 from ._options import (
+    NewOptionKind,
     _id_key,
+    _parse_new_int_id,
     _validate_id,
     map_selection,
+    new_option_kind,
     normalize_options,
     sort_items,
 )
@@ -211,7 +214,7 @@ def _resolve_default_ids(
     default: Any,
     selection_mode: str,
     id_to_original: dict[Any, Any],
-    accept_new_options: bool,
+    kind: NewOptionKind | None,
 ) -> list[Any]:
     """Resolve the `default` argument to a list of option ids.
 
@@ -221,8 +224,11 @@ def _resolve_default_ids(
     as an option id (``_validate_id``: exactly str or int, bool rejected, ints
     within the JS safe range) — a default is seeded straight into the frontend
     selection, so it crosses the same JSON/``String(id)`` boundary. When
-    accept_new_options is False, every resolved id must additionally name a row
-    of the options, membership judged by ``_id_key`` rendered row identity.
+    ``kind`` is None (``accept_new_options`` off), every resolved id must
+    additionally name a row of the options, membership judged by ``_id_key``
+    rendered row identity. When ``kind`` is "int", an id naming no row must be
+    a whole number — an int, or a str that ``_parse_new_int_id`` accepts —
+    because it comes back as an int.
     """
     if selection_mode == "single":
         if isinstance(default, (list, tuple, set)):
@@ -292,12 +298,27 @@ def _resolve_default_ids(
         # Gated on default_ids: option_by_key is a full pass over the options,
         # which the common default=None call must not pay on every rerun.
         option_by_key = {_id_key(item_id): item_id for item_id in id_to_original}
-        if not accept_new_options:
+        if kind is None:
             for did in default_ids:
                 if _id_key(did) not in option_by_key:
                     raise ValueError(
                         f"default id {did!r} is not present in options "
                         "(set accept_new_options=True to allow unknown defaults)."
+                    )
+        elif kind == "int":
+            # With int options a new entry must be a whole number — the rule the
+            # frontend's add field applies to typed text — because it comes back
+            # as an int; an unknown "abc" would come back as a str instead. A
+            # bool never gets here: _validate_id rejected it above.
+            for did in default_ids:
+                if _id_key(did) not in option_by_key and not (
+                    isinstance(did, int) or _parse_new_int_id(did) is not None
+                ):
+                    raise ValueError(
+                        f"default id {did!r} is not a whole number written "
+                        "plainly. With int options, a new entry must be a whole "
+                        "number such as 42 or -5: no leading zero, plus sign or "
+                        "separator, and an absolute value of at most 2**53 - 1."
                     )
         # Ship each matched default in the OPTION's own spelling, not the
         # caller's. The seed is both the mount display and the V2 `default=`
@@ -432,6 +453,14 @@ def listview(
     formatter — that is the ``df.to_dict("records")`` NULL-cell shape. ``None``
     (the default) means no formatter: the label is ``str(id)``. The option handed
     over is your own object, not a copy; treat it as read-only.
+
+    ``accept_new_options`` lets the user add an entry that is not in
+    ``options``. The entry comes back in the type of the other options: a
+    ``{"id": text, "label": text}`` dict when every option is a dict, an int
+    when every option is an int — the add field then accepts only whole numbers
+    such as ``42`` — and the typed string otherwise (str, mixed or no options).
+    An unknown ``default`` follows the same rule; with int options it must be a
+    whole number.
     """
     _validate_params(
         label=label,
@@ -462,6 +491,10 @@ def listview(
     items, id_to_original = normalize_options(options, format_func)
     items = sort_items(items, sort, sort_ascending)
 
+    # The type a new entry comes back as (see new_option_kind). None when adding
+    # is off, so the common call skips the pass over the options.
+    kind = new_option_kind(id_to_original) if accept_new_options else None
+
     # No options and no way to add any -> nothing is selectable: default the
     # placeholder prompt to "No options to select" and disable the widget
     # (matching st.multiselect). An explicit placeholder is kept as-is.
@@ -470,9 +503,7 @@ def listview(
         if placeholder is None:
             placeholder = "No options to select"
 
-    default_ids = _resolve_default_ids(
-        default, selection_mode, id_to_original, accept_new_options
-    )
+    default_ids = _resolve_default_ids(default, selection_mode, id_to_original, kind)
 
     if (
         selection_mode == "multi"
@@ -497,6 +528,7 @@ def listview(
         "collapsible_groups": collapsible_groups,
         "collapsed_groups": collapsed_groups,
         "accept_new_options": accept_new_options,
+        "new_option_kind": kind,
         "max_selections": max_selections,
         "placeholder": placeholder,
         "height": height,
@@ -537,6 +569,6 @@ def listview(
         selected_ids,
         id_to_original,
         selection_mode,
-        accept_new_options,
-        max_selections,
+        kind=kind,
+        max_selections=max_selections,
     )
