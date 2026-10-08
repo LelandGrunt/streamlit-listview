@@ -8,11 +8,23 @@ Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](h
 
 - The demo's **Large** dataset offers up to 100,000 items, up from 10,000.
 - The demo turns on Streamlit's websocket compression (`server.enableWebsocketCompression`). At 100,000 options a click or settings change then sends 0.48 MB over the network instead of 6.75 MB, for about 0.1 s more server CPU. An app of your own with a large option list can turn on the same setting.
-- The performance benchmarks also measure 100,000 rows. At that size, in Chromium, the list appears after 2.6 s, and a clicked row highlights after 0.29 s and the app settles after 1.3 s. The options take 6.7 MB to send, and Streamlit sends them again on every rerun that changes the listview's parameters or, for a listview with a `key`, its selection. See [BENCHMARKS.md](BENCHMARKS.md).
+- The performance benchmarks also measure 100,000 rows. At that size the options take 6.7 MB to send, and Streamlit sends them again on every rerun that changes the listview's parameters or, for a listview with a `key`, its selection. See [BENCHMARKS.md](BENCHMARKS.md).
+- **Each option reports its place in the list and the size of the list** (`aria-posinset`, `aria-setsize`), so a screen reader announces "23,456 of 100,000" also for rows the browser has not drawn. The numbers count the whole list, also while a search narrows it.
 - The performance benchmarks measure dict options that carry a `disabled` key on every row. At 100,000 rows the key makes the options 28 % larger (8.6 MB instead of 6.7 MB), the `listview()` call 20 % slower and a rerun that leaves the options unchanged 12 % slower. Search, clicks, group toggles and scrolling take as long as without the key. A row without the key is enabled, so pass `disabled` only on the rows you disable.
 
 ### Changed
 
+- **The browser lays out and paints only the rows near the visible frame.** Every row stays in the page, but rows outside the frame skip style, layout and paint until the list scrolls to them. Measured in Chromium with 100,000 options in groups of 100 (medians of 3 runs):
+
+  | Measurement                     | Before   | Now      |
+  | ------------------------------- | -------- | -------- |
+  | The list appears                | 2,310 ms | 1,120 ms |
+  | The app settles after a click   | 1,254 ms | 475 ms   |
+  | A rerun with unchanged options  | 780 ms   | 384 ms   |
+  | Clearing the search             | 1,797 ms | 550 ms   |
+  | A scroll frame, 95th percentile | 158 ms   | 18 ms    |
+
+  At 1,000 options the times stay within the spread of the measurement. In Chromium a screen reader sees only the rows near the frame, and the other rows as the list scrolls to them; each row's `aria-posinset` and `aria-setsize` give its place in the whole list. Firefox before 125 and Safari before 18 ignore the setting and draw every row as before.
 - **An entry the user adds via `accept_new_options` comes back in the type of the other options.** Before, it always came back as the typed string, so code had to test each returned value with `isinstance`. Now:
 
   | `options` are …           | The user adds | Before    | Now                                 |

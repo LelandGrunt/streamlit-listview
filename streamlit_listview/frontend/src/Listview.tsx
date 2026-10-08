@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, FC, MouseEvent } from "react";
 import type { FrontendRendererArgs } from "@streamlit/component-v2-lib";
 import type { Id, ListviewData, ListviewItem, ListviewState } from "./types";
@@ -14,6 +14,11 @@ import { useFilter } from "./hooks/useFilter";
 import { useCollapse } from "./hooks/useCollapse";
 import { useScrollToItem } from "./hooks/useScrollToItem";
 import { useColorScheme } from "./hooks/useColorScheme";
+import { useRowHeight } from "./hooks/useRowHeight";
+import {
+  FORGET_CLASS,
+  useResetChunkHeights,
+} from "./hooks/useResetChunkHeights";
 import { disabledIdSet, idKey, itemIdByKey, parseNewIntId } from "./utils/ids";
 import { reuseUnchangedItems, runsByKey } from "./utils/items";
 import { foldForMatch } from "./utils/text";
@@ -34,14 +39,25 @@ const NO_TARGET_IDS: Id[] = [];
 const NO_DISABLED_IDS: Set<Id> = new Set();
 const EMPTY_ID_MAP: Map<string, Id> = new Map();
 
-// A block renders its rows in keyed Fragment chunks, not as one flat run. When
-// an update brings many new rows into ONE parent at once — clearing or
-// backspacing the search, expanding a big group, options growing on a rerun —
-// React places each new row on its own and, for each, searches forward through
-// the following siblings for a settled DOM node to insert before
-// (`getHostSibling`). Across thousands of new siblings that search is O(k²):
-// clearing the search over 50k ungrouped rows took ~7 s (~40 s on a 4×-slowed
-// CPU), against ~0.85 s for the same rows grouped 100 to a block.
+// A block renders its rows in keyed "render chunks" of ROW_CHUNK_SIZE rows,
+// each a `div.listview-chunk`, not as one flat run. Two costs set that shape.
+//
+// React: when an update brings many new rows into ONE parent at once —
+// clearing or backspacing the search, expanding a big group, options growing
+// on a rerun — React places each new row on its own and, for each, searches
+// forward through the following siblings for a settled DOM node to insert
+// before (`getHostSibling`). Across thousands of new siblings that search is
+// O(k²): clearing the search over 50k ungrouped rows took ~7 s (~40 s on a
+// 4×-slowed CPU), against ~0.85 s for the same rows grouped 100 to a block.
+//
+// The browser: listview.css gives each chunk `content-visibility: auto`, so a
+// chunk outside the scrollport skips style, layout and paint, sized by an
+// estimate (its row count, `--listview-chunk-rows`, times the measured row
+// height, see useRowHeight). In the 2026-10-07 spike at 100k rows a click
+// settled in 0.40 s instead of 1.27 s and scrolling ran at 60 Hz: Chrome's
+// lifecycle over the whole DOM, not script, was the cost. Every row stays in
+// the DOM, but the accessibility tree holds only the rendered chunks, which is
+// why each row reports aria-posinset / aria-setsize.
 //
 // A row's chunk is fixed by its place in the UNFILTERED list (`chunkOf` below),
 // never by the filtered rows: a filter then cannot move a row into another
@@ -50,10 +66,12 @@ const EMPTY_ID_MAP: Map<string, Id> = new Map();
 // settled survivor — which ends each sibling search within that chunk — or in a
 // wholly new chunk, inserted with one search for all of its rows. (Keying a
 // chunk by its first FILTERED row instead remounted the survivors on every
-// scattered narrowing keystroke: 2–3× slower at 50k.) Fragments add no DOM, so
-// rows stay direct children of their block, which scrollToId's sticky-header
-// check and the role="group" structure rely on. 100 is the group size that
-// measured fine.
+// scattered narrowing keystroke: 2–3× slower at 50k.) A chunk carries
+// role="none", so assistive technology sees its rows as children of the
+// block's role="group" (or of the listbox), and scrollToId finds the block with
+// closest(".listview-group"), because a row's parent is its chunk. 100 is the
+// group size that measured fine; at the default 300 px height the browser
+// renders at most two chunks.
 const ROW_CHUNK_SIZE = 100;
 
 export interface ListviewProps {
@@ -89,6 +107,38 @@ function groupItems(items: ListviewItem[]): RenderGroup[] {
     groups[idx].items.push(item);
   }
   return groups;
+}
+
+/**
+ * The render blocks for `items`, in render order: the caller's options grouped
+ * as given, then the accept_new_options rows in a block of their OWN at the
+ * very bottom.
+ *
+ * Grouping the two sets separately is what makes the documented promise true —
+ * "entries added via accept_new_options are appended at the bottom": a single
+ * pass merges each ungrouped added row into the FIRST ungrouped block, which
+ * for a list that mixes grouped and ungrouped options can sit ABOVE the group
+ * headers, so an added entry appeared in the middle of the list.
+ *
+ * ONE function serves the rendered (filtered) rows and the positions
+ * (aria-posinset), which count the unfiltered rows: two copies of the block
+ * order could disagree, and a row would announce a place it is not shown at.
+ */
+function blocksFor(
+  items: ListviewItem[],
+  newOptionItems: ListviewItem[],
+): RenderGroup[] {
+  if (newOptionItems.length === 0) {
+    return groupItems(items);
+  }
+  const addedKeys = new Set(newOptionItems.map((it) => idKey(it.id)));
+  const known: ListviewItem[] = [];
+  const added: ListviewItem[] = [];
+  for (const item of items) {
+    (addedKeys.has(idKey(item.id)) ? added : known).push(item);
+  }
+  // groupItems([]) is [], so a fully filtered-out set adds no empty block.
+  return [...groupItems(known), ...groupItems(added)];
 }
 
 function optionDomId(id: Id): string {
@@ -128,6 +178,14 @@ function sameNewOptionRows(a: ListviewItem[], b: ListviewItem[]): boolean {
 
 /** Where a scrolled-to row lands in the frame (the ScrollLogicalPosition subset we implement). */
 type ScrollBlock = "center" | "nearest";
+
+/**
+ * How many frames scrollToId waits for the target row's chunk to drop
+ * FORGET_CLASS before it measures the row anyway. useResetChunkHeights keeps
+ * the class on for two frames; the bound only keeps a class that somehow
+ * stayed from parking the scroll forever.
+ */
+const FORGET_WAIT_FRAMES = 4;
 
 /**
  * The rendered row carrying `domId` inside `body`, or null when it is not
@@ -386,26 +444,45 @@ export const Listview: FC<ListviewProps> = ({
     groupNames,
   });
 
-  // Render blocks, in render order: the caller's options grouped as given, then
-  // the accept_new_options rows in a block of their OWN at the very bottom.
-  // Grouping the two sets separately is what makes the documented promise true —
-  // "entries added via accept_new_options are appended at the bottom": a single
-  // pass merges each ungrouped added row into the FIRST ungrouped block, which
-  // for a list that mixes grouped and ungrouped options can sit ABOVE the group
-  // headers, so an added entry appeared in the middle of the list.
-  const renderGroups = useMemo(() => {
-    if (newOptionItems.length === 0) {
-      return groupItems(visibleItems);
+  // The blocks over EVERY row, filtered or not — the order aria-posinset counts
+  // in — and the blocks the list renders (see blocksFor). Not filtering, they
+  // are the same blocks: useFilter hands back `allItems` itself, so the
+  // unfiltered blocks are reused rather than built twice.
+  const allBlocks = useMemo(
+    () => blocksFor(allItems, newOptionItems),
+    [allItems, newOptionItems],
+  );
+  const renderGroups = useMemo(
+    () =>
+      visibleItems === allItems
+        ? allBlocks
+        : blocksFor(visibleItems, newOptionItems),
+    [visibleItems, allItems, allBlocks, newOptionItems],
+  );
+
+  // Each row's one-based place in the whole list, in render order, for
+  // aria-posinset; aria-setsize is the number of places handed out, which is
+  // every row, filtered or not. (`rowPosition.size` rather than
+  // `allItems.length`: the same number, but oxlint's react/refs rule reads
+  // `allItems`, built from the render-body ref above, captured in the row
+  // callback as a ref read during render.) The browser leaves the rows of
+  // a skipped render chunk out of the accessibility tree, so without them a
+  // screen reader announced "23 of 200" in a list of 100,000. Keyed by the item
+  // object and built from the UNFILTERED blocks: a search keystroke or a click
+  // leaves every value alone, so the memoized rows keep bailing out. A search
+  // therefore announces places in the whole list, not among the matches.
+  const rowPosition = useMemo(() => {
+    const byItem = new Map<ListviewItem, number>();
+    let position = 0;
+    for (const block of allBlocks) {
+      for (const item of block.items) {
+        position += 1;
+        byItem.set(item, position);
+      }
     }
-    const addedKeys = new Set(newOptionItems.map((it) => idKey(it.id)));
-    const known: ListviewItem[] = [];
-    const added: ListviewItem[] = [];
-    for (const item of visibleItems) {
-      (addedKeys.has(idKey(item.id)) ? added : known).push(item);
-    }
-    // groupItems([]) is [], so a fully filtered-out set adds no empty block.
-    return [...groupItems(known), ...groupItems(added)];
-  }, [visibleItems, newOptionItems]);
+    return byItem;
+  }, [allBlocks]);
+  const setSize = rowPosition.size;
 
   // Each row's render chunk: its place among ALL rows, filtered or not, in
   // steps of ROW_CHUNK_SIZE (see there for why it must not follow the filter).
@@ -588,7 +665,7 @@ export const Listview: FC<ListviewProps> = ({
   // fold yanked the host page away from whatever the user was reading, on first
   // render and on every rerun that changed `default_ids` by value.
   const scrollToId = useCallback((id: Id, block: ScrollBlock = "center") => {
-    requestAnimationFrame(() => {
+    const attempt = (framesLeft: number): void => {
       const body = bodyRef.current;
       // Unreachable in practice: the body renders unconditionally, and this
       // callback only runs after a commit. It guards an unmount racing the rAF.
@@ -599,6 +676,18 @@ export const Listview: FC<ListviewProps> = ({
       const node = findRowNode(body, optionDomId(id));
       if (node === null) {
         return; // row not rendered (e.g. filtered out) → nothing to scroll to
+      }
+      // A row's parent is its render chunk. While the chunk carries
+      // FORGET_CLASS (content-visibility: hidden, see useResetChunkHeights) the
+      // row has no geometry, so a jump to a new default inside a chunk whose
+      // rows changed on the same rerun would measure a zero rect. Wait a frame
+      // and look again; the class goes after two.
+      if (
+        framesLeft > 0 &&
+        (node.parentElement as HTMLElement).classList.contains(FORGET_CLASS)
+      ) {
+        requestAnimationFrame(() => attempt(framesLeft - 1));
+        return;
       }
       const frame = body.clientHeight;
       const rowBox = node.getBoundingClientRect();
@@ -620,11 +709,13 @@ export const Listview: FC<ListviewProps> = ({
         // the top of the scrollport, so the band where a row is actually visible
         // starts BELOW it. Bringing a row's top edge to the frame's top edge
         // parked it exactly under that header: ArrowUp / Home focused a row the
-        // user could not see, and Enter selected it. A row always renders inside
-        // a group block whose first child is either that header or a row, so this
-        // is a fixed class-name check with none of the id-escaping hazards of the
-        // row lookup; an ungrouped block has no header and keeps the frame edge.
-        const first = (node.parentElement as HTMLElement)
+        // user could not see, and Enter selected it. A row always renders in a
+        // render chunk inside a group block, and the block's first child is
+        // either that header or a chunk, so this is a fixed class-name check
+        // with none of the id-escaping hazards of the row lookup; an ungrouped
+        // block has no header and keeps the frame edge. closest(), not
+        // parentElement: a row's parent is its chunk.
+        const first = (node.closest(".listview-group") as HTMLElement)
           .firstElementChild as Element;
         const stickyHeight = first.classList.contains("listview-group-header")
           ? first.getBoundingClientRect().height
@@ -635,7 +726,8 @@ export const Listview: FC<ListviewProps> = ({
           body.scrollTop = top + rowBox.height - frame; // below → bottom edge in
         }
       }
-    });
+    };
+    requestAnimationFrame(() => attempt(FORGET_WAIT_FRAMES));
   }, []);
 
   // Keyboard focus moves only need the row brought just inside the frame:
@@ -764,6 +856,17 @@ export const Listview: FC<ListviewProps> = ({
     },
     [widgetDisabled, allItems, selection, data.new_option_kind, revealHint],
   );
+
+  // The first row's height, published on the listbox for the size estimate of
+  // the render chunks the browser skips (see ROW_CHUNK_SIZE). A layout effect,
+  // so it lands before the first paint and before useScrollToItem's rAF
+  // measures where a default row lies.
+  useRowHeight(listboxRef);
+  // After a commit that changed the blocks, a skipped chunk whose rows changed
+  // forgets the height the browser remembered from its last render (see
+  // useResetChunkHeights): otherwise a search after scrolling left every chunk
+  // scrolled past at the height of the rows it no longer holds.
+  useResetChunkHeights(listboxRef, renderBlocks);
 
   useScrollToItem({
     defaultIds: data.default_ids,
@@ -916,12 +1019,26 @@ export const Listview: FC<ListviewProps> = ({
                   />
                 )}
                 {chunks.map((run) => (
-                  <Fragment key={run.key}>
+                  <div
+                    key={run.key}
+                    className="listview-chunk"
+                    role="none"
+                    // The row count the skipped chunk's size estimate multiplies
+                    // by (listview.css). Unitless: React sets a custom property
+                    // as given.
+                    style={
+                      {
+                        "--listview-chunk-rows": run.items.length,
+                      } as CSSProperties
+                    }
+                  >
                     {run.items.map((item) => (
                       <ListItem
                         key={idKey(item.id)}
                         item={item}
                         domId={optionDomId(item.id)}
+                        posInSet={rowPosition.get(item) as number}
+                        setSize={setSize}
                         selected={selection.isSelected(item.id)}
                         disabled={Boolean(item.disabled) || widgetDisabled}
                         focused={focusedId === item.id}
@@ -929,7 +1046,7 @@ export const Listview: FC<ListviewProps> = ({
                         onSelect={onItemClick}
                       />
                     ))}
-                  </Fragment>
+                  </div>
                 ))}
               </div>
             ))

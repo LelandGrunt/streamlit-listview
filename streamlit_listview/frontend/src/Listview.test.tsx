@@ -1163,7 +1163,10 @@ function stubGeometry(
   body.getBoundingClientRect = () => ({ top: 0, height: frame }) as DOMRect;
   row.getBoundingClientRect = () =>
     ({ top: top - body.scrollTop, height }) as DOMRect;
-  const headerEl = row.parentElement?.querySelector(".listview-group-header");
+  // The row's parent is its render chunk; the header sits on the group block.
+  const headerEl = row
+    .closest(".listview-group")
+    ?.querySelector(".listview-group-header");
   if (headerEl) {
     headerEl.getBoundingClientRect = () =>
       ({ top: 0, height: header }) as DOMRect;
@@ -1653,10 +1656,10 @@ describe("group blocks", () => {
 
   describe("rows beyond one render chunk", () => {
     // A block renders its rows in chunks of 100 (the cure for React's quadratic
-    // sibling search when thousands of rows enter one parent at once). 250 rows
-    // span three chunks, the last one partial, and the chunks must stay
-    // invisible: the same rows, in the same order, under the same parent — also
-    // while the filter moves rows across chunk boundaries.
+    // sibling search when thousands of rows enter one parent at once, and the
+    // unit the browser skips while it is off-screen). 250 rows span three
+    // chunks, the last one partial: the same rows, in the same order, inside
+    // one block — also while the filter moves rows across chunk boundaries.
     const rowLabel = (i: number) => `Row ${String(i).padStart(3, "0")}`;
     const rowLabels = (from: number, to: number) =>
       Array.from({ length: to - from }, (_, k) => rowLabel(from + k));
@@ -1669,13 +1672,53 @@ describe("group blocks", () => {
     const shown = () =>
       screen.queryAllByRole("option").map((o) => o.textContent);
 
-    it("renders every row in order, all children of the one block", () => {
-      render(
+    it("renders a block's rows in chunk elements of 100 that assistive technology skips", () => {
+      const { container } = render(
         <Listview data={baseData({ items: rows() })} setStateValue={vi.fn()} />,
       );
       const options = screen.getAllByRole("option");
       expect(options.map((o) => o.textContent)).toEqual(rowLabels(0, 250));
-      expect(new Set(options.map((o) => o.parentElement)).size).toBe(1);
+      const chunks = Array.from(
+        container.querySelectorAll<HTMLElement>(".listview-chunk"),
+      );
+      expect(chunks.map((c) => c.children.length)).toEqual([100, 100, 50]);
+      for (const chunk of chunks) {
+        // role="none": the options stay children of the block's group (or
+        // of the listbox) for assistive technology
+        expect(chunk.getAttribute("role")).toBe("none");
+        // one block holds every chunk
+        expect(chunk.parentElement).toBe(chunks[0].parentElement);
+        // the row count the skipped chunk's size estimate multiplies by
+        expect(chunk.style.getPropertyValue("--listview-chunk-rows")).toBe(
+          String(chunk.children.length),
+        );
+      }
+      for (const option of options) {
+        expect(option.parentElement?.classList.contains("listview-chunk")).toBe(
+          true,
+        );
+      }
+    });
+
+    it("sizes each chunk's estimate by the rows it shows while a filter narrows it", () => {
+      // "Row 24" matches Row 240..249: ten rows, all in the third chunk. The
+      // chunk must estimate ten rows, not a hundred, or a skipped chunk would
+      // reserve the scroll height of rows the filter removed.
+      const { container } = render(
+        <Listview
+          data={baseData({ items: rows(), enable_search: true })}
+          setStateValue={vi.fn()}
+        />,
+      );
+      fireEvent.change(screen.getByTestId("stListviewSearch"), {
+        target: { value: "Row 24" },
+      });
+      const chunks = Array.from(
+        container.querySelectorAll<HTMLElement>(".listview-chunk"),
+      );
+      expect(
+        chunks.map((c) => c.style.getPropertyValue("--listview-chunk-rows")),
+      ).toEqual(["10"]);
     });
 
     it("keeps every row once and in order as the filter crosses chunk boundaries", () => {
@@ -1739,7 +1782,7 @@ describe("group blocks", () => {
       expect(shown()).toEqual(rowLabels(0, 250));
       const group = screen.getByRole("group");
       for (const option of screen.getAllByRole("option")) {
-        expect(option.parentElement).toBe(group);
+        expect(option.closest('[role="group"]')).toBe(group);
       }
     });
   });
@@ -1757,6 +1800,150 @@ describe("group blocks", () => {
     expect(
       screen.getAllByRole("group").map((g) => g.getAttribute("aria-label")),
     ).toEqual(["Fruit", "Veg"]);
+  });
+});
+
+// ── Position in the set (aria-posinset / aria-setsize) ──────────────────────
+
+describe("position in the set", () => {
+  // The browser leaves the rows of a skipped render chunk out of the
+  // accessibility tree, so every row reports its place in the WHOLE list and
+  // the row count itself. Both depend on the items only: a search or a click
+  // must not change them (or re-render the rows).
+  const positions = () =>
+    screen
+      .getAllByRole("option")
+      .map((o) => [
+        o.textContent,
+        o.getAttribute("aria-posinset"),
+        o.getAttribute("aria-setsize"),
+      ]);
+
+  it("numbers the rows in render order and counts every row, disabled ones too", () => {
+    render(<Listview data={makeData()} setStateValue={vi.fn()} />);
+    expect(positions()).toEqual([
+      ["Apple", "1", "4"],
+      ["Banana", "2", "4"],
+      ["Carrot", "3", "4"],
+      ["Disabled", "4", "4"],
+    ]);
+  });
+
+  it("follows the rendered order when groups interleave in options", () => {
+    // Grouping renders Fruit's rows together, so Banana is shown second
+    // although it is the third option.
+    render(
+      <Listview
+        data={baseData({
+          items: [
+            { id: "a", label: "Apple", group: "Fruit" },
+            { id: "c", label: "Carrot", group: "Veg" },
+            { id: "b", label: "Banana", group: "Fruit" },
+          ],
+        })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(positions()).toEqual([
+      ["Apple", "1", "3"],
+      ["Banana", "2", "3"],
+      ["Carrot", "3", "3"],
+    ]);
+  });
+
+  it("keeps each row's place in the whole list while a search narrows it", () => {
+    render(
+      <Listview
+        data={makeData({ enable_search: true })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByTestId("stListviewSearch"), {
+      target: { value: "car" },
+    });
+    expect(positions()).toEqual([["Carrot", "3", "4"]]);
+  });
+
+  it("counts the rows of a collapsed group", async () => {
+    const user = userEvent.setup();
+    render(
+      <Listview
+        data={makeData({ collapsible_groups: true })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /Fruit/ }));
+    expect(positions()).toEqual([
+      ["Carrot", "3", "4"],
+      ["Disabled", "4", "4"],
+    ]);
+  });
+
+  it("keeps the numbers when a click selects a row", async () => {
+    const user = userEvent.setup();
+    render(<Listview data={makeData()} setStateValue={vi.fn()} />);
+    await user.click(screen.getByText("Banana"));
+    expect(
+      screen.getByText("Banana").closest('[role="option"]'),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(positions()).toEqual([
+      ["Apple", "1", "4"],
+      ["Banana", "2", "4"],
+      ["Carrot", "3", "4"],
+      ["Disabled", "4", "4"],
+    ]);
+  });
+
+  it("puts an added option last and counts it", async () => {
+    const user = userEvent.setup();
+    render(
+      <Listview
+        data={makeData({
+          accept_new_options: true,
+          new_option_kind: "str",
+          selection_mode: "multi",
+        })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    await user.type(screen.getByTestId("stListviewNewOption"), "Mango");
+    await user.keyboard("{Enter}");
+    expect(positions()).toEqual([
+      ["Apple", "1", "5"],
+      ["Banana", "2", "5"],
+      ["Carrot", "3", "5"],
+      ["Disabled", "4", "5"],
+      ["Mango", "5", "5"],
+    ]);
+  });
+});
+
+describe("row height for the skipped chunks' size estimate", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("publishes the first row's height on the listbox and keeps it across a rerun", () => {
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+      height: 35.5,
+    } as DOMRect);
+    const { rerender } = render(
+      <Listview data={makeData()} setStateValue={vi.fn()} />,
+    );
+    const listbox = screen.getByRole("listbox");
+    expect(listbox.style.getPropertyValue("--listview-row-height")).toBe(
+      "35.5px",
+    );
+    // a rerun that restyles the container root leaves the listbox alone
+    rerender(
+      <Listview
+        data={makeData({ height: 480, item_height: 44 })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(listbox.style.getPropertyValue("--listview-row-height")).toBe(
+      "35.5px",
+    );
   });
 });
 
@@ -1900,6 +2087,71 @@ describe("keyboard scroll stays inside the list body", () => {
     const body = setup(0, "Carrot", 260);
     fireEvent.keyDown(screen.getByRole("listbox"), { key: "End" });
     expect(body.scrollTop).toBe(180); // 260 + 20 - 100
+  });
+
+  describe("while the row's chunk is forgetting its remembered height", () => {
+    // useResetChunkHeights hides a skipped chunk whose rows changed for two
+    // frames (content-visibility: hidden, class listview-chunk--forget), and a
+    // row inside hidden content reports no geometry. A jump to a new default
+    // inside such a chunk, on the rerun that changed it, therefore has to wait
+    // until the class is gone before it measures the row, or it scrolls to
+    // wherever a zero rect puts it.
+    let frames: FrameRequestCallback[] = [];
+    const nextFrame = () => {
+      const due = frames;
+      frames = [];
+      for (const callback of due) {
+        callback(0);
+      }
+    };
+    const FORGET = "listview-chunk--forget";
+
+    beforeEach(() => {
+      frames = [];
+      vi.stubGlobal(
+        "requestAnimationFrame",
+        (callback: FrameRequestCallback) => {
+          frames.push(callback);
+          return frames.length;
+        },
+      );
+    });
+
+    it("measures the row only once its chunk has forgotten", () => {
+      const body = setup(0, "Carrot", 260);
+      const chunk = rowFor("Carrot").parentElement as HTMLElement;
+      chunk.classList.add(FORGET);
+      fireEvent.keyDown(screen.getByRole("listbox"), { key: "End" });
+      nextFrame();
+      expect(body.scrollTop).toBe(0); // hidden: not measured
+      nextFrame();
+      expect(body.scrollTop).toBe(0); // still hidden
+      chunk.classList.remove(FORGET);
+      nextFrame();
+      expect(body.scrollTop).toBe(180); // 260 + 20 - 100
+    });
+
+    it("gives up waiting after four frames and measures anyway", () => {
+      // The class never stays longer than two frames; the bound only keeps a
+      // stuck class from parking the scroll forever.
+      const body = setup(0, "Carrot", 260);
+      (rowFor("Carrot").parentElement as HTMLElement).classList.add(FORGET);
+      fireEvent.keyDown(screen.getByRole("listbox"), { key: "End" });
+      for (let frame = 1; frame <= 4; frame += 1) {
+        nextFrame();
+        expect(body.scrollTop).toBe(0);
+      }
+      nextFrame();
+      expect(body.scrollTop).toBe(180);
+    });
+
+    it("scrolls at once when the chunk is not forgetting", () => {
+      const body = setup(0, "Carrot", 260);
+      fireEvent.keyDown(screen.getByRole("listbox"), { key: "End" });
+      nextFrame();
+      expect(body.scrollTop).toBe(180);
+      expect(frames).toHaveLength(0); // no second frame requested
+    });
   });
 
   it("brings a row above the frame in by its top edge", () => {

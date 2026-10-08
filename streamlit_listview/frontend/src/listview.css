@@ -223,6 +223,36 @@
   border-bottom: 1px solid var(--st-border-color, rgba(49, 51, 63, 0.2));
 }
 
+/* A render chunk (ROW_CHUNK_SIZE rows, see Listview.tsx). Outside the
+   scrollport the browser skips its style, layout and paint: at 100,000 rows
+   that work, over every row, was most of a click's and a rerun's main-thread
+   time. A skipped chunk is as tall as its own row count (--listview-chunk-rows,
+   set on the chunk) times the first row's measured height
+   (--listview-row-height, published on the listbox by useRowHeight; the
+   fallback is a one-line row at the default font size). `content-visibility:
+   auto` implies `auto` here, so the browser keeps a chunk it has rendered at
+   that rendered height while skipped; useResetChunkHeights makes it forget
+   that height when the chunk's rows change. The rule writes no `auto` itself,
+   because the forget rule below works only where nothing else supplies it.
+   The row's highlight pill and focus ring paint inside the row (inset 3px,
+   ring 2px), so the chunk's paint containment clips nothing. An engine without
+   content-visibility ignores both declarations and renders every row. */
+.listview-chunk {
+  content-visibility: auto;
+  contain-intrinsic-block-size: calc(
+    var(--listview-row-height, 2.25rem) * var(--listview-chunk-rows, 100)
+  );
+}
+
+/* Set for two frames by useResetChunkHeights on a skipped chunk whose rows
+   changed. `hidden` keeps the chunk skipped but implies no `auto`, so the
+   browser drops the height the chunk had when it last rendered: after a
+   search, a chunk the user had scrolled past takes the estimate for the rows
+   it holds now instead of the height of the rows it held before. */
+.listview-chunk.listview-chunk--forget {
+  content-visibility: hidden;
+}
+
 /* One option row. Positioned and isolated so its highlight pill (::before,
    z-index -1) paints behind the label but inside the row — without the
    isolation it would drop behind the list surface and never show. */

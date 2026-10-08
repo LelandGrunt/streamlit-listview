@@ -888,3 +888,35 @@ describe("Milestone C feature styling", () => {
     );
   });
 });
+
+describe("listview.css render chunks", () => {
+  it("lets an off-screen render chunk skip its rows' style, layout and paint", () => {
+    const chunk = css.match(/\.listview-chunk\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(chunk).toMatch(/content-visibility:\s*auto\s*;/);
+  });
+
+  it("sizes a skipped chunk as its own row count times the measured row height", () => {
+    // The chunk is as tall as its rows (--listview-chunk-rows, set per chunk)
+    // times the first row's height (--listview-row-height, published by
+    // useRowHeight), with a one-line row and a full chunk as the fallbacks.
+    // No `auto`: the browser would keep a skipped chunk at its last rendered
+    // height, so a chunk scrolled past before a search kept the height of the
+    // rows the search removed (e2e/test_performance.py measures it).
+    const chunk = css.match(/\.listview-chunk\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(chunk).toMatch(
+      /contain-intrinsic-block-size:\s*calc\(\s*var\(--listview-row-height,\s*2\.25rem\)\s*\*\s*var\(--listview-chunk-rows,\s*100\)\s*\)\s*;/,
+    );
+    expect(chunk).not.toMatch(/contain-intrinsic[^;]*\bauto\b/);
+  });
+
+  it("lets a skipped chunk forget its remembered height through content-visibility: hidden", () => {
+    // useResetChunkHeights puts the class on a skipped chunk whose rows
+    // changed: `hidden` implies no `auto`, so the browser drops the height the
+    // chunk had when it last rendered, and the chunk stays skipped. It must
+    // out-rank the base rule, hence the two classes.
+    const forget =
+      css.match(/\.listview-chunk\.listview-chunk--forget\s*\{[^}]*\}/)?.[0] ??
+      "";
+    expect(forget).toMatch(/content-visibility:\s*hidden\s*;/);
+  });
+});

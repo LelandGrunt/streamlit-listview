@@ -12,6 +12,8 @@ describe("ListItem", () => {
       <ListItem
         item={base}
         domId="listview-opt-a"
+        posInSet={1}
+        setSize={1}
         selected={false}
         disabled={false}
         focused={false}
@@ -31,6 +33,8 @@ describe("ListItem", () => {
       <ListItem
         item={base}
         domId="listview-opt-a"
+        posInSet={1}
+        setSize={1}
         selected={true}
         disabled={false}
         focused={false}
@@ -51,6 +55,8 @@ describe("ListItem", () => {
       <ListItem
         item={base}
         domId="listview-opt-a"
+        posInSet={1}
+        setSize={1}
         selected={false}
         disabled={false}
         focused={false}
@@ -69,6 +75,8 @@ describe("ListItem", () => {
       <ListItem
         item={{ id: "a", label: "Apple", disabled: true }}
         domId="listview-opt-a"
+        posInSet={1}
+        setSize={1}
         selected={false}
         disabled={true}
         focused={false}
@@ -89,6 +97,8 @@ describe("ListItem", () => {
       <ListItem
         item={base}
         domId="listview-opt-a"
+        posInSet={1}
+        setSize={1}
         selected={false}
         disabled={false}
         focused={true}
@@ -98,5 +108,24 @@ describe("ListItem", () => {
     );
     expect(container.querySelector(".listview-item--focused")).not.toBeNull();
     expect(container.querySelector(".listview-item--muted")).not.toBeNull();
+  });
+
+  it("reports its place in the whole list through aria-posinset and aria-setsize", () => {
+    render(
+      <ListItem
+        item={base}
+        domId="listview-opt-a"
+        posInSet={23456}
+        setSize={100000}
+        selected={false}
+        disabled={false}
+        focused={false}
+        muted={false}
+        onSelect={vi.fn()}
+      />,
+    );
+    const opt = screen.getByRole("option");
+    expect(opt.getAttribute("aria-posinset")).toBe("23456");
+    expect(opt.getAttribute("aria-setsize")).toBe("100000");
   });
 });

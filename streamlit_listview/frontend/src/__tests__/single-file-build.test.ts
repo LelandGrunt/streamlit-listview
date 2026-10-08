@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 // Verifies the V2 single-file invariant AFTER a production build:
@@ -21,5 +21,19 @@ describe("single-file build output", () => {
   it("emits exactly one index-*.css", () => {
     const css = readdirSync(buildDir).filter((f) => /^index-.*\.css$/.test(f));
     expect(css).toHaveLength(1);
+  });
+
+  it("keeps the render chunks' content-visibility rule through the CSS minifier", () => {
+    // lightningcss rewrites what it understands (it breaks prefers-color-scheme
+    // and light-dark() in the shadow tree, see CLAUDE.md), so the declarations
+    // the off-screen skipping depends on are checked in the built sheet itself.
+    const name = readdirSync(buildDir).find((f) =>
+      /^index-.*\.css$/.test(f),
+    ) as string;
+    const built = readFileSync(resolve(buildDir, name), "utf8");
+    expect(built).toMatch(/\.listview-chunk\{[^}]*content-visibility:auto/);
+    expect(built).toMatch(
+      /\.listview-chunk\{[^}]*contain-intrinsic-block-size:calc\(/,
+    );
   });
 });

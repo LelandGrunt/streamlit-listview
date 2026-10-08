@@ -140,6 +140,8 @@ One line of the JSONL file, abbreviated:
 | `scroll` | `p50_ms`, `p95_ms`, `max_ms` per frame |
 | `add_option` | `rows_ms`, `painted_ms` |
 
+`dom_nodes` is Chromium's count of Node objects (`Performance.getMetrics`), which includes pseudo-elements such as each row's `::before`. A row inside a skipped render chunk has no pseudo-element, so since the off-screen render chunks the count falls with the skipped rows, by 24 % at 100,000 rows, although the DOM gains one element per chunk.
+
 ---
 
 ## Prerequisites
@@ -347,7 +349,7 @@ How to read it:
 
 - **Mount, search and an unchanged rerun grow with the rows.** Doubling the rows from 50,000 to 100,000 multiplies their time by 1.8 to 2.2.
 - **A changed row, a click's round trip and scrolling grow faster.** The same doubling multiplies their time by 3 to 6. At 100,000 rows a click keeps the main thread busy for 1.2 s (`click_select.task_ms`); the component's script takes 0.15 s of that, and style and layout almost nothing. The rest is Chrome's work outside script, style and layout, which the 2026-10-03 trace at 50,000 rows attributed to pre-paint, hit testing, commit and paint over the whole DOM. Only a smaller DOM reduces it.
-- **100,000 rows work, but slowly.** The demo offers the size so users can see that cost; 50,000 rows remain the practical ceiling of a list that renders every row.
+- **100,000 rows worked, but slowly.** The demo offers the size so users can see that cost. The off-screen render chunks below removed most of it.
 - **The frontend tier** needed no change beyond the new size. Its 100,000-row mount takes 5.6 s grouped and 11.7 s ungrouped in jsdom, and the grouped 100,000-row cell peaked at 3.6 GB of memory.
 
 ### The `disabled` shape
@@ -367,6 +369,34 @@ How to read it:
 - **Everything else stays within the spread.** At 100,000 rows the search, a click, the group toggles, scrolling and `add_option` show ranges that overlap between the two shapes. The disabled rows themselves add no measurable work.
 - **The frontend tier agrees.** Only the 100,000-row `mount` moved beyond its error margin: 5.51 s instead of 5.26 s (+5 %, rme ±3 %). The `disabled` cells ran to completion at every size, 100,000 rows included.
 - **An app can avoid the cost.** A row without the key is enabled, so passing `disabled` only on the rows that are disabled sends the smaller payload.
+
+### Off-screen render chunks
+
+On 2026-10-07 the browser tier compared `main` with the branch that turns each 100-row render chunk into an element with `content-visibility: auto`, on the reference machine with CPU throttling off. Medians of 3 reps, with the low..high range:
+
+| Measurement at 100,000 rows, grouped | Metric | `main` | branch | Δ |
+|---|---|---|---|---|
+| The list appears | `mount.painted_ms` | 2,310 ms (2,252..2,323) | 1,120 ms (1,108..1,141) | −52 % |
+| Click: the row highlights | `click_select.local_painted_ms` | 262 ms (259..272) | 80 ms (76..81) | −70 % |
+| Click: the app settles | `click_select.settled_ms` | 1,254 ms (1,249..1,259) | 475 ms (448..487) | −62 % |
+| Rerun, options unchanged | `rerun_unchanged.settled_ms` | 780 ms (774..853) | 384 ms (383..400) | −51 % |
+| Rerun, one option changed | `rerun_one_changed.settled_ms` | 1,183 ms (1,183..1,186) | 424 ms (422..426) | −64 % |
+| Clearing the search | `search_clear.painted_ms` | 1,797 ms (1,783..1,826) | 550 ms (548..556) | −69 % |
+| Collapsing a group | `group_collapse.painted_ms` | 511 ms (505..519) | 107 ms (107..107) | −79 % |
+| Scroll frame, p95 | `scroll.p95_ms` | 158 ms (156..218) | 18 ms (18..18) | −89 % |
+| Main thread, mount | `mount.task_ms` | 1,993 ms (1,950..2,015) | 804 ms (788..827) | −60 % |
+| Script, mount | `mount.script_ms` | 556 ms (543..565) | 673 ms (655..697) | +21 % |
+
+How to read it:
+
+- **The gain is style, layout and paint.** At mount `layout_ms` falls by 96 % and `recalcstyle_ms` by 87 %.
+- **Script time rises with the rows.** Each row now carries `aria-posinset` and `aria-setsize`, and the frontend keeps a map of row positions. At 100,000 rows that adds 117 ms to the mount's `script_ms` and 19 ms to a click's (136 ms to 155 ms); the spike without the attributes measured 23 ms more at mount. Adding an option changes `aria-setsize` on every row, so `add_option.rows_ms` rises from 74 ms to 207 ms, while its `painted_ms` falls from 317 ms to 232 ms.
+- **Mount still creates every row.** `mount.rows_ms`, the time until the last row exists in the DOM, rises from 914 ms to 1,084 ms with the script, and the mount's painted time still halves.
+- **What remains of a click is the round trip.** At 100,000 rows the click's `roundtrip_ms` is 432 ms of its 475 ms `settled_ms`: Streamlit's rerun with the 6.7 MB options payload, which the render chunks cannot touch.
+- **Sizes.** At 50,000 rows the scenarios in the table fall by 28 to 76 %. At 10,000 rows the mount, a click and clearing the search fall by 22 to 67 %, and an unchanged rerun stays within the spread. At 1,000 rows, measured with 10 reps on both sides, the painted times stay within the spread, and three DOM-update times (`add_option`, `group_collapse`, `search_clear`) rise by 1 to 2 ms. Scrolling runs at the 60 Hz frame time at every size.
+- **The ungrouped shape behaves the same.** A click settles in 380 ms instead of 763 ms, and a scroll frame's p95 falls from 190 ms to 18 ms.
+- **The frontend tier cannot see the gain.** jsdom performs no layout or paint.
+- **The review fix leaves these numbers standing.** `useResetChunkHeights`, added after the final review, runs only when the blocks change, never on a click. A rerun of the 100,000-row cells after it stayed within the spread for the ungrouped shape. The grouped cell ran 3 to 11 % slower, and its unchanged Python call ran 7 % slower with it: the sign of machine load (rule 2), not of the change.
 
 ---
 
