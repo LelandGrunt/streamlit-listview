@@ -1,6 +1,6 @@
 # README GIFs and the visual comparison
 
-Scripts that regenerate the GIFs in the top-level `README.md`, and that record the same scenarios as PNG frames, so that two recordings show what a change did to the widget's look.
+Scripts that regenerate the GIFs in the top-level `README.md`, and that record the same scenarios as PNG frames, so that two recordings show what a change did to the widget's look. One more script records the tour of the demo app that opens the README.
 
 ## Parts
 
@@ -11,12 +11,13 @@ Scripts that regenerate the GIFs in the top-level `README.md`, and that record t
 - **`make_gif.py`**: scales the frames by 0.5, builds one 256-colour palette over all of them, and writes a looping GIF.
 - **`generate.py`**: the command line. It starts one Streamlit server per take, and either builds GIFs or records frames.
 - **`compare.py`**: compares two recordings frame by frame and writes an HTML report.
+- **`screencast.py`**: records the README's tour of the demo app with Streamlit's own *Record screen* and turns the video into `assets/listview-tour.gif`. It uses none of the parts above except `generate.py`'s server start; see [Record the tour](#record-the-tour).
 
 ## Scenarios
 
 | Scenario | Shows | Output |
 |---|---|---|
-| `hero` | live search, multi-select, select-all, collapsing a group | `assets/listview-demo.gif` |
+| `hero` | live search, multi-select, select-all, collapsing a group | `assets/listview-demo.gif`; the README shows the tour instead, but the PyPI pages of released versions link this file |
 | `keyboard` | single selection by keyboard, with a key badge | `assets/listview-keyboard.gif` |
 | `add-options` | `accept_new_options` | `assets/listview-add-options.gif` |
 | `markdown` | Markdown in the widget label and the help tooltip | `assets/listview-markdown.gif` |
@@ -47,6 +48,28 @@ LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py --
 ```
 
 Options: `--scenario NAME` (repeatable), `--gallery`, `--out` (one scenario only), `--port` (`0` picks a free port), `--scale` (`0.5`), `--colors` (`256`), and `--keep-frames`, which keeps the PNG frames under `build/gif-frames/<scenario>/`. `--out`, `--scale`, `--colors` and `--keep-frames` shape a GIF, so `--record` refuses them. On one machine the output is byte-identical from run to run.
+
+## Record the tour
+
+`screencast.py` starts the demo (`demo/app.py`), opens it in headless Chromium at 1280 × 800, and starts *Record screen* from the app menu. The tour then runs in real time, about 50 seconds: multi-select, search, collapsible groups, sorting, a default far down the list, the Databricks Brand and Snowflake Brand themes, 100,000 options, and the sidebar. Esc stops the recording, and the script saves the video Streamlit offers for download. ffmpeg turns it into a looping GIF, 960 px wide at 10 frames per second, of about 3.6 MB.
+
+ffmpeg is no project dependency. `uv run --with imageio-ffmpeg` adds a copy for one run; without it, the script looks for `ffmpeg` on the PATH and stops before recording if there is none:
+
+```sh
+npm --prefix streamlit_listview/frontend run build
+LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel --with imageio-ffmpeg python scripts/gif/screencast.py
+```
+
+Options: `--out` (`assets/listview-tour.gif`), `--width` (`960`, at most 1280), `--fps` (`10`) and `--port` (`0` picks a free port). The video stays in `build/screencast/tour.webm`; a failed step leaves `build/screencast/failure.png`.
+
+What is non-obvious:
+- **Only this tab is recorded.** A tab capture would otherwise ask which source to record. Chromium runs with `--auto-accept-this-tab-capture`, and a script in the page asks `getDisplayMedia` for the current tab and stops any other source before Streamlit's recorder sees it. Never add `--use-fake-ui-for-media-stream`: it answers with the whole monitor, so the video shows the desktop of whoever runs the script. `e2e/test_screencast_guard.py` checks the guard in Chromium.
+- **The page draws the mouse pointer.** A tab capture shows none, so the script draws an arrow that follows the mouse and a ring at each click.
+- **Esc ends the recording**, so the tour never presses it; `Tour.press` refuses the key.
+- **Each run differs.** The tour runs in real time, so two runs never produce the same GIF, even of an unchanged widget. Regenerate it when the demo or the widget changes visibly, look at the result, and commit it only then.
+- **Every version bump needs a new tour.** The demo shows the installed version next to its title, and the tour records it. Record the tour after the bump has reached the editable install (`uv run` re-installs the project once `pyproject.toml` changes), and check the badge in the GIF.
+- **The Databricks Brand and Snowflake Brand steps need the network** for their Google Fonts.
+- **Why a GIF:** GitHub serves a `.webp` file from the repository as `application/octet-stream`, and PyPI's image proxy passes only `image/*` types, so a WebP would be missing on PyPI.
 
 ## Compare before and after a change
 

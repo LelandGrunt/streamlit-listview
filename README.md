@@ -17,10 +17,10 @@
 A selectable, scrollable **list widget** for Streamlit — with grouping, search, sorting, multi-select, and native theming. It renders **inline** in the page (no iframe) and inherits your Streamlit theme automatically.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/LelandGrunt/streamlit-listview/HEAD/assets/listview-demo.gif" alt="streamlit-listview: live search, grouping, multi-select, and a select-all toggle" width="480">
+  <img src="https://raw.githubusercontent.com/LelandGrunt/streamlit-listview/HEAD/assets/listview-tour.gif" alt="A tour of the demo app: multi-select, search, collapsible groups, sorting, a default, themes, 100,000 options and the sidebar" width="800">
 </p>
 
-<p align="center"><sub>Live search · collapsible groups · multi-select · select-all — all themed by Streamlit, no iframe.</sub></p>
+<p align="center"><sub>A 50-second tour of the <a href="https://st-listview-demo.streamlit.app/">demo app</a>: multi-select · search · collapsible groups · sorting · a default far down the list · brand themes · 100,000 options · the sidebar. Recorded with Streamlit's own <em>Record screen</em>.</sub></p>
 
 ## Why listview?
 

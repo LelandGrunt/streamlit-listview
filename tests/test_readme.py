@@ -152,14 +152,23 @@ def test_notes_markdown_and_theming():
     assert "--st-" in README  # theming via Streamlit CSS variables
 
 
+TOUR = "listview-tour.gif"
+
+
 def test_readme_gallery_matches_the_gallery_scenarios():
-    """The README links every gallery GIF, each linked GIF exists, and assets/
-    holds no GIF that no scenario writes. Each GIF's caption is its title."""
+    """The README opens with the tour and links every other gallery GIF; each
+    linked GIF exists, and assets/ holds no GIF that nothing writes. Each GIF's
+    caption is its title.
+
+    The hero GIF is the exception: the README no longer shows it, but the
+    project pages of released versions link it at HEAD, so it stays."""
+    hero = SCENARIOS["hero"]
     gallery = {s.gif_file for s in SCENARIOS.values() if s.gallery}
     linked = set(re.findall(r"/assets/(listview-[\w-]+\.gif)", README))
     committed = {path.name for path in (ROOT / "assets").glob("*.gif")}
-    assert linked == gallery
-    assert committed == gallery
+    assert linked == gallery - {hero.gif_file} | {TOUR}
+    assert committed == gallery | {TOUR}
+    assert README.index(TOUR) < README.index("## Features in action")
     for scenario in SCENARIOS.values():
-        if scenario.gallery:
+        if scenario.gallery and scenario is not hero:
             assert scenario.title in README, scenario.name
