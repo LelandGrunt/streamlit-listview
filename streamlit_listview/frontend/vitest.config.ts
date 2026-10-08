@@ -17,9 +17,9 @@ export default defineConfig({
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
     css: false,
     benchmark: {
-      // The performance benchmarks (src/bench/*.bench.tsx — see CLAUDE.md,
-      // "Performance benchmarks"). `vitest bench` only: `vitest run` never
-      // collects them, so they can neither slow nor fail the unit suite.
+      // The performance benchmarks (src/bench/*.bench.tsx — see BENCHMARKS.md).
+      // `vitest bench` only: `vitest run` never collects them, so they can
+      // neither slow nor fail the unit suite.
       include: ["src/**/*.bench.{ts,tsx}"],
     },
     coverage: {

@@ -6,7 +6,7 @@ name: Release
 # One-time setup on PyPI (https://pypi.org/manage/account/publishing/):
 #   add a "Trusted Publisher" for this GitHub repo with
 #   workflow = "release.yml" and environment = "pypi".
-# See CLAUDE.md ("Releasing to PyPI") for the full checklist.
+# See .claude/skills/release/SKILL.md for the full checklist.
 
 on:
   push:

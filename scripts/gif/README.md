@@ -47,7 +47,9 @@ LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py --
 LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py --gallery             # every gallery GIF
 ```
 
-Options: `--scenario NAME` (repeatable), `--gallery`, `--out` (one scenario only), `--port` (`0` picks a free port), `--scale` (`0.5`), `--colors` (`256`), and `--keep-frames`, which keeps the PNG frames under `build/gif-frames/<scenario>/`. `--out`, `--scale`, `--colors` and `--keep-frames` shape a GIF, so `--record` refuses them. On one machine the output is byte-identical from run to run.
+Options: `--scenario NAME` (repeatable), `--gallery`, `--out` (one scenario only), `--port` (`0` picks a free port), `--scale` (`0.5`), `--colors` (`256`), and `--keep-frames`, which keeps the PNG frames under `build/gif-frames/<scenario>/`. `--out`, `--scale`, `--colors` and `--keep-frames` shape a GIF, so `--record` refuses them. On one machine the output is byte-identical from run to run. Pillow comes with Streamlit, so the commands need no `--with pillow`.
+
+`tests/test_readme.py` pins the README's *Features in action* table, the GIFs in `assets/` and the catalogue to each other. The scenarios find the widget by the `data-testid`s and classes that `streamlit_listview/frontend/CLAUDE.md` lists, and by Streamlit's own `stRadio` (the preset switch) and `stElementContainer` (which hides the run counter). A renamed hook or a removed feature breaks a scenario; fix the scenario in the same change rather than drop a step.
 
 ## Record the tour
 
@@ -63,9 +65,10 @@ LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel --with imageio-ffmpeg python scri
 Options: `--out` (`assets/listview-tour.gif`), `--width` (`960`, at most 1280), `--fps` (`10`) and `--port` (`0` picks a free port). The video stays in `build/screencast/tour.webm`; a failed step leaves `build/screencast/failure.png`.
 
 What is non-obvious:
-- **Only this tab is recorded.** A tab capture would otherwise ask which source to record. Chromium runs with `--auto-accept-this-tab-capture`, and a script in the page asks `getDisplayMedia` for the current tab and stops any other source before Streamlit's recorder sees it. Never add `--use-fake-ui-for-media-stream`: it answers with the whole monitor, so the video shows the desktop of whoever runs the script. `e2e/test_screencast_guard.py` checks the guard in Chromium.
+- **Only this tab is recorded.** A tab capture would otherwise ask which source to record. Chromium runs with `--auto-accept-this-tab-capture`, and a script in the page asks `getDisplayMedia` for the current tab and stops any other source before Streamlit's recorder sees it. Never add `--use-fake-ui-for-media-stream`: it answers with the whole monitor, so the video shows the desktop of whoever runs the script. `TAB_ONLY_JS` in `screencast.py` is that script; `tests/test_gif_screencast.py` pins the launch flags, and `e2e/test_screencast_guard.py` checks the guard in Chromium.
 - **The page draws the mouse pointer.** A tab capture shows none, so the script draws an arrow that follows the mouse and a ring at each click.
-- **Esc ends the recording**, so the tour never presses it; `Tour.press` refuses the key.
+- **Esc ends the recording**, so the tour never presses it; `Tour.press` refuses the key. A focused select box swallows Esc, so `record()` blurs the focus before the final Esc.
+- **The tour drives the demo by its labels:** the section pills, `multi`, *Collapsible groups*, *Sort*, *Default*, *Large*, the *Items* slider, *Theme* and *Render widget in sidebar*, plus Streamlit's `stMainMenu`, `stMainMenuItem-recordScreencast`, `stCountdown` and the app root's `data-test-script-state`. Renaming one of them in `demo/app.py` breaks the tour; fix `play_tour` in the same change.
 - **Each run differs.** The tour runs in real time, so two runs never produce the same GIF, even of an unchanged widget. Regenerate it when the demo or the widget changes visibly, look at the result, and commit it only then.
 - **Every version bump needs a new tour.** The demo shows the installed version next to its title, and the tour records it. Record the tour after the bump has reached the editable install (`uv run` re-installs the project once `pyproject.toml` changes), and check the badge in the GIF.
 - **The Databricks Brand and Snowflake Brand steps need the network** for their Google Fonts.

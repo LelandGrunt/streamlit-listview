@@ -39,8 +39,9 @@ streamlit_listview/uv.lock
 Thumbs.db
 .DS_Store
 
-# Claude Code (local settings + worktrees)
-.claude/
+# Claude Code (local settings + worktrees); the project skills are tracked
+.claude/*
+!.claude/skills/
 
 # Superpowers brainstorming companion artifacts
 .superpowers/

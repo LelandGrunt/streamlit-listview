@@ -3,7 +3,7 @@ import { makeData } from "../test/makeData";
 
 /**
  * Fixtures for the frontend-tier performance benchmark (listview.bench.tsx;
- * see CLAUDE.md, "Performance benchmarks"). Nothing here is reachable from
+ * see BENCHMARKS.md). Nothing here is reachable from
  * index.tsx, so the production bundle is unaffected. The file imports only what
  * every checkout of the component has — its payload types and the shared
  * test-data factory — because the bench is copied into OTHER checkouts to

@@ -459,4 +459,4 @@ uv run --extra devel pytest e2e/perf/ -q --perf-out /tmp/smoke.jsonl --perf-size
 | `e2e/perf/cells.py` | the matrix, each shape's rows, option parsing, bundle check, JSONL writer |
 | `e2e/perf/report.py` | the summary and comparison report |
 | `bench-results/` | your results (gitignored) |
-| `CLAUDE.md`, section "Performance benchmarks" | the condensed version for maintainers and coding agents |
+| `CLAUDE.md`, section "Performance benchmarks" | a summary for coding agents that points here |

@@ -12,6 +12,12 @@
 # uv, ruff or ty version does not matter. The frontend hooks run the project's
 # npm scripts with the versions in package-lock.json, so they need `npm ci` in
 # streamlit_listview/frontend first.
+#
+# The hook checks the staged snapshot: pre-commit sets unstaged changes aside
+# as a patch file (not `git stash`, whose stack the worktrees share) and
+# restores them afterwards. Every worktree runs the one hook installed in the
+# shared .git/hooks; --allow-missing-config lets a branch that predates this
+# file still commit.
 minimum_pre_commit_version: "4.4.0" # `language: unsupported`
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit

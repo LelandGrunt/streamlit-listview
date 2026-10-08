@@ -68,6 +68,11 @@ jobs:
         working-directory: streamlit_listview/frontend
         run: npm test
 
+      # setup-uv rides a full version tag: it publishes no floating major tag
+      # after v7. Keep it at v6 or later: v5 ran its own `uv venv` whenever
+      # python-version was set, and the explicit `uv venv` below then fails
+      # ("A virtual environment already exists"). For the same reason, do not
+      # set activate-environment: true without dropping that `uv venv`.
       - name: Set up uv + Python
         uses: astral-sh/setup-uv@v10.2.0
         with:

@@ -17,7 +17,7 @@ import {
 /**
  * Frontend-tier performance benchmark: the component through its public
  * surface (props and DOM events) in jsdom, at every size and shape, one bench
- * per scenario. `npm run bench`; CLAUDE.md ("Performance benchmarks") has the
+ * per scenario. `npm run bench`; BENCHMARKS.md has the
  * two tiers' roles, the compare workflow and the caveats — React development
  * build, jsdom DOM speed — that make these numbers relative, never absolute.
  *
