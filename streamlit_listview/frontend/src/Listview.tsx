@@ -15,10 +15,8 @@ import { useCollapse } from "./hooks/useCollapse";
 import { useScrollToItem } from "./hooks/useScrollToItem";
 import { useColorScheme } from "./hooks/useColorScheme";
 import { useRowHeight } from "./hooks/useRowHeight";
-import {
-  FORGET_CLASS,
-  useResetChunkHeights,
-} from "./hooks/useResetChunkHeights";
+import { useResetChunkHeights } from "./hooks/useResetChunkHeights";
+import { FORGET_CLASS } from "./utils/chunks";
 import { disabledIdSet, idKey, itemIdByKey, parseNewIntId } from "./utils/ids";
 import { reuseUnchangedItems, runsByKey } from "./utils/items";
 import { foldForMatch } from "./utils/text";
@@ -696,10 +694,9 @@ export const Listview: FC<ListviewProps> = ({
   // the jump waits a frame at a time (whenStyled). And the published row height
   // must match the styled rows: the chunks above the target are sized by it, so
   // a stale height puts the row elsewhere than the browser later draws it. The
-  // ResizeObserver in useRowHeight cannot vouch for it, because it sees nothing
-  // while the first row's chunk is skipped, and on the first frame with the
-  // stylesheet every chunk is. So attempt() measures the first row again
-  // before it measures the target.
+  // ResizeObserver in useRowHeight publishes a changed height a frame after
+  // the listbox resized, which is a frame after this jump would measure. So
+  // attempt() measures the first row again before it measures the target.
   const scrollToId = useCallback(
     (id: Id, block: ScrollBlock = "center") => {
       const attempt = (framesLeft: number): void => {

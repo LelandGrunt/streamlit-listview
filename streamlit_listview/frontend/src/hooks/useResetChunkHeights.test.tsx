@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { useRef } from "react";
-import { FORGET_CLASS, useResetChunkHeights } from "./useResetChunkHeights";
+import { useResetChunkHeights } from "./useResetChunkHeights";
+import { FORGET_CLASS } from "../utils/chunks";
 
 /** Animation frames the test advances by hand. */
 let frames: FrameRequestCallback[] = [];
