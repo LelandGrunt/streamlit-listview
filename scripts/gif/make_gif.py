@@ -3,8 +3,10 @@
 Importable: ``build_gif(frames_dir, out, scale=0.5, colors=256)`` -> output Path.
 CLI: ``python make_gif.py <frames_dir> <out.gif> [scale] [colors]``
 
-Builds a global palette from all frames (so selection/filter states keep their
-colors), no dithering (flat UI), infinite loop, per-frame durations.
+Reads frames.json, a list of {"file", "ms", "take", "step"} objects as capture.py
+writes them. Builds a global palette from all frames (so selection/filter
+states keep their colors), no dithering (flat UI), infinite loop, per-frame
+durations. Every frame must have the first frame's size.
 """
 
 import json
@@ -40,17 +42,21 @@ def build_gif(frames_dir, out, scale: float = 0.5, colors: int = 256) -> Path:
             f"no frames to assemble: {frames_dir / 'frames.json'} is empty"
         )
 
+    with Image.open(frames_dir / manifest[0]["file"]) as first:
+        size = first.size
+    target = (round(size[0] * scale), round(size[1] * scale))
     imgs: list[Image.Image] = []
     durations: list[int] = []
-    target = None
-    for name, dur in manifest:
+    for entry in manifest:
+        name = entry["file"]
         im = Image.open(frames_dir / name).convert("RGB")
-        if target is None:
-            w, h = im.size
-            target = (round(w * scale), round(h * scale))
+        if im.size != size:
+            raise ValueError(
+                f"{name} is {im.size[0]}x{im.size[1]} px, but the first frame is "
+                f"{size[0]}x{size[1]} px: a GIF needs frames of one size"
+            )
         imgs.append(im.resize(target, Image.Resampling.LANCZOS))
-        durations.append(int(dur))
-    assert target is not None  # the manifest is non-empty, checked above
+        durations.append(int(entry["ms"]))
 
     # Global palette from a montage of every frame, so colors that appear only in
     # later states (selection tint, filtered view) are represented.

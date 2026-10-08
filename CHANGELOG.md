@@ -11,6 +11,8 @@ Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](h
 - The performance benchmarks also measure 100,000 rows. At that size the options take 6.7 MB to send, and Streamlit sends them again on every rerun that changes the listview's parameters or, for a listview with a `key`, its selection. See [BENCHMARKS.md](BENCHMARKS.md).
 - **Each option reports its place in the list and the size of the list** (`aria-posinset`, `aria-setsize`), so a screen reader announces "23,456 of 100,000" also for rows the browser has not drawn. The numbers count the whole list, also while a search narrows it.
 - The performance benchmarks measure dict options that carry a `disabled` key on every row. At 100,000 rows the key makes the options 28 % larger (8.6 MB instead of 6.7 MB), the `listview()` call 20 % slower and a rerun that leaves the options unchanged 12 % slower. Search, clicks, group toggles and scrolling take as long as without the key. A row without the key is enabled, so pass `disabled` only on the rows you disable.
+- **The README shows the widget in seven more GIFs**: keyboard use, adding options, Markdown, the layout parameters, themes, a list of 100,000 options with a pinned search, and the jump to the default selection.
+- `scripts/gif/compare.py` compares two recordings of the README GIF scenarios frame by frame and writes an HTML report that marks the changed pixels in red. It shows what a change did to the widget's look; see `scripts/gif/README.md`.
 
 ### Changed
 

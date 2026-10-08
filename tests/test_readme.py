@@ -9,8 +9,10 @@ README = (ROOT / "README.md").read_text(encoding="utf-8")
 PYPROJECT = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
 sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "scripts" / "gif"))
 
 import verify_wheel
+from scenarios import SCENARIOS
 
 
 def _first(pattern: str, text: str) -> str:
@@ -148,3 +150,16 @@ def test_notes_markdown_and_theming():
     # LaTeX/KaTeX intentionally unsupported (spec decision)
     assert "LaTeX" in README or "KaTeX" in README
     assert "--st-" in README  # theming via Streamlit CSS variables
+
+
+def test_readme_gallery_matches_the_gallery_scenarios():
+    """The README links every gallery GIF, each linked GIF exists, and assets/
+    holds no GIF that no scenario writes. Each GIF's caption is its title."""
+    gallery = {s.gif_file for s in SCENARIOS.values() if s.gallery}
+    linked = set(re.findall(r"/assets/(listview-[\w-]+\.gif)", README))
+    committed = {path.name for path in (ROOT / "assets").glob("*.gif")}
+    assert linked == gallery
+    assert committed == gallery
+    for scenario in SCENARIOS.values():
+        if scenario.gallery:
+            assert scenario.title in README, scenario.name

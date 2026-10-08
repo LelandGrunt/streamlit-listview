@@ -1,49 +1,45 @@
-"""Minimal capture page for the README demo GIF (one well-configured listview)."""
+"""The capture page for the GIF scenarios.
+
+generate.py starts one Streamlit server per take, with LISTVIEW_GIF_SCENARIO and
+LISTVIEW_GIF_TAKE naming what to render. The page hides Streamlit's chrome,
+renders that scenario's page for that take, and ends every run with a hidden run
+counter, which stage.Stage.rerun() waits on.
+"""
+
+import os
 
 import streamlit as st
 
-from streamlit_listview import listview
+from scenarios import SCENARIOS
 
-st.set_page_config(page_title="streamlit-listview", layout="centered")
+scenario = SCENARIOS[os.environ.get("LISTVIEW_GIF_SCENARIO", "hero")]
+take = os.environ.get("LISTVIEW_GIF_TAKE", scenario.takes[0].name)
 
-# Strip Streamlit chrome so the frame is just the component.
+# page_config adds options; it must not repeat page_title or layout.
+st.set_page_config(
+    page_title="streamlit-listview", layout="centered", **scenario.page_config
+)
+
+# Strip Streamlit's chrome so the frame is just the component, and take the run
+# counter's element container out of the layout, so the counter moves nothing.
 st.markdown(
     """
     <style>
       header[data-testid="stHeader"], [data-testid="stToolbar"],
       #MainMenu, footer {display: none !important;}
       .block-container {padding-top: 1.5rem; padding-bottom: 1rem; max-width: 640px;}
+      [data-testid="stElementContainer"]:has(.gif-run) {display: none !important;}
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-CITIES = [
-    {"id": "berlin", "label": "Berlin", "group": "Germany"},
-    {"id": "munich", "label": "Munich", "group": "Germany"},
-    {"id": "hamburg", "label": "Hamburg", "group": "Germany"},
-    {"id": "paris", "label": "Paris", "group": "France"},
-    {"id": "lyon", "label": "Lyon", "group": "France"},
-    {"id": "marseille", "label": "Marseille", "group": "France"},
-    {"id": "tokyo", "label": "Tokyo", "group": "Japan"},
-    {"id": "osaka", "label": "Osaka", "group": "Japan"},
-    {"id": "kyoto", "label": "Kyoto", "group": "Japan"},
-    {"id": "newyork", "label": "New York", "group": "USA"},
-    {"id": "chicago", "label": "Chicago", "group": "USA"},
-    {"id": "seattle", "label": "Seattle", "group": "USA"},
-]
+scenario.page(take)
 
-listview(
-    "Cities",
-    CITIES,
-    selection_mode="multi",
-    enable_search=True,
-    pin_search=False,
-    search_placeholder="Search cities…",
-    collapsible_groups=True,
-    select_all=True,
-    height=640,
-    width=560,
-    help="Pick the cities you want to include.",
-    key="gif_demo",
+# The last element of every run. It changes only after the run has sent every
+# other element, so a grown count means the run has finished.
+runs = st.session_state.get("gif_runs", 0) + 1
+st.session_state["gif_runs"] = runs
+st.markdown(
+    f'<span class="gif-run" data-run="{runs}">{runs}</span>', unsafe_allow_html=True
 )
