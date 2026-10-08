@@ -1,14 +1,14 @@
-"""The list scrolls its default into view when it first renders.
+"""The list scrolls its default into view, switched by a radio above the frame.
 
-Each default is its own take, so each frame comes from a fresh mount. A key
-change would remount the listview as well, but on a remount the component's
-stylesheet arrives a frame after the first row is measured, and the list then
-places the default row outside its frame. Switch to a key-change remount once
-that is fixed.
+The key carries the default, the way the demo folds `default` into its widget
+key, so each pick remounts the listview and the new instance scrolls its
+default into view.
 """
 
+import streamlit as st
+
 from data import make_large_dataset
-from stage import Scenario, Stage, Take
+from stage import Scenario, Stage
 
 OPTIONS = make_large_dataset(1_000)
 DEFAULTS = ("item-00042", "item-00500", "item-00987")
@@ -17,19 +17,35 @@ DEFAULTS = ("item-00042", "item-00500", "item-00987")
 def page(take: str) -> None:
     from streamlit_listview import listview  # inside page(): see hero.py
 
+    default = (
+        st.radio(
+            "Default",
+            DEFAULTS,
+            horizontal=True,
+            key="default",
+            label_visibility="collapsed",
+        )
+        or DEFAULTS[0]
+    )
+    # Keeps the radio out of the frame's 12 px margin.
+    st.markdown('<div style="height: 24px"></div>', unsafe_allow_html=True)
     listview(
-        f"default = `{take}`",
+        f"default = `{default}`",
         OPTIONS,
         selection_mode="single",
-        default=take,
+        default=default,
         height=300,
         width=560,
-        key="gif_jump_to_default",
+        key=f"gif_jump_to_default_{default}",
     )
 
 
 def play(stage: Stage) -> None:
-    stage.snap(f"default-{stage.take.removeprefix('item-')}", 1500)
+    for index, default in enumerate(DEFAULTS):
+        if index:
+            with stage.rerun():
+                stage.control(default).click()
+        stage.snap(f"default-{default.removeprefix('item-')}", 1500)
 
 
 SCENARIO = Scenario(
@@ -38,5 +54,4 @@ SCENARIO = Scenario(
     gallery=True,
     page=page,
     play=play,
-    takes=tuple(Take(default) for default in DEFAULTS),
 )

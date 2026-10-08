@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, within, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Listview } from "./Listview";
+import { ROW_HEIGHT_PROPERTY } from "./hooks/useRowHeight";
 import type { ListviewData } from "./types";
 import { makeData } from "./test/makeData";
 
@@ -1159,6 +1160,9 @@ function stubGeometry(
     value: frame,
     configurable: true,
   });
+  // listview.css makes the body a scroll container, and scrollToId waits until
+  // it is one; jsdom applies no stylesheet (vitest's css: false).
+  body.style.overflowY = "auto";
   body.scrollTop = scrollTop; // jsdom stores the assignment
   body.getBoundingClientRect = () => ({ top: 0, height: frame }) as DOMRect;
   row.getBoundingClientRect = () =>
@@ -1175,6 +1179,32 @@ function stubGeometry(
 
 function rowFor(label: string): HTMLElement {
   return screen.getByText(label).closest('[role="option"]') as HTMLElement;
+}
+
+/**
+ * Hold requestAnimationFrame callbacks until the test runs the next frame, for
+ * the tests that step through scrollToId's waits. Call it inside a describe: it
+ * installs the queue before each test there.
+ */
+function queueFrames(): { nextFrame: () => void; pending: () => number } {
+  let frames: FrameRequestCallback[] = [];
+  beforeEach(() => {
+    frames = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+  });
+  return {
+    nextFrame: () => {
+      const due = frames;
+      frames = [];
+      for (const callback of due) {
+        callback(0);
+      }
+    },
+    pending: () => frames.length,
+  };
 }
 
 describe("jump to default", () => {
@@ -1206,6 +1236,44 @@ describe("jump to default", () => {
     expect(body.scrollTop).toBe(220);
     expect(scrollSpy).not.toHaveBeenCalled();
     scrollSpy.mockRestore();
+  });
+
+  it("measures the default against the row height the rows have now", () => {
+    // Regression: on a key-change remount the new instance's stylesheet applies
+    // after its first commit, so useRowHeight measured an unstyled row (25.6 px
+    // instead of 35.4 px). On the first frame with the sheet the browser skips
+    // every render chunk, so the ResizeObserver never saw the styled row. The
+    // skipped chunks above a far default kept the unstyled estimate, the scroll
+    // range came out short, and the jump left the default 800 px below the
+    // frame. The jump measures the first row again before it measures its own.
+    const setStateValue = vi.fn();
+    const { container, rerender } = render(
+      <Listview
+        data={baseData({ default_ids: ["apple"] })}
+        setStateValue={setStateValue}
+      />,
+    );
+    const body = container.querySelector(".listview-body") as HTMLElement;
+    const listbox = screen.getByRole("listbox");
+    const carrot = rowFor("Carrot");
+    stubGeometry(body, carrot, { frame: 100, top: 260, height: 20 });
+    // The first row is styled now, and no ResizeObserver reported it.
+    rowFor("Apple").getBoundingClientRect = () =>
+      ({ top: 0, height: 35.5 }) as DOMRect;
+    const measureCarrot = carrot.getBoundingClientRect;
+    let estimate = "";
+    carrot.getBoundingClientRect = () => {
+      estimate = listbox.style.getPropertyValue(ROW_HEIGHT_PROPERTY);
+      return measureCarrot();
+    };
+    rerender(
+      <Listview
+        data={baseData({ default_ids: ["carrot"] })}
+        setStateValue={setStateValue}
+      />,
+    );
+    expect(estimate).toBe("35.5px");
+    expect(body.scrollTop).toBe(220); // 260 - (100 - 20)/2
   });
 
   it("does not scroll when the target row is not rendered", () => {
@@ -1265,6 +1333,63 @@ describe("jump to default", () => {
       expect(body.scrollTop).toBe(260); // centered: 300 - (100 - 20)/2
       unmount();
     }
+  });
+});
+
+describe("jump to default before the stylesheet applies", () => {
+  // The body is a scroll container only once listview.css applies
+  // (overflow-y: auto). A remounted instance gets a new shadow root, which
+  // fetches the stylesheet again, so on a slow connection the sheet arrives
+  // frames after the first commit. A scrollTop written before then is lost and
+  // the default stays out of view, so the jump waits for the sheet.
+  const { nextFrame, pending } = queueFrames();
+
+  function jumpBeforeTheSheet() {
+    const setStateValue = vi.fn();
+    const view = render(
+      <Listview data={baseData()} setStateValue={setStateValue} />,
+    );
+    const body = view.container.querySelector(".listview-body") as HTMLElement;
+    stubGeometry(body, rowFor("Carrot"), { frame: 100, top: 260, height: 20 });
+    body.style.overflowY = ""; // computed `visible`: the sheet has not applied
+    view.rerender(
+      <Listview
+        data={baseData({ default_ids: ["carrot"] })}
+        setStateValue={setStateValue}
+      />,
+    );
+    return { body, unmount: view.unmount };
+  }
+
+  it("waits until the body scrolls before it measures the default", () => {
+    const { body } = jumpBeforeTheSheet();
+    nextFrame();
+    expect(body.scrollTop).toBe(0);
+    nextFrame();
+    expect(body.scrollTop).toBe(0);
+    body.style.overflowY = "auto"; // the stylesheet applied
+    nextFrame();
+    expect(body.scrollTop).toBe(220); // 260 - (100 - 20)/2
+  });
+
+  it("gives up waiting after 600 frames and measures anyway", () => {
+    // A stylesheet that never loads must not keep a callback running on every
+    // frame for as long as the list is mounted.
+    const { body } = jumpBeforeTheSheet();
+    for (let frame = 1; frame <= 600; frame += 1) {
+      nextFrame();
+    }
+    expect(body.scrollTop).toBe(0);
+    nextFrame();
+    expect(body.scrollTop).toBe(220);
+  });
+
+  it("stops waiting when the list unmounts", () => {
+    const { unmount } = jumpBeforeTheSheet();
+    nextFrame();
+    unmount();
+    nextFrame();
+    expect(pending()).toBe(0);
   });
 });
 
@@ -2083,6 +2208,23 @@ describe("keyboard scroll stays inside the list body", () => {
     expect(firstBody.scrollTop).toBe(0);
   });
 
+  it("finds the row in a list that is not attached to a document", () => {
+    // The renderer can be invoked on a detached host. A detached subtree's root
+    // node is its topmost element, which has no getElementById, so the lookup
+    // scans the body's own rows.
+    const container = document.createElement("div");
+    render(<Listview data={baseData()} setStateValue={vi.fn()} />, {
+      container,
+    });
+    const body = container.querySelector(".listview-body") as HTMLElement;
+    const carrot = within(container)
+      .getByText("Carrot")
+      .closest('[role="option"]') as HTMLElement;
+    stubGeometry(body, carrot, { frame: 100, top: 260, height: 20 });
+    fireEvent.keyDown(within(container).getByRole("listbox"), { key: "End" });
+    expect(body.scrollTop).toBe(180); // 260 + 20 - 100
+  });
+
   it("brings a row below the frame in by its bottom edge", () => {
     const body = setup(0, "Carrot", 260);
     fireEvent.keyDown(screen.getByRole("listbox"), { key: "End" });
@@ -2096,26 +2238,8 @@ describe("keyboard scroll stays inside the list body", () => {
     // inside such a chunk, on the rerun that changed it, therefore has to wait
     // until the class is gone before it measures the row, or it scrolls to
     // wherever a zero rect puts it.
-    let frames: FrameRequestCallback[] = [];
-    const nextFrame = () => {
-      const due = frames;
-      frames = [];
-      for (const callback of due) {
-        callback(0);
-      }
-    };
+    const { nextFrame, pending } = queueFrames();
     const FORGET = "listview-chunk--forget";
-
-    beforeEach(() => {
-      frames = [];
-      vi.stubGlobal(
-        "requestAnimationFrame",
-        (callback: FrameRequestCallback) => {
-          frames.push(callback);
-          return frames.length;
-        },
-      );
-    });
 
     it("measures the row only once its chunk has forgotten", () => {
       const body = setup(0, "Carrot", 260);
@@ -2150,7 +2274,7 @@ describe("keyboard scroll stays inside the list body", () => {
       fireEvent.keyDown(screen.getByRole("listbox"), { key: "End" });
       nextFrame();
       expect(body.scrollTop).toBe(180);
-      expect(frames).toHaveLength(0); // no second frame requested
+      expect(pending()).toBe(0); // no second frame requested
     });
   });
 

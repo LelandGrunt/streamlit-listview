@@ -32,6 +32,10 @@ class FakeResizeObserver {
 /** The height every element reports; tests change it between steps. */
 let rowHeight = 35.5;
 
+/** What useRowHeight returned on each render of Listbox, oldest first. */
+let remeasures: Array<() => void> = [];
+const remeasure = () => remeasures[remeasures.length - 1]();
+
 function Listbox({
   rows,
   mounted = true,
@@ -40,7 +44,7 @@ function Listbox({
   mounted?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  useRowHeight(ref);
+  remeasures.push(useRowHeight(ref));
   return (
     <div ref={mounted ? ref : undefined} data-testid="listbox">
       {rows.map((label) => (
@@ -57,6 +61,7 @@ const published = () => listbox().style.getPropertyValue(ROW_HEIGHT_PROPERTY);
 
 beforeEach(() => {
   rowHeight = 35.5;
+  remeasures = [];
   FakeResizeObserver.instances = [];
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(
     () => ({ height: rowHeight }) as DOMRect,
@@ -137,6 +142,31 @@ describe("useRowHeight", () => {
   it("does nothing while the listbox is not mounted", () => {
     render(<Listbox rows={["Apple"]} mounted={false} />);
     expect(FakeResizeObserver.instances).toHaveLength(0);
+    expect(published()).toBe("");
+  });
+
+  it("measures the first row again on request", () => {
+    // A ResizeObserver reports nothing for a row inside a render chunk the
+    // browser skips, so a stylesheet that applies while the first chunk is
+    // skipped goes unseen. scrollToId asks for a measurement instead.
+    render(<Listbox rows={["Apple", "Banana"]} />);
+    rowHeight = 48;
+    remeasure();
+    expect(published()).toBe("48px");
+  });
+
+  it("returns the same function on every render", () => {
+    // scrollToId depends on it, and a new function would give the jump to a
+    // default and every keyboard move a new callback on each commit.
+    const { rerender } = render(<Listbox rows={["Apple"]} />);
+    rerender(<Listbox rows={["Banana"]} />);
+    expect(remeasures[0]).toBeTypeOf("function");
+    expect(new Set(remeasures).size).toBe(1);
+  });
+
+  it("measures nothing on request before a first row exists", () => {
+    render(<Listbox rows={[]} />);
+    remeasure();
     expect(published()).toBe("");
   });
 

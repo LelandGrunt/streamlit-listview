@@ -23,7 +23,7 @@ Scripts that regenerate the GIFs in the top-level `README.md`, and that record t
 | `layout` | four layout presets on one list | `assets/listview-layout.gif` |
 | `themes` | light, dark and the demo's Databricks Brand and Snowflake Brand themes, one server each; needs the network for their Google Fonts | `assets/listview-themes.gif` |
 | `large-list` | 100,000 options with a pinned search | `assets/listview-large-list.gif` |
-| `jump-to-default` | the list scrolls its default into view, one fresh mount per default | `assets/listview-jump-to-default.gif` |
+| `jump-to-default` | the list scrolls its default into view; a radio picks the default, and its key change remounts the list | `assets/listview-jump-to-default.gif` |
 | `dark` | `hero` and `markdown` under the dark base theme | recording only |
 | `sidebar` | the listview in `st.sidebar` | recording only |
 | `limits` | selection cap, disabled rows and widget, empty list, label visibility | recording only |

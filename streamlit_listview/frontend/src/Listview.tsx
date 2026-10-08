@@ -188,6 +188,24 @@ type ScrollBlock = "center" | "nearest";
 const FORGET_WAIT_FRAMES = 4;
 
 /**
+ * How many frames scrollToId waits for the list's stylesheet before it measures
+ * the row anyway: about ten seconds at 60 Hz. A remounted instance fetches its
+ * stylesheet again, so on a slow connection the sheet arrives frames after the
+ * first commit. The bound only stops the wait for a sheet that never loads.
+ */
+const STYLE_WAIT_FRAMES = 600;
+
+/**
+ * True once listview.css applies to the list: it makes the body a scroll
+ * container (overflow-y: auto), and until then the computed value is the
+ * initial `visible`. Before that the rows are unstyled and a scrollTop written
+ * to the body is lost.
+ */
+function isStyled(body: HTMLElement): boolean {
+  return getComputedStyle(body).overflowY !== "visible";
+}
+
+/**
  * The rendered row carrying `domId` inside `body`, or null when it is not
  * rendered (filtered out, in a collapsed group).
  *
@@ -655,6 +673,13 @@ export const Listview: FC<ListviewProps> = ({
     }
   }, []);
 
+  // The first row's height, published on the listbox for the size estimate of
+  // the render chunks the browser skips (see ROW_CHUNK_SIZE). A layout effect,
+  // so it lands before the first paint and before useScrollToItem's rAF
+  // measures where a default row lies. scrollToId measures the first row again
+  // through the returned function before it measures a row of its own.
+  const remeasureRowHeight = useRowHeight(listboxRef);
+
   // DOM scroll for a row id, shared by jump-to-default and keyboard navigation.
   // rAF so an auto-expand (or focus-move) re-render commits before we
   // measure/scroll.
@@ -664,71 +689,99 @@ export const Listview: FC<ListviewProps> = ({
   // ancestor, including the Streamlit page: a listview with `default=` below the
   // fold yanked the host page away from whatever the user was reading, on first
   // render and on every rerun that changed `default_ids` by value.
-  const scrollToId = useCallback((id: Id, block: ScrollBlock = "center") => {
-    const attempt = (framesLeft: number): void => {
-      const body = bodyRef.current;
-      // Unreachable in practice: the body renders unconditionally, and this
-      // callback only runs after a commit. It guards an unmount racing the rAF.
-      /* v8 ignore next 3 */
-      if (!body) {
-        return;
-      }
-      const node = findRowNode(body, optionDomId(id));
-      if (node === null) {
-        return; // row not rendered (e.g. filtered out) → nothing to scroll to
-      }
-      // A row's parent is its render chunk. While the chunk carries
-      // FORGET_CLASS (content-visibility: hidden, see useResetChunkHeights) the
-      // row has no geometry, so a jump to a new default inside a chunk whose
-      // rows changed on the same rerun would measure a zero rect. Wait a frame
-      // and look again; the class goes after two.
-      if (
-        framesLeft > 0 &&
-        (node.parentElement as HTMLElement).classList.contains(FORGET_CLASS)
-      ) {
-        requestAnimationFrame(() => attempt(framesLeft - 1));
-        return;
-      }
-      const frame = body.clientHeight;
-      const rowBox = node.getBoundingClientRect();
-      // The row's offset inside the scrolled content: its position relative to
-      // the frame, plus however far the frame is already scrolled. scrollTop is
-      // measured from the padding-box edge while the rect is the border box, so
-      // the body's top border (clientTop) comes out — otherwise every "nearest"
-      // scroll landed one border-width off, clipping the row.
-      const top =
-        body.scrollTop +
-        rowBox.top -
-        (body.getBoundingClientRect().top + body.clientTop);
-      if (block === "center") {
-        // Out-of-range assignments are clamped by the browser, so the first and
-        // last rows need no special casing.
-        body.scrollTop = top - (frame - rowBox.height) / 2;
-      } else {
-        // A grouped row's own header is position: sticky; top: 0 — it paints over
-        // the top of the scrollport, so the band where a row is actually visible
-        // starts BELOW it. Bringing a row's top edge to the frame's top edge
-        // parked it exactly under that header: ArrowUp / Home focused a row the
-        // user could not see, and Enter selected it. A row always renders in a
-        // render chunk inside a group block, and the block's first child is
-        // either that header or a chunk, so this is a fixed class-name check
-        // with none of the id-escaping hazards of the row lookup; an ungrouped
-        // block has no header and keeps the frame edge. closest(), not
-        // parentElement: a row's parent is its chunk.
-        const first = (node.closest(".listview-group") as HTMLElement)
-          .firstElementChild as Element;
-        const stickyHeight = first.classList.contains("listview-group-header")
-          ? first.getBoundingClientRect().height
-          : 0;
-        if (top - stickyHeight < body.scrollTop) {
-          body.scrollTop = top - stickyHeight; // above the visible band → top edge in, under the header
-        } else if (top + rowBox.height > body.scrollTop + frame) {
-          body.scrollTop = top + rowBox.height - frame; // below → bottom edge in
+  //
+  // Two things must hold before a row's position means anything, and both fail
+  // on a key-change remount, whose new shadow root loads the stylesheet again.
+  // The stylesheet must have applied: until then the body does not scroll, so
+  // the jump waits a frame at a time (whenStyled). And the published row height
+  // must match the styled rows: the chunks above the target are sized by it, so
+  // a stale height puts the row elsewhere than the browser later draws it. The
+  // ResizeObserver in useRowHeight cannot vouch for it, because it sees nothing
+  // while the first row's chunk is skipped, and on the first frame with the
+  // stylesheet every chunk is. So attempt() measures the first row again
+  // before it measures the target.
+  const scrollToId = useCallback(
+    (id: Id, block: ScrollBlock = "center") => {
+      const attempt = (framesLeft: number): void => {
+        const body = bodyRef.current;
+        // Unreachable in practice: the body renders unconditionally, and this
+        // callback only runs after a commit. It guards an unmount racing the
+        // rAF.
+        /* v8 ignore next 3 */
+        if (!body) {
+          return;
         }
-      }
-    };
-    requestAnimationFrame(() => attempt(FORGET_WAIT_FRAMES));
-  }, []);
+        const node = findRowNode(body, optionDomId(id));
+        if (node === null) {
+          return; // row not rendered (e.g. filtered out) → nothing to scroll to
+        }
+        // A row's parent is its render chunk. While the chunk carries
+        // FORGET_CLASS (content-visibility: hidden, see useResetChunkHeights)
+        // the row has no geometry, so a jump to a new default inside a chunk
+        // whose rows changed on the same rerun would measure a zero rect. Wait
+        // a frame and look again; the class goes after two.
+        if (
+          framesLeft > 0 &&
+          (node.parentElement as HTMLElement).classList.contains(FORGET_CLASS)
+        ) {
+          requestAnimationFrame(() => attempt(framesLeft - 1));
+          return;
+        }
+        remeasureRowHeight();
+        const frame = body.clientHeight;
+        const rowBox = node.getBoundingClientRect();
+        // The row's offset inside the scrolled content: its position relative
+        // to the frame, plus however far the frame is already scrolled.
+        // scrollTop is measured from the padding-box edge while the rect is the
+        // border box, so the body's top border (clientTop) comes out —
+        // otherwise every "nearest" scroll landed one border-width off,
+        // clipping the row.
+        const top =
+          body.scrollTop +
+          rowBox.top -
+          (body.getBoundingClientRect().top + body.clientTop);
+        if (block === "center") {
+          // Out-of-range assignments are clamped by the browser, so the first
+          // and last rows need no special casing.
+          body.scrollTop = top - (frame - rowBox.height) / 2;
+        } else {
+          // A grouped row's own header is position: sticky; top: 0 — it
+          // paints over the top of the scrollport, so the band where a row is
+          // actually visible starts BELOW it. Bringing a row's top edge to the
+          // frame's top edge parked it exactly under that header: ArrowUp /
+          // Home focused a row the user could not see, and Enter selected it. A
+          // row always renders in a render chunk inside a group block, and the
+          // block's first child is either that header or a chunk, so this is a
+          // fixed class-name check with none of the id-escaping hazards of the
+          // row lookup; an ungrouped block has no header and keeps the frame
+          // edge. closest(), not parentElement: a row's parent is its chunk.
+          const first = (node.closest(".listview-group") as HTMLElement)
+            .firstElementChild as Element;
+          const stickyHeight = first.classList.contains("listview-group-header")
+            ? first.getBoundingClientRect().height
+            : 0;
+          if (top - stickyHeight < body.scrollTop) {
+            body.scrollTop = top - stickyHeight; // above the visible band → top edge in, under the header
+          } else if (top + rowBox.height > body.scrollTop + frame) {
+            body.scrollTop = top + rowBox.height - frame; // below → bottom edge in
+          }
+        }
+      };
+      const whenStyled = (framesLeft: number): void => {
+        const body = bodyRef.current;
+        if (!body) {
+          return; // unmounted while it waited
+        }
+        if (framesLeft > 0 && !isStyled(body)) {
+          requestAnimationFrame(() => whenStyled(framesLeft - 1));
+          return;
+        }
+        attempt(FORGET_WAIT_FRAMES);
+      };
+      requestAnimationFrame(() => whenStyled(STYLE_WAIT_FRAMES));
+    },
+    [remeasureRowHeight],
+  );
 
   // Keyboard focus moves only need the row brought just inside the frame:
   // "nearest" leaves an already-visible row exactly where it is, so arrowing
@@ -857,11 +910,6 @@ export const Listview: FC<ListviewProps> = ({
     [widgetDisabled, allItems, selection, data.new_option_kind, revealHint],
   );
 
-  // The first row's height, published on the listbox for the size estimate of
-  // the render chunks the browser skips (see ROW_CHUNK_SIZE). A layout effect,
-  // so it lands before the first paint and before useScrollToItem's rAF
-  // measures where a default row lies.
-  useRowHeight(listboxRef);
   // After a commit that changed the blocks, a skipped chunk whose rows changed
   // forgets the height the browser remembered from its last render (see
   // useResetChunkHeights): otherwise a search after scrolling left every chunk

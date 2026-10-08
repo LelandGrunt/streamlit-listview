@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import type { RefObject } from "react";
 
 /** The custom property the skipped chunks' size estimate reads (listview.css). */
@@ -7,6 +7,8 @@ export const ROW_HEIGHT_PROPERTY = "--listview-row-height";
 interface Observed {
   row: Element;
   observer: ResizeObserver | null;
+  /** Measures `row` and publishes its height on the listbox. */
+  publish: () => void;
 }
 
 /**
@@ -33,8 +35,22 @@ interface Observed {
  * The check is one querySelector that stops at the first option, a handful of
  * nodes below the listbox: cheap on every commit, and it follows the first row
  * through every way it can be replaced, which a dependency list could not name.
+ *
+ * The ResizeObserver reports nothing while the first row's chunk is skipped,
+ * because the browser does not lay the row out. A key-change remount runs into
+ * that: the new shadow root's stylesheet applies after the first commit, so the
+ * first measurement is of an unstyled row (25.6 px instead of 35.4 px), and on
+ * the first frame with the stylesheet the browser skips every chunk. A jump to
+ * a far default then keeps the first chunk out of view, the observer never
+ * reports the styled row, and every chunk keeps the unstyled estimate. The
+ * returned function therefore measures the first row again and publishes it;
+ * scrollToId calls it right before it measures a row. getBoundingClientRect
+ * lays out a row inside a skipped chunk on request, so the measurement is of
+ * the row as styled now. The function keeps its identity across renders.
  */
-export function useRowHeight(listboxRef: RefObject<HTMLElement | null>): void {
+export function useRowHeight(
+  listboxRef: RefObject<HTMLElement | null>,
+): () => void {
   const observed = useRef<Observed | null>(null);
 
   useLayoutEffect(() => {
@@ -66,7 +82,7 @@ export function useRowHeight(listboxRef: RefObject<HTMLElement | null>): void {
         ? null
         : new ResizeObserver(publish);
     observer?.observe(row);
-    observed.current = { row, observer };
+    observed.current = { row, observer, publish };
   });
 
   useLayoutEffect(
@@ -76,4 +92,6 @@ export function useRowHeight(listboxRef: RefObject<HTMLElement | null>): void {
     },
     [],
   );
+
+  return useCallback(() => observed.current?.publish(), []);
 }
