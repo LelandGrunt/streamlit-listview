@@ -5,7 +5,7 @@ Scripts that regenerate the GIFs in the top-level `README.md`, and that record t
 ## Parts
 
 - **`scenarios/`**: the catalogue. Each module defines one `SCENARIO`: the Streamlit page it renders, the steps that drive it, and its takes. Eight gallery scenarios write a GIF to `assets/`; three test scenarios (`dark`, `sidebar`, `limits`) only record frames.
-- **`stage.py`**: `Take`, `Scenario`, and the `Stage` helper the steps use. It holds locators for the widget's parts, `rerun()` and `settle()` to wait for a state instead of a fixed time, `snap()` to take a frame, `press()` with a key badge, `scroll_list()` and `park_pointer()`.
+- **`stage.py`**: `Take`, `Scenario`, and the `Stage` helper the steps use. It holds locators for the widget's parts, `rerun()` and `settle()` to wait for a state instead of a fixed time, `snap()` to take a frame, `press()` with a key badge, `scroll_list()` and `park_pointer()`. A key change leaves the page without a listview for about one frame after the script run ends, so `settle()` waits for the listview to appear before it waits for quiet; `e2e/test_gif_settle.py` checks it in Chromium.
 - **`app.py`**: the one capture page. It renders the scenario and the take that `LISTVIEW_GIF_SCENARIO` and `LISTVIEW_GIF_TAKE` name, hides Streamlit's header, and ends every run with a hidden run counter that `rerun()` waits on.
 - **`capture.py`**: plays one take in Chromium (a 720 × 840 viewport at device scale factor 2) and screenshots the listview's box plus 12 px.
 - **`make_gif.py`**: scales the frames by 0.5, builds one 256-colour palette over all of them, and writes a looping GIF.

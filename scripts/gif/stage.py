@@ -34,15 +34,24 @@ RERUN_TIMEOUT_MS = 60_000
 # DOM mutation, no scroll event and no loading stylesheet for `quietFrames`
 # animation frames. A remounted listview gets a new shadow root whose stylesheet
 # applies a frame or more after its first render; until then its rows are
-# unstyled.
+# unstyled. A key-change remount also leaves the shadow root without the
+# listview for about a frame after its script run ends, so the lookup repeats
+# once per frame until the listview appears.
 _SETTLE_JS = """
 async ([quietFrames, timeoutMs]) => {
   await document.fonts.ready;
-  const host = [...document.querySelectorAll("*")].find(
-    (el) => el.shadowRoot?.querySelector('[data-testid="stListview"]'),
-  );
-  if (!host) {
-    throw new Error("settle: no listview on the page");
+  const started = performance.now();
+  const findHost = () =>
+    [...document.querySelectorAll("*")].find(
+      (el) => el.shadowRoot?.querySelector('[data-testid="stListview"]'),
+    );
+  let host = findHost();
+  while (!host) {
+    if (performance.now() - started > timeoutMs) {
+      throw new Error(`settle: no listview on the page after ${timeoutMs} ms`);
+    }
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    host = findHost();
   }
   const root = host.shadowRoot;
   let dirty = false;
@@ -59,7 +68,6 @@ async ([quietFrames, timeoutMs]) => {
   root.addEventListener("scroll", mark, true);
   const loading = () =>
     [...root.querySelectorAll('link[rel="stylesheet"]')].some((link) => !link.sheet);
-  const started = performance.now();
   try {
     let quiet = 0;
     while (quiet < quietFrames) {
@@ -190,7 +198,10 @@ def run_count(page: Page) -> int:
 
 
 def settle(page: Page) -> None:
-    """Wait for the fonts, then until the listview is quiet for QUIET_FRAMES frames."""
+    """Wait for the fonts and the listview, then for QUIET_FRAMES quiet frames.
+
+    Fails when the listview has not appeared and gone quiet in SETTLE_TIMEOUT_MS.
+    """
     page.evaluate(_SETTLE_JS, [QUIET_FRAMES, SETTLE_TIMEOUT_MS])
 
 
