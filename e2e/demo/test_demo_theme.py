@@ -83,6 +83,13 @@ def picker(page: Page):
     return page.locator('[data-testid="stSelectbox"]:has-text("Theme")')
 
 
+def header(page: Page):
+    """The caption under the title, which names the applied theme file."""
+    return page.get_by_test_id("stCaptionContainer").filter(
+        has_text="themeable selection list"
+    )
+
+
 def open_theme_section(page: Page) -> None:
     page.get_by_role("radio", name="Theme", exact=True).click()
     wait_for_run(page)
@@ -148,6 +155,8 @@ def test_switching_the_theme_rethemes_the_listview(page: Page):
     # would render as "nothing chosen" (see test_demo_empty_pickers.py).
     expect(picker(page).locator("input")).to_have_value("Streamlit default")
     expect(note).to_be_visible()
+    # The header names a theme file only while one is applied.
+    expect(header(page)).not_to_contain_text("Theme:")
     pick_theme(page, THEME_LABEL)
 
     # The listview takes no theme parameter: it inherits the --st-* variables.
@@ -157,6 +166,7 @@ def test_switching_the_theme_rethemes_the_listview(page: Page):
     expect(page.get_by_test_id("stCode").filter(has_text=THEME_PRIMARY)).to_be_visible()
     expect(page.get_by_text("Falls back to")).to_be_visible()
     expect(note).to_be_visible()
+    expect(header(page)).to_contain_text(f"Theme: {THEME_LABEL}")
     # The theme re-styles the widget without touching the call that renders it.
     expect(code).to_have_text(snippet)
 
@@ -165,13 +175,15 @@ def test_switching_the_theme_rethemes_the_listview(page: Page):
     expect(picker(page).locator("input")).to_have_value("Streamlit default")
     expect_primary(page, default_primary)
     assert "Lato" not in font(page)
+    expect(header(page)).not_to_contain_text("Theme:")
 
 
 def test_the_picker_shows_the_server_theme_to_other_sessions(
     page: Page, app: StreamlitRunner
 ):
     """A second tab is a second Streamlit session: it renders the theme the
-    first one picked, and its picker says so instead of "Streamlit default"."""
+    first one picked, and its header and picker say so instead of "Streamlit
+    default"."""
     open_theme_section(page)
     pick_theme(page, THEME_LABEL)
 
@@ -180,6 +192,7 @@ def test_the_picker_shows_the_server_theme_to_other_sessions(
         other.goto(app.server_url)
         expect(other.get_by_test_id("stListview").first).to_be_visible(timeout=20000)
         expect_primary(other, THEME_PRIMARY)
+        expect(header(other)).to_contain_text(f"Theme: {THEME_LABEL}")
         open_theme_section(other)
         expect(picker(other).locator("input")).to_have_value(THEME_LABEL)
     finally:

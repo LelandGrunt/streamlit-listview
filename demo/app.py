@@ -125,6 +125,13 @@ st.session_state.setdefault("demo_just_reset", False)
 # under its display name from config_themes.json (or its bare name without one).
 THEMES = themes.discover_themes(DEMO_DIR / ".streamlit")
 THEME_LABELS = themes.theme_labels(DEMO_DIR / ".streamlit")
+
+
+def theme_label(name):
+    """A theme's name as the Theme picker and the header show it."""
+    return THEME_LABELS.get(name, name)
+
+
 # The Theme picker's entry for "no theme file". A real option, not None: a
 # selectbox renders a None value as an empty field, not as an entry.
 DEFAULT_THEME = "Streamlit default"
@@ -694,7 +701,7 @@ def render_theme(cfg, ids, groups):
     st.selectbox(
         "Theme",
         [DEFAULT_THEME, *THEMES],
-        format_func=lambda name: THEME_LABELS.get(name, name),
+        format_func=theme_label,
         help=(
             "A theme file from `demo/.streamlit/` (`config_theme_<name>.toml`), "
             "named in `config_themes.json`. "
@@ -1252,7 +1259,15 @@ def render_api():
 st.title(
     f":material/list: Listview Demo [:primary-badge[v{LISTVIEW_VERSION}]]({CHANGELOG_URL})"
 )
-st.caption("An interactive, themeable selection list for Streamlit.")
+tagline = "An interactive, themeable selection list for Streamlit."
+# A second line names the server's theme file, which another session may have
+# picked; the Streamlit default needs no name. Read once: another session can
+# reset the theme between two reads. Two trailing spaces make the Markdown line
+# break, which keeps both lines in one caption.
+active_theme = themes.SERVER_THEME.active
+if active_theme is not None:
+    tagline += f"  \n:material/format_paint: Theme: **{theme_label(active_theme)}**"
+st.caption(tagline)
 
 demo_tab, api_tab = st.tabs(
     [":material/play_circle: Demo", ":material/menu_book: API reference"],

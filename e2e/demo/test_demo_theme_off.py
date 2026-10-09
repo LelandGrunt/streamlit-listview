@@ -8,6 +8,8 @@ server of its own through EXTRA_ENV (see ``_servers`` in e2e/conftest.py).
 
 from playwright.sync_api import Page, expect
 
+from e2e.demo.test_demo_theme import header
+
 EXTRA_ENV = {"LISTVIEW_DEMO_THEME_SWITCHER": "0"}
 
 
@@ -16,3 +18,5 @@ def test_the_theme_section_is_gone_when_switched_off(page: Page):
     # The other sections are untouched; only Theme drops out.
     expect(sections.get_by_role("radio", name="Formatting", exact=True)).to_be_visible()
     expect(sections.get_by_role("radio", name="Theme", exact=True)).to_have_count(0)
+    # The Streamlit default is the only theme, so the header names none.
+    expect(header(page)).not_to_contain_text("Theme:")

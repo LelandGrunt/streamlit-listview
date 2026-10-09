@@ -42,6 +42,8 @@ Streamlit has no per-session theme, so the switch applies to the **whole
 server**: every open session picks it up on its next rerun, including other
 visitors of a hosted demo. It falls back to the Streamlit default 24 hours after
 the last switch, and on every server restart, since it lives in memory only.
+While a theme file is applied, a line under the title names it, so every
+visitor sees which theme is on, whoever picked it.
 
 To hide the switcher on one deployment, set `LISTVIEW_DEMO_THEME_SWITCHER` to
 `0` (`false`, `off` and `no` work too); unset, it is on. Locally:
