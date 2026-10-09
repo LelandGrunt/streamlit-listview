@@ -11,6 +11,7 @@ PYPROJECT = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "scripts" / "gif"))
 
+import push_gate
 import verify_wheel
 from scenarios import SCENARIOS
 
@@ -101,8 +102,9 @@ def test_version_matches_pyproject_and_no_stale_scaffold():
     name = _first(r'(?m)^name\s*=\s*"([^"]+)"', PYPROJECT)
 
     assert re.search(rf"img\.shields\.io/pypi/v/{re.escape(name)}(?=[?)])", README)
-    assert f"streamlit_listview-{version}-py3-none-any.whl" in README
-    assert f"streamlit_listview-{version}.tar.gz" in README
+    # The same two names the pre-push gate requires (push_gate.dist_names).
+    for dist in push_gate.dist_names(version):
+        assert dist in README
     assert "0.0.1" not in README  # stale expected-output filename
     assert "num_clicks" not in README  # stale scaffold snippet
     assert 'listview("World")' not in README

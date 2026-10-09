@@ -8,7 +8,7 @@ description: Cut a streamlit-listview release to PyPI. Bumps the version in all 
 A `v*.*.*` tag pushed to GitHub runs `.github/workflows/release.yml`, which publishes through PyPI Trusted Publishing (OIDC). No API token lives in the repo.
 
 ## What the workflow does
-- **build:** checks that the tag matches `[project].version`; builds the frontend, then runs its tests (in that order, as in CI); installs the package editable and runs the unit tests; runs `uv build` with `LISTVIEW_SKIP_NPM_BUILD=1`, so the tested bundle is the packaged one; then runs `scripts/verify_wheel.py` and `uvx twine check --strict`.
+- **build:** runs `scripts/push_gate.py check tag`, which checks that the tag names `[project].version`, that the five places and `uv.lock` agree, that the changelog dates the version and contains no "Unreleased", that PyPI lacks the version, and that GitHub's `main` can fast-forward to the tagged commit; builds the frontend, then runs its tests (in that order, as in CI); installs the package editable and runs the unit tests; runs `uv build` with `LISTVIEW_SKIP_NPM_BUILD=1`, so the tested bundle is the packaged one; then runs `scripts/verify_wheel.py` and `uvx twine check --strict`.
 - **publish-to-pypi:** runs `pypa/gh-action-pypi-publish` in the `pypi` environment with `id-token: write`; it also uploads PEP 740 attestations.
 - **github-release:** signs the distributions with Sigstore and creates the GitHub Release with `--generate-notes`, adding `--prerelease` for an `a`, `b` or `rc` tag.
 
@@ -19,17 +19,17 @@ A `v*.*.*` tag pushed to GitHub runs `.github/workflows/release.yml`, which publ
    3. `EXPECTED_VERSION` in `tests/test_packaging.py`. `test_root_version_is_target` and `test_nested_version_is_target` compare both files against it.
    4. The wheel and sdist filename examples in `README.md`. `tests/test_readme.py::test_version_matches_pyproject_and_no_stale_scaffold` pins them to the root. The version badge needs no bump: it is the live shields.io PyPI badge.
    5. The `streamlit-listview==<version>` pin in `demo/requirements.txt`, which Streamlit Community Cloud and the Codespaces dev container (`.devcontainer/devcontainer.json`) install. `tests/test_packaging.py::test_demo_requirements_pin_the_released_version` pins it to the root.
-2. **Run `uv lock`,** so that `uv.lock` records the new version; otherwise the next `uv run` rewrites it as an unrelated diff. The `uv-audit` hook refuses the commit until then.
-3. **Turn the `Unreleased` heading in `CHANGELOG.md` into the version and the release date.** No check enforces this.
+2. **Run `uv lock`,** so that `uv.lock` records the new version; otherwise the next `uv run` rewrites it as an unrelated diff. The `uv-audit` hook refuses the commit, and the push gate the push, until then.
+3. **Turn the `Unreleased` section of `CHANGELOG.md` into the release.** The heading becomes `## [<version>] - <date>`, and the link `[Unreleased]: …/compare/v<previous>...HEAD` becomes `[<version>]: …/compare/v<previous>...v<version>`. The push gate and the release job refuse the tag while the word "Unreleased" remains anywhere in the file.
 4. **Regenerate the README tour** (`assets/listview-tour.gif`). The demo shows the installed version next to its title, so record the tour after the bump has reached the editable install and before the release commit. `uv run` reinstalls the project once `pyproject.toml` changes, and the tour command runs through it:
    ```sh
    npm --prefix streamlit_listview/frontend run build
    LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel --with imageio-ffmpeg python scripts/gif/screencast.py
    ```
-   Check that the badge in the new GIF reads the new version. No check enforces this either.
+   Check that the badge in the new GIF reads the new version. No check enforces this.
 5. **Commit, then tag:** `git tag v<version>`.
-6. **Push the tag to the GitHub remote by name:** `git push <github-remote> v<version>`. The workflow runs only on GitHub, and a bare `git push --tags` goes to the default remote, which need not be GitHub. The build job fails when the tag differs from `[project].version`, so the tag and the published wheel always agree.
-7. **Push the branch only after the publish job has finished.** Community Cloud redeploys on every branch push. Pushed early, the hosted demo installs a pin that PyPI does not have yet, and it fails until someone reboots it.
+6. **Push the tag to the GitHub remote by name, with the confirmation:** `git -c listview.pushGithub=<version> push <github-remote> v<version>`. The workflow runs only on GitHub, and a bare `git push --tags` goes to the default remote, which need not be GitHub. The push gate refuses a version that PyPI already has and a tag that GitHub's `main` could not fast-forward to, and it runs the full CI suite on the tagged commit, which must be `HEAD` of a clean tree; the suite takes several minutes. The build job fails when the tag differs from `[project].version`, so the tag and the published wheel always agree.
+7. **Push the branch only after the publish job has finished:** `git -c listview.pushGithub=<version> push <github-remote> main`. Community Cloud redeploys on every branch push and installs the pin from PyPI. The push gate refuses the push until PyPI serves the version, so the hosted demo never installs a missing pin. The suite result comes from the tag push of the same commit.
 
 Steps 6 and 7 publish. Confirm each push with the user before running it.
 

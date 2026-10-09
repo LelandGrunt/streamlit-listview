@@ -56,7 +56,8 @@ devel = [
 
 [tool.coverage.run]
 branch = true
-source = ["streamlit_listview", "demo"]
+# push_gate is scripts/push_gate.py, imported by name after a sys.path insert.
+source = ["streamlit_listview", "demo", "push_gate"]
 omit = [
   # Streamlit entry point: rendered in a subprocess and exercised by the
   # Playwright e2e suite (+ a compile smoke test), not measurable in-process.
@@ -65,8 +66,8 @@ omit = [
 
 [tool.coverage.report]
 show_missing = true
-# The unit-testable surface (the listview package + the demo's pure helpers)
-# is exhaustively covered; keep it that way.
+# The unit-testable surface (the listview package, the demo's pure helpers and
+# the push gate) is exhaustively covered; keep it that way.
 fail_under = 100
 
 # Ruff lints with its default rule set and formats with its default style

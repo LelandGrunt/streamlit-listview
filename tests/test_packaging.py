@@ -21,6 +21,7 @@ EXPECTED_VERSION = "1.0.1"
 
 sys.path.insert(0, str(ROOT / "scripts"))
 
+import push_gate
 import verify_wheel
 
 
@@ -53,9 +54,9 @@ def test_demo_requirements_pin_the_released_version():
     # rather than building the repo, so a pin left behind on a release silently
     # keeps the hosted demo on the previous version. Exactly one `==` pin: a
     # range or a second spelling would let the two drift apart unnoticed.
-    pins = re.findall(
-        r"(?mi)^\s*streamlit[-_.]listview\s*==\s*([^\s;#]+)", _read(DEMO_REQUIREMENTS)
-    )
+    # THE pin parse lives in push_gate.demo_pins, which the pre-push gate uses
+    # too, so the gate and this test agree on what counts as a pin.
+    pins = push_gate.demo_pins(_read(DEMO_REQUIREMENTS))
     assert pins == [_project_version(_read(ROOT_PYPROJECT))]
 
 

@@ -26,19 +26,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the history the check needs to compare the tag with main
 
-      # Fail fast if the pushed tag disagrees with [project].version — otherwise
-      # the wheel filename (and the PyPI release) would not match the git tag.
-      - name: Check tag matches package version
-        shell: bash
-        run: |
-          version=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
-          tag="${GITHUB_REF_NAME#v}"
-          if [ "$tag" != "$version" ]; then
-            echo "::error::Tag '$tag' does not match pyproject version '$version'"
-            exit 1
-          fi
-          echo "Tag matches package version $version"
+      # Fail fast unless the tagged commit is a consistent release: the tag
+      # names [project].version, the places that assert the version and
+      # uv.lock agree, CHANGELOG.md dates the version and contains no
+      # "Unreleased", PyPI lacks the version, and GitHub's main can
+      # fast-forward to the tagged commit. The local pre-push hook runs the
+      # same checks; this step catches a tag pushed with --no-verify.
+      - name: Check the version information (push gate)
+        run: python3 scripts/push_gate.py check tag "$GITHUB_REF_NAME"
 
       - name: Set up Node
         uses: actions/setup-node@v7

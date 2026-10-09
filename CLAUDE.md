@@ -119,10 +119,21 @@ uv run --extra devel streamlit run demo/app.py   # needs the package installed a
 - **The GIF scenarios, the tour and the e2e suite find the widget by its `data-testid`s and the demo by its labels.** A rename breaks them; fix them in the same change.
 
 ## CI (`.github/workflows/ci.yml`)
-Two jobs run in parallel. `lint` runs `uvx pre-commit run --all-files --show-diff-on-failure`. `test-build-verify` runs, in order: `npm ci`, `npm run build`, `npm test`, an editable install with `LISTVIEW_SKIP_NPM_BUILD=1`, `pytest tests/` with the coverage gate, a wheel build from a clean bundle, and `scripts/verify_wheel.py`. That script checks that the wheel ships exactly one `index-*.js` and one `index-*.css` under `frontend/build/`, plus the manifest and the license files. **The build must precede `npm test`** (see *Tests*). The e2e suite does not run in CI. Actions are referenced by version tag, not by SHA, on purpose.
+Three jobs run in parallel. `lint` runs `uvx pre-commit run --all-files --show-diff-on-failure`. `test-build-verify` runs, in order: `npm ci`, `npm run build`, `npm test`, an editable install with `LISTVIEW_SKIP_NPM_BUILD=1`, `pytest tests/` with the coverage gate, a wheel build from a clean bundle, and `scripts/verify_wheel.py`. That script checks that the wheel ships exactly one `index-*.js` and one `index-*.css` under `frontend/build/`, plus the manifest and the license files. `push-gate` runs on a push to `main` only: `python3 scripts/push_gate.py check main` checks the version information and the release state (see *Pushing to GitHub*). **The build must precede `npm test`** (see *Tests*). The e2e suite does not run in CI. Actions are referenced by version tag, not by SHA, on purpose.
 
 ## Releasing
 A `v*.*.*` tag pushed to GitHub publishes to PyPI through Trusted Publishing (`.github/workflows/release.yml`). **Cut a release with the `release` skill** (`.claude/skills/release/SKILL.md`): five files assert the version, the release job fails when one disagrees, and the order of the pushes matters.
+
+### Pushing to GitHub
+GitHub `main` shows released code only: Streamlit Community Cloud runs the hosted demo from it and installs the version that `demo/requirements.txt` pins from PyPI. A pre-push hook, `scripts/push_gate.py`, refuses every push to GitHub except `main` and `v*` tags. It lets those pass only with a command-line confirmation that names the version, consistent version information, a changelog without "Unreleased", the release order (the tag, then the PyPI release, then `main`), and a passing CI suite on the pushed commit, which must be `HEAD` of a clean tree. CI's `push-gate` job and `release.yml` repeat the version checks on GitHub.
+```sh
+uv run --no-project python scripts/push_gate.py install       # once per clone; the worktrees share the hook
+git branch --set-upstream-to=azure/main main                  # in a clone with an Azure DevOps remote `azure`
+git -c listview.pushGithub=<version> push origin v<version>   # then the same for main, once PyPI serves the version
+```
+- **Never pass `--no-verify`.** CI reports such a push on `main`, but by then the commit is public.
+- **`git push --dry-run` runs the hook and sends nothing.** Use it to see what the gate says.
+- **The suite runs once per commit.** `.git/push-gate/passed` lists the commits that passed; delete the file to force a new run.
 
 ## Docs
 `README.md` documents the public API, `demo/README.md` the playground, `CHANGELOG.md` the user-visible changes per release (Keep a Changelog format), and `BENCHMARKS.md` the benchmarks. Update `BENCHMARKS.md` when a benchmark tier changes.

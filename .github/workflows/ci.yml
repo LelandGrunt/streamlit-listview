@@ -105,3 +105,19 @@ jobs:
           name: streamlit-listview-wheel
           path: dist/*.whl
           if-no-files-found: error
+
+  # Every push to main must leave GitHub on a released version: consistent
+  # version information, a changelog without "Unreleased", the release tag and
+  # the PyPI release in place, and the library code of that release. The local
+  # pre-push hook (scripts/push_gate.py) checks the same before a push; this
+  # job reports a push that skipped the hook with --no-verify.
+  push-gate:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the tags and the history for the library comparison
+
+      - name: Version information and release state (push gate)
+        run: python3 scripts/push_gate.py check main
