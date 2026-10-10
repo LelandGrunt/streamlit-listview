@@ -396,6 +396,7 @@ def sort_items(
     items: list[dict[str, Any]],
     sort: str | None,
     sort_ascending: bool,
+    ungrouped_label: str | None = None,
 ) -> list[dict[str, Any]]:
     """Reorder normalized items for the ``sort`` / ``sort_ascending`` params.
 
@@ -410,7 +411,13 @@ def sort_items(
 
     ``sort_ascending`` reverses both comparisons when False; the ungrouped block
     stays last regardless of direction. The sort is stable. Input dicts are not
-    mutated.
+    mutated. The frontend renders the ungrouped block last in every mode, None
+    included. This function moves it last only when it sorts groups, so its
+    output follows the render order only then.
+
+    The group named ``ungrouped_label`` belongs to the ungrouped block: the
+    frontend renders its options and the options without a group as one block
+    under that header, so they sort as one. None puts no group there.
     """
     if sort is None:
         return items
@@ -420,11 +427,13 @@ def sort_items(
     sort_groups = sort in ("groups", "both")
 
     # Partition into blocks, preserving first-appearance order. A None name is
-    # the ungrouped block.
+    # the ungrouped block, which the group named ungrouped_label joins.
     blocks: list[tuple[str | None, list[dict[str, Any]]]] = []
     index_by_name: dict[str | None, int] = {}
     for item in items:
         name = item.get("group")
+        if name == ungrouped_label:
+            name = None
         idx = index_by_name.get(name)
         if idx is None:
             idx = len(blocks)

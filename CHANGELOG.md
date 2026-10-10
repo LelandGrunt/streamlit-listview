@@ -14,6 +14,7 @@ Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](h
 - **The README shows the widget in seven more GIFs**: keyboard use, adding options, Markdown, the layout parameters, themes, a list of 100,000 options with a pinned search, and the jump to the default selection.
 - **The README opens with a 50-second tour of the demo app**, recorded with Streamlit's own *Record screen*: multi-select, search, collapsible groups, sorting, a default far down the list, two brand themes, 100,000 options and the sidebar. `scripts/gif/screencast.py` records it again.
 - `scripts/gif/compare.py` compares two recordings of the README GIF scenarios frame by frame and writes an HTML report that marks the changed pixels in red. It shows what a change did to the widget's look; see `scripts/gif/README.md`.
+- **`ungrouped_label` sets the header of the options without a group** (default `"Other"`). A group of your own with that name shares the header and its block. Set another label, such as `"N/A"`, to translate the header or to keep that group apart.
 
 ### Changed
 
@@ -39,6 +40,9 @@ Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](h
   The same rule covers an unknown `default` and a selected id that a keyed widget keeps after you remove it from `options`. If your code tested a returned value for `str` to find added entries, test for the option's type instead: with dict options an added entry is a dict whose `id` is the typed text.
 - **With int options, the add field accepts only whole numbers.** It takes `42` or `-5` and refuses `abc`, `1.5`, `007` and `+5`, with the hint "Enter a whole number" below the field. Text that matches an existing row's id or label still selects that row, but users can no longer add free text to a list of int options.
 - **With int options, an unknown `default` must be a whole number.** `default="abc"` raises `ValueError`; `default=42` and `default="42"` both come back as `42`.
+- **In a grouped list, the options without a group render last, under their own header.** Before, they rendered without a header where the first of them stood in `options`, so an option placed first, such as "All cities", sat above every group. It now renders at the end. `collapsed_groups="all"` collapses this header too, and so does a list that names `ungrouped_label`.
+- **The add field of `accept_new_options` sits in a footer below the list** and stays in view while the list scrolls. The widget grows by the height of that footer; `height` still sets the height of the scrolling list. After an add, the list opens the block the entry appears in and scrolls to the entry.
+- **Select all adds the rows in the order shown, so a `max_selections` cap takes them from the top of the list.** Before, it took the options in the order you passed them, which grouping can rearrange.
 
 ### Fixed
 
@@ -46,6 +50,7 @@ Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](h
 - **A listview whose `key` changes scrolls its `default` into view also when its stylesheet arrives late.** A new `key`, such as one that includes the `default` the way the demo's does, makes Streamlit draw the listview anew, and the browser loads the listview's stylesheet again. On a slow connection the listview scrolled to its default before the stylesheet arrived, so the scroll was lost and the list stayed at its top. With the stylesheet held back 400 ms in Chromium, the 988th of 1,000 options stayed out of view. The listview now waits for its stylesheet, up to about 10 seconds, before it scrolls.
 - **The demo clears the selection when you pick another data source or Large size.** Before, the selection outlived its dataset: with **Accept new options** on, every row selected in the old dataset stayed selected as an added entry. Edits to the **Custom** options keep the selection, so the demo still shows how a keyed listview corrects its selection when `options` change.
 - **The scroll range follows a change of the row height on a rerun.** A listview with a `key`, scrolled away from its top, got `item_height`, `content_font_size` or `show_grid_lines` changed on a rerun, and the rows outside the visible frame kept their old height until the list scrolled back to its top. With 1,000 options and a change to `item_height=50`, the list scrolled over 37,205 px where its rows take 50,354 px, so the scrollbar and the rows below the frame sat at the wrong places. The listview now measures its rows again whenever their height changes, a theme with another font included.
+- **Options without a group and entries added via `accept_new_options` show that they belong to no group.** In a grouped list they looked like members of the last group above them, and only the returned value showed otherwise. The add field below the rows looked like part of that group too.
 
 ## [1.0.1] - 2026-10-04
 

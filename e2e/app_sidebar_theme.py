@@ -1,8 +1,9 @@
 # e2e/app_sidebar_theme.py
 """Harness for the sidebar surface-color test (e2e/test_sidebar_theme.py).
 
-The same grouped, searchable listview is rendered twice — once in st.sidebar,
-once in the main body — each next to an st.selectbox in the SAME container.
+The same grouped, searchable listview with an add field is rendered twice —
+once in st.sidebar, once in the main body — each next to an st.selectbox in the
+SAME container.
 The selectbox is the reference the assertions compare against: Streamlit fills
 its control from --st-secondary-background-color, which its sidebar theme swaps
 with --st-background-color. Reading both from one page is what makes the
@@ -28,6 +29,7 @@ with st.sidebar:
         "Sidebar list",
         OPTIONS,
         enable_search=True,
+        accept_new_options=True,
         height=200,
         key="sidebar_list",
     )
@@ -37,6 +39,7 @@ listview(
     "Main list",
     OPTIONS,
     enable_search=True,
+    accept_new_options=True,
     height=200,
     key="main_list",
 )

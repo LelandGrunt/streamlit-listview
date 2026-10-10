@@ -7,8 +7,12 @@ export interface UseScrollToItemArgs {
   defaultIds: Id[];
   /** Current items (including any synthetic new-option rows). */
   items: ListviewItem[];
-  /** Force a group open before scrolling (from useCollapse). */
-  ensureGroupExpanded: (name: string) => void;
+  /**
+   * Force the target's block open before scrolling. Takes the target's group,
+   * or `null` when it has none; the container finds the block that group
+   * renders in.
+   */
+  ensureGroupExpanded: (group: string | null) => void;
   /** Perform the actual DOM scroll for an id (container-provided). */
   scrollToId: (id: Id) => void;
 }
@@ -17,8 +21,9 @@ export interface UseScrollToItemArgs {
  * Jump-to-default-item. Scrolls the FIRST default id into view on first mount
  * and again whenever `defaultIds` changes between reruns (compared by value).
  * Reruns where `defaultIds` is unchanged never scroll, so the user's scroll
- * position is preserved. If the target sits in a collapsed group it is expanded
- * first. A target absent from `items` is a no-op. Scrolling never changes the
+ * position is preserved. If the target sits in a collapsed block — a group, or
+ * the block without a group — it is expanded first. A target absent from
+ * `items` is a no-op. Scrolling never changes the
  * selection — it only scrolls.
  */
 export function useScrollToItem({
@@ -48,9 +53,9 @@ export function useScrollToItem({
     if (!target) {
       return; // not in options → no-op
     }
-    if (target.group != null) {
-      ensureGroupExpanded(target.group);
-    }
+    // Every row renders in a block the user may have collapsed, the block
+    // without a group included, so the target's block always gets opened.
+    ensureGroupExpanded(target.group ?? null);
     scrollToId(targetId);
     // `items` intentionally excluded from deps: scrolling is triggered by a
     // defaultIds change, not by item churn (re-running on every items change

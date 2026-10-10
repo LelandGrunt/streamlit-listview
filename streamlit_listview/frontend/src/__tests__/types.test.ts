@@ -62,6 +62,7 @@ describe("types wire format", () => {
       search_placeholder: "Search",
       collapsible_groups: false,
       collapsed_groups: null,
+      ungrouped_label: "Other",
       accept_new_options: false,
       new_option_kind: null,
       max_selections: null,
@@ -100,6 +101,7 @@ describe("types wire format", () => {
         "selection_mode",
         "show_grid_lines",
         "state_selection",
+        "ungrouped_label",
         "width",
       ].sort(),
     );

@@ -20,6 +20,7 @@ _INSTANCE_NAME = {
     "newopt_int": "Add a number",
     "selectall": "Bulk select",
     "sorted": "Sorted",
+    "groupednew": "Grouped adds",
 }
 
 
@@ -157,13 +158,12 @@ def test_accept_new_options_with_int_options_refuses_text_with_a_hint(page: Page
     expect(inp).to_have_value("abc")
     expect(inp).to_have_attribute("aria-invalid", "true")
     expect(echo(page, "newopt_int")).to_contain_text("newopt_int_echo=[]")
-    # The hint is the last content of the 100 px scroll frame, so the frame must
-    # have scrolled to its end for the hint to be seen.
-    body = root.locator(".listview-body")
-    page.wait_for_function(
-        "el => el.scrollTop + el.clientHeight >= el.scrollHeight - 1",
-        arg=body.element_handle(),
-    )
+    # The hint sits in the footer below the 100 px scroll frame, so it shows
+    # without the frame having to scroll.
+    expect(
+        root.locator(".listview-footer").get_by_test_id("stListviewNewOptionHint")
+    ).to_be_visible()
+    assert root.locator(".listview-body").evaluate("el => el.scrollTop") == 0
 
 
 def test_select_all_selects_all_visible_and_flips_label(page: Page):
@@ -234,3 +234,85 @@ def test_sort_orders_groups_and_items(page: Page):
     expect(rows).to_have_count(len(expected))
     for i, label in enumerate(expected):
         expect(rows.nth(i)).to_contain_text(label)
+
+
+def test_rows_without_a_group_render_last_under_their_own_header(page: Page):
+    root = _root(page, "groupednew")
+    headers = root.get_by_test_id("stListviewGroup")
+    expect(headers).to_have_count(4)
+    expect(headers.nth(3)).to_contain_text("Other")
+    rows = root.locator("[data-testid^='stListviewOption-']")
+    expect(rows.last).to_contain_text("Misc")
+    expect(
+        root.get_by_role("group", name="Other").get_by_test_id("stListviewOption-misc")
+    ).to_have_count(1)
+
+
+def test_the_add_field_stays_in_place_while_the_list_scrolls(page: Page):
+    root = _root(page, "groupednew")
+    field = root.get_by_test_id("stListviewNewOption")
+    expect(
+        root.locator(".listview-footer").get_by_test_id("stListviewNewOption")
+    ).to_have_count(1)
+    expect(
+        root.locator(".listview-body").get_by_test_id("stListviewNewOption")
+    ).to_have_count(0)
+    before = field.bounding_box()
+    body = root.locator(".listview-body")
+    body.evaluate("el => el.scrollTo(0, el.scrollHeight)")
+    # the frame overflows, so the list really did scroll
+    assert body.evaluate("el => el.scrollTop") > 0
+    # scrolling the list moves the rows, not the field
+    assert field.bounding_box() == before
+
+
+def test_an_added_entry_scrolls_into_view_under_other(page: Page):
+    root = _root(page, "groupednew")
+    body = root.locator(".listview-body")
+    body.evaluate("el => el.scrollTo(0, 0)")
+    inp = root.get_by_test_id("stListviewNewOption")
+    inp.fill("Mango")
+    inp.press("Enter")
+    # Polled: the scroll runs in a frame after the commit that renders the row.
+    page.wait_for_function(
+        """(body) => {
+            const row = body.querySelector('[data-testid="stListviewOption-Mango"]');
+            if (!row) return false;
+            const frame = body.getBoundingClientRect();
+            const box = row.getBoundingClientRect();
+            return (
+                body.scrollTop > 0 &&
+                box.top >= frame.top - 1 &&
+                box.bottom <= frame.bottom + 1
+            );
+        }""",
+        arg=body.element_handle(),
+    )
+    expect(
+        root.get_by_role("group", name="Other").get_by_test_id("stListviewOption-Mango")
+    ).to_have_count(1)
+
+
+def test_footer_seam_stays_a_divider_while_the_frame_lights(page: Page):
+    # The footer mirrors the pinned header: focus paints the control's outline
+    # in the primary color, and the seam between body and footer keeps its
+    # resting color as the only line there.
+    root = _root(page, "groupednew")
+    footer, body = root.locator(".listview-footer"), root.locator(".listview-body")
+    rest = footer.evaluate("el => getComputedStyle(el).borderBottomColor")
+
+    root.get_by_test_id("stListviewNewOption").click()
+    page.wait_for_timeout(300)  # the frame's border-color transition (0.15s)
+
+    lit = footer.evaluate(
+        "el => { const s = getComputedStyle(el); return [s.borderBottomColor, s.borderLeftColor]; }"
+    )
+    edges = body.evaluate(
+        """el => { const s = getComputedStyle(el);
+            return { left: s.borderLeftColor, top: s.borderTopColor, bottomWidth: s.borderBottomWidth }; }"""
+    )
+    seam = footer.evaluate("el => getComputedStyle(el, '::before').backgroundColor")
+    assert lit[0] != rest and lit == [lit[0], lit[0]]
+    assert edges["left"] == lit[0] and edges["top"] == lit[0]
+    assert seam == rest
+    assert edges["bottomWidth"] == "0px"

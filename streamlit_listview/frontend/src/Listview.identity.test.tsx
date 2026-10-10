@@ -117,7 +117,7 @@ describe("newOptionItems referential identity", () => {
     // Counter-check: a rebuild that genuinely grows the list must hand back a
     // NEW array and re-run the fold pass ("Papaya" itself stays filtered out by
     // the active query). "Apple" folds twice on this add — once by
-    // findExistingId's label scan, once by the re-run fold pass; a wrongly
+    // findExistingRow's label scan, once by the re-run fold pass; a wrongly
     // remembered array would leave only the scan's single fold.
     foldCalls.mockClear();
     await user.type(screen.getByTestId("stListviewNewOption"), "Papaya");

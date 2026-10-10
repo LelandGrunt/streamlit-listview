@@ -37,6 +37,7 @@ export interface ListviewData {
   search_placeholder: string;
   collapsible_groups: boolean;
   collapsed_groups: string[] | "all" | null;
+  ungrouped_label: string; // header of the rows without a group, shown only in a grouped list
   accept_new_options: boolean;
   new_option_kind: NewOptionKind | null; // the type a new entry comes back as; null when accept_new_options is off
   max_selections: number | null;

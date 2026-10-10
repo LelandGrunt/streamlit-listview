@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { useCollapse } from "./useCollapse";
+import { useCollapse, type GroupKey } from "./useCollapse";
 
 const NAMES = ["Fruit", "Vegetable"];
 
@@ -10,7 +10,7 @@ describe("useCollapse", () => {
       useCollapse({
         collapsibleGroups: false,
         collapsedGroups: "all",
-        groupNames: NAMES,
+        groupKeys: NAMES,
       }),
     );
     expect(result.current.isCollapsed("Fruit")).toBe(false);
@@ -22,7 +22,7 @@ describe("useCollapse", () => {
       useCollapse({
         collapsibleGroups: true,
         collapsedGroups: "all",
-        groupNames: NAMES,
+        groupKeys: NAMES,
       }),
     );
     expect(result.current.isCollapsed("Fruit")).toBe(true);
@@ -36,7 +36,7 @@ describe("useCollapse", () => {
       useCollapse({
         collapsibleGroups: true,
         collapsedGroups: ["Fruit", "Nope"],
-        groupNames: NAMES,
+        groupKeys: NAMES,
       }),
     );
     expect(result.current.isCollapsed("Fruit")).toBe(true);
@@ -49,7 +49,7 @@ describe("useCollapse", () => {
       useCollapse({
         collapsibleGroups: true,
         collapsedGroups: null,
-        groupNames: NAMES,
+        groupKeys: NAMES,
       }),
     );
     expect(result.current.isCollapsed("Fruit")).toBe(false);
@@ -60,7 +60,7 @@ describe("useCollapse", () => {
       useCollapse({
         collapsibleGroups: true,
         collapsedGroups: null,
-        groupNames: NAMES,
+        groupKeys: NAMES,
       }),
     );
     act(() => result.current.toggle("Fruit"));
@@ -79,7 +79,7 @@ describe("useCollapse", () => {
       useCollapse({
         collapsibleGroups: true,
         collapsedGroups: null,
-        groupNames: NAMES,
+        groupKeys: NAMES,
       }),
     );
     act(() => result.current.expand("Fruit"));
@@ -90,51 +90,51 @@ describe("useCollapse", () => {
     // The reconcile effect also runs on mount; it must not prune the names the
     // initializer just seeded (the groups were already "seen" at that point).
     const { result, rerender } = renderHook(
-      ({ groupNames }) =>
+      ({ groupKeys }) =>
         useCollapse({
           collapsibleGroups: true,
           collapsedGroups: ["Fruit"],
-          groupNames,
+          groupKeys,
         }),
-      { initialProps: { groupNames: [...NAMES] } },
+      { initialProps: { groupKeys: [...NAMES] } },
     );
     expect(result.current.isCollapsed("Fruit")).toBe(true);
-    rerender({ groupNames: [...NAMES] }); // same names, fresh array identity
+    rerender({ groupKeys: [...NAMES] }); // same names, fresh array identity
     expect(result.current.isCollapsed("Fruit")).toBe(true);
   });
 
   it("applies collapsedGroups to groups whose options only arrive on a later rerun", () => {
     // A keyed instance does not remount, so options fetched async / behind a
-    // "load data" button reach the hook with groupNames still empty. The config
+    // "load data" button reach the hook with groupKeys still empty. The config
     // must apply when the groups first show up, not be silently inert.
     const { result, rerender } = renderHook(
-      ({ groupNames }) =>
+      ({ groupKeys }) =>
         useCollapse({
           collapsibleGroups: true,
           collapsedGroups: ["Fruit"],
-          groupNames,
+          groupKeys,
         }),
-      { initialProps: { groupNames: [] as string[] } },
+      { initialProps: { groupKeys: [] as string[] } },
     );
     expect(result.current.isCollapsed("Fruit")).toBe(false); // nothing to collapse yet
-    rerender({ groupNames: NAMES });
+    rerender({ groupKeys: NAMES });
     expect(result.current.isCollapsed("Fruit")).toBe(true);
     expect(result.current.isCollapsed("Vegetable")).toBe(false); // not configured
   });
 
   it('collapsedGroups="all" applies to a group seen for the first time after mount', () => {
     const { result, rerender } = renderHook(
-      ({ groupNames }) =>
+      ({ groupKeys }) =>
         useCollapse({
           collapsibleGroups: true,
           collapsedGroups: "all",
-          groupNames,
+          groupKeys,
         }),
-      { initialProps: { groupNames: [] as string[] } },
+      { initialProps: { groupKeys: [] as string[] } },
     );
-    rerender({ groupNames: ["Fruit"] });
+    rerender({ groupKeys: ["Fruit"] });
     expect(result.current.isCollapsed("Fruit")).toBe(true);
-    rerender({ groupNames: ["Fruit", "Vegetable"] }); // Vegetable is new
+    rerender({ groupKeys: ["Fruit", "Vegetable"] }); // Vegetable is new
     expect(result.current.isCollapsed("Vegetable")).toBe(true);
   });
 
@@ -142,17 +142,17 @@ describe("useCollapse", () => {
     // Once a group has been seen the user owns it: neither the expanded nor the
     // collapsed hand-set state may be re-seeded from the config afterwards.
     const { result, rerender } = renderHook(
-      ({ groupNames }) =>
+      ({ groupKeys }) =>
         useCollapse({
           collapsibleGroups: true,
           collapsedGroups: ["Fruit"],
-          groupNames,
+          groupKeys,
         }),
-      { initialProps: { groupNames: [...NAMES] } },
+      { initialProps: { groupKeys: [...NAMES] } },
     );
     act(() => result.current.expand("Fruit")); // user opens the seeded-collapsed group
     act(() => result.current.toggle("Vegetable")); // and closes another by hand
-    rerender({ groupNames: [...NAMES, "Dairy"] }); // options change (a group is added)
+    rerender({ groupKeys: [...NAMES, "Dairy"] }); // options change (a group is added)
     expect(result.current.isCollapsed("Fruit")).toBe(false);
     expect(result.current.isCollapsed("Vegetable")).toBe(true);
     expect(result.current.isCollapsed("Dairy")).toBe(false); // new, not configured
@@ -162,17 +162,17 @@ describe("useCollapse", () => {
     // Documented contract: groups appearing in later reruns default to open. A
     // group seeded collapsed that vanishes and returns must NOT stay collapsed.
     const { result, rerender } = renderHook(
-      ({ groupNames }) =>
+      ({ groupKeys }) =>
         useCollapse({
           collapsibleGroups: true,
           collapsedGroups: ["Fruit"],
-          groupNames,
+          groupKeys,
         }),
-      { initialProps: { groupNames: ["Fruit", "Vegetable"] } },
+      { initialProps: { groupKeys: ["Fruit", "Vegetable"] } },
     );
     expect(result.current.isCollapsed("Fruit")).toBe(true);
-    rerender({ groupNames: ["Vegetable"] }); // Fruit removed
-    rerender({ groupNames: ["Fruit", "Vegetable"] }); // Fruit reappears
+    rerender({ groupKeys: ["Vegetable"] }); // Fruit removed
+    rerender({ groupKeys: ["Fruit", "Vegetable"] }); // Fruit reappears
     expect(result.current.isCollapsed("Fruit")).toBe(false);
   });
 
@@ -186,7 +186,7 @@ describe("useCollapse", () => {
         useCollapse({
           collapsibleGroups,
           collapsedGroups: ["Fish"],
-          groupNames: ["Fish", "Fowl"],
+          groupKeys: ["Fish", "Fowl"],
         }),
       { initialProps: { collapsibleGroups: false } },
     );
@@ -198,17 +198,17 @@ describe("useCollapse", () => {
 
   it("seeds a group whose options only arrive after the flip to collapsible", () => {
     const { result, rerender } = renderHook(
-      ({ collapsibleGroups, groupNames }) =>
+      ({ collapsibleGroups, groupKeys }) =>
         useCollapse({
           collapsibleGroups,
           collapsedGroups: ["Fish"],
-          groupNames,
+          groupKeys,
         }),
       {
-        initialProps: { collapsibleGroups: false, groupNames: [] as string[] },
+        initialProps: { collapsibleGroups: false, groupKeys: [] as string[] },
       },
     );
-    rerender({ collapsibleGroups: true, groupNames: ["Fish"] });
+    rerender({ collapsibleGroups: true, groupKeys: ["Fish"] });
     expect(result.current.isCollapsed("Fish")).toBe(true);
   });
 
@@ -220,7 +220,7 @@ describe("useCollapse", () => {
         useCollapse({
           collapsibleGroups,
           collapsedGroups: ["Fish"],
-          groupNames: ["Fish"],
+          groupKeys: ["Fish"],
         }),
       { initialProps: { collapsibleGroups: true } },
     );
@@ -231,13 +231,93 @@ describe("useCollapse", () => {
     expect(result.current.isCollapsed("Fish")).toBe(false); // not re-seeded
   });
 
+  it('"all" collapses the block without a group (key null), and so does a list holding null', () => {
+    const all = renderHook(() =>
+      useCollapse({
+        collapsibleGroups: true,
+        collapsedGroups: "all",
+        groupKeys: ["Fruit", null],
+      }),
+    );
+    expect(all.result.current.isCollapsed(null)).toBe(true);
+    // The hook matches keys exactly: the container maps ungrouped_label in the
+    // caller's list to null, so a string never names the null block here.
+    const named = renderHook(() =>
+      useCollapse({
+        collapsibleGroups: true,
+        collapsedGroups: ["Other", "Fruit"],
+        groupKeys: ["Fruit", null],
+      }),
+    );
+    expect(named.result.current.isCollapsed(null)).toBe(false);
+    expect(named.result.current.isCollapsed("Fruit")).toBe(true);
+    const mapped = renderHook(() =>
+      useCollapse({
+        collapsibleGroups: true,
+        collapsedGroups: [null],
+        groupKeys: ["Fruit", null],
+      }),
+    );
+    expect(mapped.result.current.isCollapsed(null)).toBe(true);
+    expect(mapped.result.current.isCollapsed("Fruit")).toBe(false);
+  });
+
+  it("keeps the block without a group apart from a group named like its header", () => {
+    const { result } = renderHook(() =>
+      useCollapse({
+        collapsibleGroups: true,
+        collapsedGroups: null,
+        groupKeys: ["Other", null],
+      }),
+    );
+    act(() => result.current.toggle(null));
+    expect(result.current.isCollapsed(null)).toBe(true);
+    expect(result.current.isCollapsed("Other")).toBe(false);
+  });
+
+  it("an expand counts as a sighting, so the seed cannot close a group opened before it appears", () => {
+    // An add under accept_new_options opens the block without a group in the
+    // event that creates it; the key arrives with the next render. Under "all"
+    // the first-sighting seed would close the block over the row just added.
+    const { result, rerender } = renderHook(
+      ({ groupKeys }) =>
+        useCollapse({
+          collapsibleGroups: true,
+          collapsedGroups: "all",
+          groupKeys,
+        }),
+      { initialProps: { groupKeys: ["Fruit"] as GroupKey[] } },
+    );
+    act(() => result.current.expand(null));
+    rerender({ groupKeys: ["Fruit", null] });
+    expect(result.current.isCollapsed(null)).toBe(false);
+    expect(result.current.isCollapsed("Fruit")).toBe(true);
+  });
+
+  it("an expand while collapsibleGroups is off spends no seed", () => {
+    // Like every sighting, an expand counts only while the header is a toggle.
+    const { result, rerender } = renderHook(
+      ({ collapsibleGroups, groupKeys }) =>
+        useCollapse({ collapsibleGroups, collapsedGroups: "all", groupKeys }),
+      {
+        initialProps: {
+          collapsibleGroups: false,
+          groupKeys: ["Fruit"] as GroupKey[],
+        },
+      },
+    );
+    act(() => result.current.expand(null));
+    rerender({ collapsibleGroups: true, groupKeys: ["Fruit", null] });
+    expect(result.current.isCollapsed(null)).toBe(true);
+  });
+
   it("returns a referentially stable object across re-renders with unchanged inputs", () => {
     // The container memoizes off this object identity (focusableItems); a fresh
     // object every render would defeat that memo and re-filter on every render.
     const props = {
       collapsibleGroups: true,
       collapsedGroups: null as string[] | "all" | null,
-      groupNames: NAMES,
+      groupKeys: NAMES,
     };
     const { result, rerender } = renderHook(() => useCollapse(props));
     const first = result.current;

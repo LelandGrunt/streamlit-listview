@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, within, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useLayoutEffect } from "react";
 import { Listview } from "./Listview";
 import { ROW_HEIGHT_PROPERTY } from "./hooks/useRowHeight";
 import type { ListviewData } from "./types";
@@ -178,24 +179,6 @@ describe("Listview", () => {
     expect(listbox.getAttribute("aria-disabled")).toBe("true");
     await user.click(screen.getByText("Apple"));
     expect(setStateValue).not.toHaveBeenCalled();
-  });
-
-  it("renders ungrouped items without a header and keeps grouped headers", () => {
-    render(
-      <Listview
-        data={makeData({
-          items: [
-            { id: "x", label: "Loose" },
-            { id: "a", label: "Apple", group: "Fruit" },
-          ],
-        })}
-        setStateValue={vi.fn()}
-      />,
-    );
-    expect(screen.getByText("Loose")).toBeInTheDocument();
-    expect(screen.getByText("Fruit")).toBeInTheDocument();
-    // exactly one group header (Fruit); the loose item has none
-    expect(screen.getAllByTestId("stListviewGroup")).toHaveLength(1);
   });
 
   it("applies layout via inline CSS variables", () => {
@@ -456,6 +439,51 @@ describe("accept_new_options", () => {
       />,
     );
     expect(screen.getByTestId("stListviewNewOption")).toBeInTheDocument();
+  });
+
+  it("puts the add field in a footer after the scroll frame, not inside it", () => {
+    // Inside the frame the add field read as the last row of the last group,
+    // and it scrolled away with the rows.
+    const { container } = render(
+      <Listview
+        data={baseData({ accept_new_options: true })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    const footer = container.querySelector(".listview-footer") as HTMLElement;
+    expect(
+      within(footer).getByTestId("stListviewNewOption"),
+    ).toBeInTheDocument();
+    expect(
+      within(footer).getByTestId("stListviewNewOptionHint"),
+    ).toBeInTheDocument();
+    expect(
+      footer.previousElementSibling?.classList.contains("listview-body"),
+    ).toBe(true);
+    expect(
+      container.querySelector(
+        '.listview-body [data-testid="stListviewNewOption"]',
+      ),
+    ).toBeNull();
+  });
+
+  it("renders no footer without accept_new_options", () => {
+    const { container } = render(
+      <Listview data={baseData()} setStateValue={vi.fn()} />,
+    );
+    expect(container.querySelector(".listview-footer")).toBeNull();
+  });
+
+  it("disables the add field with the rest of a disabled widget", () => {
+    // The footer sits outside the body; its field takes the widget's disabled
+    // state, and the stylesheet fades the footer too.
+    render(
+      <Listview
+        data={baseData({ accept_new_options: true, disabled: true })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("stListviewNewOption")).toBeDisabled();
   });
 
   it("adding a new option selects it, renders it as a row, and writes state", async () => {
@@ -757,45 +785,6 @@ describe("accept_new_options", () => {
     expect(screen.getAllByRole("option")).toHaveLength(2);
   });
 
-  it("renders added entries in a block of their own at the very bottom", async () => {
-    // README promise: added entries are appended at the bottom. Grouping the
-    // caller's options and the added rows separately is what keeps that true when
-    // the list MIXES grouped and ungrouped options — a single grouping pass merged
-    // the added row into the first ungrouped block, which sits above the group.
-    const user = userEvent.setup();
-    render(
-      <Listview
-        data={baseData({
-          items: [
-            { id: "z", label: "Zulu" },
-            { id: "b", label: "Bravo", group: "G" },
-          ],
-          accept_new_options: true,
-          selection_mode: "multi",
-        })}
-        setStateValue={vi.fn()}
-      />,
-    );
-    await user.type(screen.getByTestId("stListviewNewOption"), "new");
-    await user.keyboard("{Enter}");
-    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
-      "Zulu",
-      "Bravo",
-      "new",
-    ]);
-    // ... and below the group header, not above it
-    const header = screen.getByText("G");
-    const added = screen.getByText("new");
-    expect(
-      header.compareDocumentPosition(added) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    // keyboard order follows the rendered order: End lands on the added row
-    fireEvent.keyDown(screen.getByRole("listbox"), { key: "End" });
-    expect(
-      screen.getByRole("listbox").getAttribute("aria-activedescendant"),
-    ).toBe("listview-opt-new");
-  });
-
   it("at the cap, adding a new option neither selects it nor leaves a phantom row", async () => {
     // multi mode at max_selections: selection.add() is a no-op, so the typed
     // value must NOT be persisted as an unselected/muted row the user can't
@@ -1040,26 +1029,29 @@ describe("accept_new_options", () => {
       );
     });
 
-    it("scrolls only the list body to its end on a refusal, never the page", async () => {
+    it("shows the hint in the footer and leaves the list where it is", async () => {
+      // The hint sits in the footer below the scroll frame, always in view, so a
+      // refusal moves neither the list nor the page.
       const user = userEvent.setup();
       const intoView = vi.spyOn(Element.prototype, "scrollIntoView");
       const { container } = render(
         <Listview data={intData()} setStateValue={vi.fn()} />,
       );
       const body = container.querySelector(".listview-body") as HTMLElement;
-      Object.defineProperty(body, "scrollHeight", {
-        value: 500,
-        configurable: true,
-      });
+      body.scrollTop = 7;
       await user.type(screen.getByTestId("stListviewNewOption"), "abc");
       await user.keyboard("{Enter}");
-      expect(body.scrollTop).toBe(500);
+      const footer = container.querySelector(".listview-footer") as HTMLElement;
+      expect(
+        within(footer).getByTestId("stListviewNewOptionHint"),
+      ).toHaveTextContent(HINT);
+      expect(body.scrollTop).toBe(7);
       expect(intoView).not.toHaveBeenCalled();
       intoView.mockRestore();
     });
 
     it("trims a pasted value and adds it without a hint", async () => {
-      // Review focus 4.
+      // The pasted value is trimmed before it is checked and added.
       const user = userEvent.setup();
       const setStateValue = vi.fn();
       render(<Listview data={intData()} setStateValue={setStateValue} />);
@@ -1072,7 +1064,7 @@ describe("accept_new_options", () => {
     });
 
     it("clears the hint once the text changes, then adds the corrected number", async () => {
-      // Review focus 5.
+      // The hint belongs to the typed text and goes when the text changes.
       const user = userEvent.setup();
       const setStateValue = vi.fn();
       render(<Listview data={intData()} setStateValue={setStateValue} />);
@@ -1393,6 +1385,227 @@ describe("jump to default before the stylesheet applies", () => {
   });
 });
 
+describe("an add reveals its row", () => {
+  // The add field sits in the footer, below the scroll frame, so the row an
+  // add resolves to can lie outside the frame or inside a collapsed group.
+  // The list opens the row's block and scrolls the row in by the "nearest"
+  // rule of keyboard focus, once the row has rendered.
+  const { nextFrame, pending } = queueFrames();
+
+  function addTyped(value: string) {
+    const input = screen.getByTestId("stListviewNewOption");
+    fireEvent.change(input, { target: { value } });
+    fireEvent.keyDown(input, { key: "Enter" });
+  }
+
+  it("scrolls a new entry in by its bottom edge", () => {
+    const { container } = render(
+      <Listview
+        data={baseData({ accept_new_options: true, selection_mode: "multi" })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    addTyped("Mango");
+    const body = container.querySelector(".listview-body") as HTMLElement;
+    stubGeometry(body, rowFor("Mango"), { frame: 100, top: 260, height: 20 });
+    nextFrame();
+    expect(body.scrollTop).toBe(180); // 260 + 20 - 100
+  });
+
+  it("opens a collapsed group to scroll to the row a typed label names", () => {
+    const { container } = render(
+      <Listview
+        data={baseData({
+          accept_new_options: true,
+          selection_mode: "multi",
+          collapsible_groups: true,
+          collapsed_groups: ["Veg"],
+        })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText("Carrot")).toBeNull();
+    addTyped("carrot");
+    expect(screen.getByRole("button", { name: /Veg/ })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    const body = container.querySelector(".listview-body") as HTMLElement;
+    stubGeometry(body, rowFor("Carrot"), { frame: 100, top: 260, height: 20 });
+    nextFrame();
+    expect(body.scrollTop).toBe(180);
+  });
+
+  it('keeps a new entry in view under collapsed_groups="all"', () => {
+    // The add brings the block without a group in; the "all" seed for a first
+    // sighting must not close it over the row just added.
+    render(
+      <Listview
+        data={baseData({
+          accept_new_options: true,
+          selection_mode: "multi",
+          collapsible_groups: true,
+          collapsed_groups: "all",
+        })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    addTyped("Mango");
+    expect(screen.getByText("Mango")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Other/ })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  });
+
+  it("leaves the list alone when the search hides the new entry", () => {
+    // The entry exists but the query hides it, so there is no row to scroll
+    // to; it shows once the search clears.
+    const { container } = render(
+      <Listview
+        data={baseData({
+          accept_new_options: true,
+          selection_mode: "multi",
+          enable_search: true,
+        })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    const body = container.querySelector(".listview-body") as HTMLElement;
+    body.style.overflowY = "auto"; // styled, so the scroll does not wait
+    fireEvent.change(screen.getByTestId("stListviewSearch"), {
+      target: { value: "apple" },
+    });
+    body.scrollTop = 7;
+    addTyped("Mango");
+    nextFrame();
+    expect(screen.queryByText("Mango")).toBeNull();
+    expect(body.scrollTop).toBe(7);
+    fireEvent.change(screen.getByTestId("stListviewSearch"), {
+      target: { value: "" },
+    });
+    expect(screen.getByText("Mango")).toBeInTheDocument();
+  });
+
+  it("requests no scroll for a value the int options refuse", () => {
+    render(
+      <Listview
+        data={baseData({
+          items: [{ id: 1, label: "1", group: "G" }],
+          accept_new_options: true,
+          new_option_kind: "int",
+          selection_mode: "multi",
+        })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    nextFrame(); // whatever the mount queued
+    addTyped("abc");
+    expect(pending()).toBe(0);
+  });
+
+  it("requests no scroll for a new entry the cap refuses", () => {
+    render(
+      <Listview
+        data={baseData({
+          accept_new_options: true,
+          selection_mode: "multi",
+          max_selections: 1,
+          state_selection: ["apple"], // at the cap; state, so no jump to it
+        })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    nextFrame();
+    addTyped("Mango");
+    expect(screen.queryByText("Mango")).toBeNull();
+    expect(pending()).toBe(0);
+  });
+
+  it("scrolls again when the same label is added twice", () => {
+    // Each request is a fresh object, so a repeat for a row that is already
+    // selected and in view still commits and queues a scroll, though nothing
+    // else in the list changed.
+    const { container } = render(
+      <Listview
+        data={baseData({
+          accept_new_options: true,
+          selection_mode: "multi",
+          state_selection: ["apple"], // selected from the start, no jump to it
+        })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    const body = container.querySelector(".listview-body") as HTMLElement;
+    body.style.overflowY = "auto"; // styled, so a scroll completes in one frame
+    const settle = () => {
+      for (let round = 0; round < 10 && pending() > 0; round += 1) {
+        nextFrame();
+      }
+    };
+    settle();
+    expect(pending()).toBe(0);
+    addTyped("Apple");
+    expect(pending()).toBeGreaterThan(0);
+    settle();
+    expect(pending()).toBe(0);
+    addTyped("Apple");
+    expect(pending()).toBeGreaterThan(0);
+  });
+
+  it("opens the block of an existing row whose selection is refused", () => {
+    // The disabled row cannot be selected, but the typed label still names it:
+    // the list shows where it is, as it does for any existing row.
+    const setStateValue = vi.fn();
+    const { container } = render(
+      <Listview
+        data={makeData({
+          accept_new_options: true,
+          selection_mode: "multi",
+          collapsible_groups: true,
+          collapsed_groups: ["Veg"],
+        })}
+        setStateValue={setStateValue}
+      />,
+    );
+    expect(screen.queryByText("Disabled")).toBeNull();
+    addTyped("Disabled");
+    expect(screen.getByRole("button", { name: /Veg/ })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(rowFor("Disabled")).toHaveAttribute("aria-selected", "false");
+    expect(setStateValue).not.toHaveBeenCalled();
+    const body = container.querySelector(".listview-body") as HTMLElement;
+    stubGeometry(body, rowFor("Disabled"), {
+      frame: 100,
+      top: 260,
+      height: 20,
+    });
+    nextFrame();
+    expect(body.scrollTop).toBe(180);
+  });
+
+  it("keeps the focus in the add field after an add", () => {
+    // The list reveals the row without moving the focus, so the user can type
+    // the next entry at once.
+    render(
+      <Listview
+        data={baseData({ accept_new_options: true, selection_mode: "multi" })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    const input = screen.getByTestId("stListviewNewOption");
+    input.focus();
+    addTyped("Mango");
+    nextFrame(); // the scroll to the new row
+    expect(input).toHaveFocus();
+    addTyped("banana"); // a row that exists
+    nextFrame();
+    expect(input).toHaveFocus();
+  });
+});
+
 describe("group item counts", () => {
   it("shows each group's item count in its header", () => {
     render(<Listview data={baseData()} setStateValue={vi.fn()} />);
@@ -1695,6 +1908,31 @@ describe("Listview select_all toggle", () => {
     // a, b selectable in list order; capped at 2.
     expect(setStateValue).toHaveBeenLastCalledWith("selection", ["a", "b"]);
   });
+
+  it("fills a max_selections cap in render order, not option order", async () => {
+    // The block without a group renders last, so the leading option "Loose"
+    // shows after the grouped rows. Select all takes rows from the top of the
+    // list as shown.
+    const setStateValue = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <Listview
+        data={makeData({
+          selection_mode: "multi",
+          select_all: true,
+          max_selections: 2,
+          items: [
+            { id: "x", label: "Loose" },
+            { id: "a", label: "Apple", group: "Fruit" },
+            { id: "b", label: "Banana", group: "Fruit" },
+          ],
+        })}
+        setStateValue={setStateValue}
+      />,
+    );
+    await user.click(screen.getByTestId("stListviewSelectAllToggle"));
+    expect(setStateValue).toHaveBeenLastCalledWith("selection", ["a", "b"]);
+  });
 });
 
 // ── Group blocks: React keys + ARIA structure ────────────────────────────────
@@ -1720,12 +1958,13 @@ describe("group blocks", () => {
     );
     const search = screen.getByTestId("stListviewSearch");
     const rows = () => screen.getAllByRole("option").map((o) => o.textContent);
-    expect(rows()).toEqual(["Zulu", "Alpha", "Bravo"]);
+    // The block without a group renders last, after the group "X".
+    expect(rows()).toEqual(["Zulu", "Bravo", "Alpha"]);
     // walk the filter through several states; every step must match the query
     for (const [query, expected] of [
-      ["a", ["Alpha", "Bravo"]],
+      ["a", ["Bravo", "Alpha"]],
       ["al", ["Alpha"]],
-      ["", ["Zulu", "Alpha", "Bravo"]],
+      ["", ["Zulu", "Bravo", "Alpha"]],
       ["brav", ["Bravo"]],
     ] as const) {
       fireEvent.change(search, { target: { value: query } });
@@ -1758,25 +1997,6 @@ describe("group blocks", () => {
     for (const header of screen.getAllByTestId("stListviewGroup")) {
       expect(header.getAttribute("aria-hidden")).toBe("true");
     }
-  });
-
-  it("gives the ungrouped block no group role (there is no name to give it)", () => {
-    render(
-      <Listview
-        data={baseData({
-          items: [
-            { id: "x", label: "Loose" },
-            { id: "a", label: "Apple", group: "Fruit" },
-          ],
-        })}
-        setStateValue={vi.fn()}
-      />,
-    );
-    const groups = screen.getAllByRole("group");
-    expect(groups).toHaveLength(1);
-    expect(groups[0].getAttribute("aria-label")).toBe("Fruit");
-    // the loose row is not inside it
-    expect(within(groups[0]).queryByText("Loose")).toBeNull();
   });
 
   describe("rows beyond one render chunk", () => {
@@ -1928,6 +2148,418 @@ describe("group blocks", () => {
   });
 });
 
+// ── Rows without a group ─────────────────────────────────────────────────────
+
+describe("rows without a group", () => {
+  // Options of which only some carry a group. The rows without one render in
+  // ONE block, after every group, under the ungrouped_label header: rendered
+  // where the first of them stood, without a header, they read as members of
+  // the group above them.
+  const mixed = (overrides: Partial<ListviewData> = {}) =>
+    baseData({
+      items: [
+        { id: "x", label: "Loose" },
+        { id: "a", label: "Apple", group: "Fruit" },
+        { id: "c", label: "Carrot", group: "Veg" },
+      ],
+      ...overrides,
+    });
+  const headers = () =>
+    screen.getAllByTestId("stListviewGroup").map((h) => h.textContent);
+  const rows = () => screen.getAllByRole("option").map((o) => o.textContent);
+
+  it("render last, under an Other header, in a grouped list", () => {
+    render(<Listview data={mixed()} setStateValue={vi.fn()} />);
+    expect(rows()).toEqual(["Apple", "Carrot", "Loose"]);
+    expect(headers()).toEqual(["Fruit(1)", "Veg(1)", "Other(1)"]);
+  });
+
+  it("take the header text from ungrouped_label", () => {
+    render(
+      <Listview
+        data={mixed({ ungrouped_label: "Sonstige" })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(headers()).toEqual(["Fruit(1)", "Veg(1)", "Sonstige(1)"]);
+  });
+
+  it("show only the count under an empty ungrouped_label", () => {
+    // "" is a str, so Python passes it on.
+    render(
+      <Listview
+        data={mixed({ ungrouped_label: "" })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(headers()).toEqual(["Fruit(1)", "Veg(1)", "(1)"]);
+  });
+
+  it("form a group named by the header for assistive technology", () => {
+    render(<Listview data={mixed()} setStateValue={vi.fn()} />);
+    const groups = within(screen.getByRole("listbox")).getAllByRole("group");
+    expect(groups.map((g) => g.getAttribute("aria-label"))).toEqual([
+      "Fruit",
+      "Veg",
+      "Other",
+    ]);
+    expect(
+      within(groups[2])
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["Loose"]);
+  });
+
+  it("get no header and no group role in a list without groups", () => {
+    render(
+      <Listview
+        data={baseData({
+          items: [
+            { id: "x", label: "Loose" },
+            { id: "y", label: "Free" },
+          ],
+        })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(screen.queryAllByTestId("stListviewGroup")).toHaveLength(0);
+    expect(screen.queryAllByRole("group")).toHaveLength(0);
+    expect(rows()).toEqual(["Loose", "Free"]);
+  });
+
+  it("keep their header while a search leaves only them", () => {
+    render(
+      <Listview
+        data={mixed({ enable_search: true })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByTestId("stListviewSearch"), {
+      target: { value: "loose" },
+    });
+    expect(rows()).toEqual(["Loose"]);
+    expect(headers()).toEqual(["Other(1)"]);
+  });
+
+  it("drop their block while a search matches none of them", () => {
+    render(
+      <Listview
+        data={mixed({ enable_search: true })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    fireEvent.change(screen.getByTestId("stListviewSearch"), {
+      target: { value: "apple" },
+    });
+    expect(headers()).toEqual(["Fruit(1)"]);
+  });
+
+  it("take added entries into the same block, at the very bottom", async () => {
+    const user = userEvent.setup();
+    render(
+      <Listview
+        data={mixed({ accept_new_options: true, selection_mode: "multi" })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    await user.type(screen.getByTestId("stListviewNewOption"), "new");
+    await user.keyboard("{Enter}");
+    expect(rows()).toEqual(["Apple", "Carrot", "Loose", "new"]);
+    expect(headers()).toEqual(["Fruit(1)", "Veg(1)", "Other(2)"]);
+    // keyboard order follows the rendered order: End lands on the added row
+    fireEvent.keyDown(screen.getByRole("listbox"), { key: "End" });
+    expect(
+      screen.getByRole("listbox").getAttribute("aria-activedescendant"),
+    ).toBe("listview-opt-new");
+  });
+
+  it("get an Other header with the first entry added to a fully grouped list", async () => {
+    const user = userEvent.setup();
+    render(
+      <Listview
+        data={baseData({ accept_new_options: true, selection_mode: "multi" })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(headers()).toEqual(["Fruit(2)", "Veg(1)"]);
+    await user.type(screen.getByTestId("stListviewNewOption"), "Mango");
+    await user.keyboard("{Enter}");
+    expect(headers()).toEqual(["Fruit(2)", "Veg(1)", "Other(1)"]);
+  });
+
+  it("collapse under a toggle of their own", async () => {
+    const user = userEvent.setup();
+    render(
+      <Listview
+        data={mixed({ collapsible_groups: true })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    const other = screen.getByRole("button", { name: /Other/ });
+    await user.click(other);
+    expect(other).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Loose")).toBeNull();
+    expect(screen.getByText("Apple")).toBeInTheDocument();
+  });
+
+  it('start collapsed under collapsed_groups="all"', () => {
+    render(
+      <Listview
+        data={mixed({ collapsible_groups: true, collapsed_groups: "all" })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText("Loose")).toBeNull();
+  });
+
+  it("collapse under a collapsed_groups list that names their header", () => {
+    // A list names headers, and ungrouped_label names this one.
+    render(
+      <Listview
+        data={mixed({
+          collapsible_groups: true,
+          collapsed_groups: ["Other"],
+        })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText("Loose")).toBeNull();
+    expect(screen.getByText("Apple")).toBeInTheDocument();
+  });
+
+  it("open for a jump to a default among them", () => {
+    render(
+      <Listview
+        data={mixed({
+          collapsible_groups: true,
+          collapsed_groups: "all",
+          default_ids: ["x"],
+        })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Loose")).toBeInTheDocument();
+    expect(screen.queryByText("Apple")).toBeNull(); // the other groups stay shut
+  });
+
+  it("show at once when a rerun takes away every group while they were collapsed", () => {
+    // useCollapse drops the `null` key in an effect, after the render. The
+    // render before it must not draw the flat list's one block collapsed: it
+    // has no header to open it with, and the browser could paint the empty
+    // frame. The probe reads the DOM in the commit of the rerun itself.
+    let shown: boolean | undefined;
+    const Probe = () => {
+      useLayoutEffect(() => {
+        shown = screen.queryByText("Loose") !== null;
+      });
+      return null;
+    };
+    const { rerender } = render(
+      <>
+        <Listview
+          data={mixed({ collapsible_groups: true })}
+          setStateValue={vi.fn()}
+        />
+        <Probe />
+      </>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Other/ }));
+    expect(screen.queryByText("Loose")).toBeNull();
+    rerender(
+      <>
+        <Listview
+          data={baseData({
+            collapsible_groups: true,
+            items: [{ id: "x", label: "Loose" }],
+          })}
+          setStateValue={vi.fn()}
+        />
+        <Probe />
+      </>,
+    );
+    expect(shown).toBe(true);
+  });
+
+  it('start collapsed under "all" when a rerun brings in the first group', () => {
+    // In a list without groups the block has no header, so the jump to a
+    // default among its rows has nothing to open and must not count as a
+    // sighting of the block: the "all" seed applies to it only once a rerun
+    // gives it a header.
+    const flat = baseData({
+      collapsible_groups: true,
+      collapsed_groups: "all",
+      default_ids: ["x"],
+      items: [
+        { id: "x", label: "Loose" },
+        { id: "y", label: "Free" },
+      ],
+    });
+    const setStateValue = vi.fn();
+    const { rerender } = render(
+      <Listview data={flat} setStateValue={setStateValue} />,
+    );
+    expect(screen.getByText("Loose")).toBeInTheDocument();
+    rerender(
+      <Listview
+        data={{
+          ...flat,
+          items: [...flat.items, { id: "a", label: "Apple", group: "Fruit" }],
+        }}
+        setStateValue={setStateValue}
+      />,
+    );
+    expect(screen.queryByText("Loose")).toBeNull();
+    expect(screen.queryByText("Free")).toBeNull();
+    expect(screen.queryByText("Apple")).toBeNull();
+  });
+
+  it("stay collapsed across a rerun that changes the groups when only an added entry fills them", async () => {
+    // Nothing among the caller's options lacks a group, so the added row alone
+    // gives the block its header. useCollapse must still track that block, or
+    // the rerun that changes the group set prunes its collapsed state and
+    // reopens it.
+    const user = userEvent.setup();
+    const setStateValue = vi.fn();
+    const data = baseData({
+      accept_new_options: true,
+      selection_mode: "multi",
+      collapsible_groups: true,
+    });
+    const { rerender } = render(
+      <Listview data={data} setStateValue={setStateValue} />,
+    );
+    await user.type(screen.getByTestId("stListviewNewOption"), "Mango");
+    await user.keyboard("{Enter}");
+    await user.click(screen.getByRole("button", { name: /Other/ }));
+    expect(screen.queryByText("Mango")).toBeNull();
+    rerender(
+      <Listview
+        data={{
+          ...data,
+          items: [...data.items, { id: "g", label: "Bread", group: "Grain" }],
+        }}
+        setStateValue={setStateValue}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /Other/ })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(screen.queryByText("Mango")).toBeNull();
+  });
+});
+
+// ── A group named like ungrouped_label ──────────────────────────────────────
+
+describe("a group named like ungrouped_label", () => {
+  // Its options and the options without a group share ONE block under that
+  // header: two headers with the same text could not be told apart.
+  const headers = () =>
+    screen.getAllByTestId("stListviewGroup").map((h) => h.textContent);
+  const rows = () => screen.getAllByRole("option").map((o) => o.textContent);
+  const sharing = (overrides: Partial<ListviewData> = {}) =>
+    baseData({
+      items: [
+        { id: "o", label: "Odd", group: "Other" },
+        { id: "a", label: "Apple", group: "Fruit" },
+        { id: "x", label: "Loose" },
+      ],
+      ...overrides,
+    });
+
+  it("shares one block with the options without a group, last", () => {
+    render(<Listview data={sharing()} setStateValue={vi.fn()} />);
+    expect(headers()).toEqual(["Fruit(1)", "Other(2)"]);
+    expect(rows()).toEqual(["Apple", "Odd", "Loose"]);
+    const groups = within(screen.getByRole("listbox")).getAllByRole("group");
+    expect(groups.map((g) => g.getAttribute("aria-label"))).toEqual([
+      "Fruit",
+      "Other",
+    ]);
+  });
+
+  it("stays apart under another ungrouped_label", () => {
+    render(
+      <Listview
+        data={sharing({ ungrouped_label: "N/A" })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(headers()).toEqual(["Other(1)", "Fruit(1)", "N/A(1)"]);
+  });
+
+  it("takes added entries into the shared block", async () => {
+    const user = userEvent.setup();
+    render(
+      <Listview
+        data={sharing({ accept_new_options: true, selection_mode: "multi" })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    await user.type(screen.getByTestId("stListviewNewOption"), "new");
+    await user.keyboard("{Enter}");
+    expect(headers()).toEqual(["Fruit(1)", "Other(3)"]);
+    expect(rows()).toEqual(["Apple", "Odd", "Loose", "new"]);
+  });
+
+  it('heads a list whose only group it is, and collapses under "all"', () => {
+    render(
+      <Listview
+        data={baseData({
+          collapsible_groups: true,
+          collapsed_groups: "all",
+          items: [
+            { id: "o", label: "Odd", group: "Other" },
+            { id: "p", label: "Pear", group: "Other" },
+          ],
+        })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(headers()).toEqual(["Other(2)"]);
+    expect(screen.queryByText("Odd")).toBeNull();
+  });
+
+  it("opens the shared block for a typed label among its rows", () => {
+    render(
+      <Listview
+        data={sharing({
+          accept_new_options: true,
+          selection_mode: "multi",
+          collapsible_groups: true,
+          collapsed_groups: "all",
+        })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText("Odd")).toBeNull();
+    const input = screen.getByTestId("stListviewNewOption");
+    fireEvent.change(input, { target: { value: "odd" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(screen.getByRole("button", { name: /Other/ })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByText("Odd")).toBeInTheDocument();
+  });
+
+  it("opens the shared block for a jump to a default among its rows", () => {
+    render(
+      <Listview
+        data={sharing({
+          collapsible_groups: true,
+          collapsed_groups: "all",
+          default_ids: ["o"],
+        })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Odd")).toBeInTheDocument();
+    expect(screen.getByText("Loose")).toBeInTheDocument(); // same block
+    expect(screen.queryByText("Apple")).toBeNull();
+  });
+});
+
 // ── Position in the set (aria-posinset / aria-setsize) ──────────────────────
 
 describe("position in the set", () => {
@@ -1973,6 +2605,24 @@ describe("position in the set", () => {
       ["Apple", "1", "3"],
       ["Banana", "2", "3"],
       ["Carrot", "3", "3"],
+    ]);
+  });
+
+  it("numbers an option without a group after the groups it renders below", () => {
+    render(
+      <Listview
+        data={baseData({
+          items: [
+            { id: "x", label: "Loose" },
+            { id: "a", label: "Apple", group: "Fruit" },
+          ],
+        })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(positions()).toEqual([
+      ["Apple", "1", "2"],
+      ["Loose", "2", "2"],
     ]);
   });
 

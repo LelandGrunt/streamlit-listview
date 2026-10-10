@@ -12,7 +12,8 @@ def page(take: str) -> None:
         CITIES,
         selection_mode="multi",
         accept_new_options=True,
-        # Room for the 12 cities, 4 group headers, Vienna and the add field.
+        # Room for the 12 cities, Vienna, the 4 group headers and the header of
+        # the options without a group; the add field sits in the footer below.
         height=680,
         width=560,
         key="gif_add_options",

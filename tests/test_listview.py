@@ -33,9 +33,9 @@ def test_component_declared_with_globs_and_root_html(listview_mod):
 
 
 # --------------------------------------------------------------------------
-# Validation: label / help / placeholder / search_placeholder
+# Validation: label / help / placeholder / search_placeholder / ungrouped_label
 #
-# All four are forwarded to the frontend as Markdown source or as input text. A
+# All five are forwarded to the frontend as Markdown source or as plain text. A
 # non-str label reaches escapeLabelSource, whose .replace() throws during React
 # render — with no error boundary the widget renders EMPTY and Python never sees
 # a traceback. So the type is rejected at the boundary (like collapsed_groups).
@@ -100,6 +100,26 @@ def test_search_placeholder_str_ok(listview_mod):
     mod, fake = listview_mod
     call(mod, enable_search=True, search_placeholder="Filter…")
     assert fake.last["data"]["search_placeholder"] == "Filter…"
+
+
+@pytest.mark.parametrize("bad", [None, 42, ["a"]])
+def test_ungrouped_label_non_str_raises(listview_mod, bad):
+    mod, _fake = listview_mod
+    # Non-nullable on the frontend (`ungrouped_label: string`) with a non-None
+    # signature default, like search_placeholder.
+    with pytest.raises(ValueError, match="ungrouped_label must be a str"):
+        call(mod, ungrouped_label=bad)
+
+
+def test_ungrouped_label_reaches_the_payload(listview_mod):
+    mod, fake = listview_mod
+    call(mod)
+    assert fake.last["data"]["ungrouped_label"] == "Other"
+    call(mod, ungrouped_label="Sonstige")
+    assert fake.last["data"]["ungrouped_label"] == "Sonstige"
+    # "" is a str: the header then shows only the row count.
+    call(mod, ungrouped_label="")
+    assert fake.last["data"]["ungrouped_label"] == ""
 
 
 # --------------------------------------------------------------------------
@@ -1004,6 +1024,7 @@ def test_data_payload_has_exact_listview_data_keys(listview_mod):
         "search_placeholder",
         "collapsible_groups",
         "collapsed_groups",
+        "ungrouped_label",
         "accept_new_options",
         "new_option_kind",
         "max_selections",
@@ -1473,6 +1494,26 @@ def test_payload_items_sorted_with_sort_both(listview_mod):
     items = fake.last["data"]["items"]
     # Groups sorted (Fruit, Veg); items sorted within.
     assert [it["id"] for it in items] == ["banana", "beet", "carrot"]
+
+
+def test_payload_sorts_the_group_named_like_ungrouped_label_with_the_ungrouped(
+    listview_mod,
+):
+    # The group "Misc" shares its block with the options without a group, so
+    # the sort orders them together, last.
+    mod, fake = listview_mod
+    call(
+        mod,
+        options=[
+            {"id": "zed", "label": "Zed"},
+            {"id": "mint", "label": "Mint", "group": "Misc"},
+            {"id": "beet", "label": "Beet", "group": "Veg"},
+        ],
+        sort="both",
+        ungrouped_label="Misc",
+    )
+    items = fake.last["data"]["items"]
+    assert [it["id"] for it in items] == ["beet", "mint", "zed"]
 
 
 def test_payload_items_unsorted_by_default(listview_mod):

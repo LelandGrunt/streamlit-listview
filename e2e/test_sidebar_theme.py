@@ -70,6 +70,8 @@ SELECTBOX = '[data-testid="stSelectbox"] .react-aria-ComboBox > div'
 BODY = ".listview-body"
 GROUP = ".listview-group-header"
 SEARCH = ".listview-search__input"
+FOOTER = ".listview-footer"
+ADD_FIELD = ".listview-new-option__input"
 
 
 def _luma(rgb: list[float]) -> float:
@@ -115,3 +117,13 @@ def test_the_list_looks_the_same_in_both_containers(page: Page):
     # so the swap cannot move it either.
     assert _rgb(page, BODY, sidebar=True) == _rgb(page, BODY, sidebar=False)
     assert _rgb(page, GROUP, sidebar=True) == _rgb(page, GROUP, sidebar=False)
+
+
+def test_the_add_field_footer_paints_the_list_surface_in_both_containers(page: Page):
+    # The footer is part of the list's frame, like the pinned header: it paints
+    # the list surface, so the sidebar swap moves it with the body, and its field
+    # stays an inset that never matches it.
+    for sidebar in (True, False):
+        footer = _rgb(page, FOOTER, sidebar=sidebar)
+        assert footer == _rgb(page, BODY, sidebar=sidebar)
+        assert _rgb(page, ADD_FIELD, sidebar=sidebar) != footer

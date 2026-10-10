@@ -76,8 +76,8 @@ created = listview(
 st.text(f"newopt_echo={created!r}")
 
 st.subheader("Accept new options (int)")
-# height=100 (the minimum) makes the frame overflow, so the refusal hint can
-# only be seen if the frame scrolls to it.
+# height=100 (the minimum) makes the frame overflow; the refusal hint shows in
+# the footer below it all the same.
 created_int = listview(
     "Add a number",
     [1, 2, 3],
@@ -120,3 +120,18 @@ sorted_ = listview(
     key="sorted",
 )
 st.text(f"sorted_echo={sorted_!r}")
+
+st.subheader("Groups and new options")
+# Only the first option has no group, and adding is on: the options without a
+# group render last under the "Other" header, and the add field sits in a footer
+# below the scroll frame. 160 px makes the frame overflow, so an added entry
+# starts out of view.
+grouped_new = listview(
+    "Grouped adds",
+    [{"id": "misc", "label": "Misc"}, *OPTIONS],
+    selection_mode="multi",
+    accept_new_options=True,
+    height=160,
+    key="groupednew",
+)
+st.text(f"groupednew_echo={grouped_new!r}")

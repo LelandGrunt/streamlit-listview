@@ -27,11 +27,11 @@ A selectable, scrollable **list widget** for Streamlit — with grouping, search
 `st.multiselect` and `st.radio` are great for a handful of options, but they don't scroll, group, or search well once the list grows. `listview` is a dedicated, always-visible list surface:
 
 - **Single / multi selection** with an optional `max_selections` cap.
-- **Grouping** with sticky headers and optional **collapsible groups**.
+- **Grouping** with sticky headers and optional **collapsible groups**. Options without a group render last, under a header of their own.
 - **Live search** — filters by label as you type, optionally **pinned** (stays put while the list scrolls).
 - **Sorting** — order items, group headers, or both alphabetically (ascending or descending).
-- **Select all / Deselect all** toggle for multi-select, scoped to the rows matching the current search — including rows inside collapsed groups (collapse is visual, not a filter) — excluding disabled rows.
-- **Add new options** — let users enter values that aren't in the list; each comes back in the type of the other options (see [Return value](#return-value)). Typing the visible text of an option that is already there selects that option instead of adding a duplicate row.
+- **Select all / Deselect all** toggle for multi-select, scoped to the rows matching the current search — including rows inside collapsed groups (collapse is visual, not a filter) — excluding disabled rows. Select all adds the rows in the order shown, so a `max_selections` cap takes them from the top of the list.
+- **Add new options** — let users enter values that aren't in the list, in a field below it; each comes back in the type of the other options (see [Return value](#return-value)). Typing the visible text of an option that is already there selects that option instead of adding a duplicate row. Either way, the list scrolls to that row.
 - **Jump to default** — auto-scrolls the default selection into view on first render, and again whenever `default` changes (the list scrolls, never the surrounding page).
 - **Native theming** — pure `--st-*` CSS variables, so light, dark, and custom themes apply automatically. No Bootstrap, no hardcoded palette.
 - **Markdown labels & help** — Streamlit-parity Markdown (GFM + Streamlit directives like `:red[…]`, badges, `:material/icon:`, `:streamlit:`, emoji).
@@ -128,6 +128,7 @@ def listview(
     search_placeholder="Search",
     collapsible_groups=False,
     collapsed_groups=None,            # ["GroupA", ...] | "all" | None — initial state, per group
+    ungrouped_label="Other",          # header of the options without a group
     sort=None,                        # "items" | "groups" | "both" | None
     sort_ascending=True,              # True = A→Z; False = Z→A; only when sort is set
     accept_new_options=False,
@@ -166,13 +167,14 @@ def listview(
 | `search_placeholder` | Placeholder text of the search field.                                                                                                |
 | `collapsible_groups` | Makes every group header a collapse/expand toggle.                                                                                   |
 | `collapsed_groups`   | Groups that start collapsed: `["GroupA", ...]` or `"all"` (see [Collapsible groups](#collapsible-groups)).                           |
+| `ungrouped_label`    | Header of the options without a group; a group of the same name shares it (see [Options](#options)).                                 |
 | `sort`               | Alphabetical ordering: `"items"`, `"groups"`, `"both"`, or `None` for input order (see [Sorting](#sorting)).                         |
 | `sort_ascending`     | `True` = A→Z (the default), `False` = Z→A; only meaningful when `sort` is set.                                                       |
 | `accept_new_options` | Lets users add values not in the list; each comes back in the type of the other options (see [Return value](#return-value)).         |
 | `max_selections`     | Cap on the multi-mode selection (single mode accepts `None` or `1`).                                                                 |
 | `select_all`         | Multi mode only: adds the Select all / Deselect all toggle.                                                                          |
 | `placeholder`        | Text shown instead of the list when `options` is empty.                                                                              |
-| `height`             | List height in px (≥ 100).                                                                                                           |
+| `height`             | Height of the scrolling list in px (≥ 100); a pinned header and the add field add their own height.                                  |
 | `item_height`        | Minimum row height in px — a floor, rows still grow to fit their content; `None` = auto.                                             |
 | `content_font_size`  | Font size in px of rows and group headers; `None` = theme default.                                                                   |
 | `width`              | `"stretch"` (fill the container, the default) or a pixel width (≥ 1).                                                                |
@@ -191,7 +193,7 @@ def listview(
 - **Dicts**: `{"id": ..., "label": ..., "group": ..., "disabled": ...}`
   - `id` (**required**; `str` or `int` — nothing else, not even `bool` or `float`)
   - `label` (optional display text; when missing, `None`, or NaN — the last two are what `df.to_dict("records")` yields for a NULL cell — the label comes from `format_func(option)`, i.e. `str(id)` when `format_func` is `None`, the default)
-  - `group` (optional `str`; items sharing a `group` render under one header)
+  - `group` (optional `str`; items sharing a `group` render under one header, and once any option has a `group`, the options without one render last, under the `ungrouped_label` header. A group named like that header shares their block; set another `ungrouped_label`, such as `"N/A"`, to keep the two apart)
   - `disabled` (optional `bool`; visible but not selectable)
   - any **extra fields** (e.g. a `payload`) are never rendered directly, and come back untouched in the selection result — handy for attaching your own metadata to an option. `format_func` *can* read them to build the displayed label (see below).
 
@@ -228,13 +230,15 @@ By default options render in the order you pass them (`sort=None`). Set `sort` t
 - `sort="groups"` — sort the group headers; option order within a group unchanged.
 - `sort="both"` — sort both.
 
-`sort_ascending=False` reverses the order. When groups are sorted, **ungrouped options always render last**. Entries added via `accept_new_options` are appended at the bottom — below every group — and are not sorted.
+`sort_ascending=False` reverses the order. **Options without a group always render last**, below every group, whatever `sort` says; the options of the group named like `ungrouped_label` render and sort with them. Entries added via `accept_new_options` follow them and are not sorted.
 
 ### Collapsible groups
 
 With `collapsible_groups=True` every group header becomes a toggle. `collapsed_groups` (`["GroupA", ...]` or `"all"`) is **initial state, applied per group the first time that group appears while `collapsible_groups=True`** — at mount for the groups your options already contain, and on the later rerun that first brings a group in for the rest (options fetched asynchronously, or loaded behind a button, reach the widget after mount). Once a group has been seen the user owns it: a manual toggle is never overridden, and neither is a `collapsed_groups` change on a keyed instance — change the `key` to re-apply it (see [Keying](#keying)). Groups only ever shown with `collapsible_groups=False` do not count as seen, so enabling `collapsible_groups` later on a keyed instance applies `collapsed_groups` to them at that point.
 
 The sharp edge of "per group": with `collapsed_groups="all"`, a **brand-new group that appears after mount starts collapsed**. If you append a group to a live list and want it open, name the groups explicitly instead of using `"all"`. A group that disappears and later comes back still counts as seen, so it returns **open** rather than collapsed a second time.
+
+In a grouped list, the header of the options without a group is a toggle too. `collapsed_groups="all"` collapses it, and so does a list that names `ungrouped_label`. When the user adds an entry, the list opens the block the entry appears in and scrolls to it.
 
 ### Return value
 

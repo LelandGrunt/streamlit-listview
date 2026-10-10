@@ -92,6 +92,7 @@ def _validate_params(
     help: Any,
     placeholder: Any,
     search_placeholder: Any,
+    ungrouped_label: Any,
     selection_mode: str,
     label_visibility: str,
     width: Any,
@@ -113,22 +114,25 @@ def _validate_params(
     collapsed_groups: Any,
 ) -> None:
     """Validate scalar parameters per spec §7. Raises ValueError."""
-    # The four text params are handed to the frontend verbatim — `label` and
-    # `help` as Markdown source, the two placeholders as <input>/empty-state text.
+    # The five text params are handed to the frontend verbatim — `label` and
+    # `help` as Markdown source, the two placeholders as <input>/empty-state
+    # text, and `ungrouped_label` as the plain-text header of the options
+    # without a group.
     # A non-str `label` reaches escapeLabelSource, which calls .replace() on it and
     # throws during React render; like the collapsed_groups shape below, that
     # crashes the whole widget with nothing to show for it on the Python side (no
     # traceback, just an empty component). So the type is checked here.
     #
     # None-ness deliberately mirrors the signature defaults *and* the frontend's
-    # ListviewData contract: `label: string` and `search_placeholder: string` are
-    # non-nullable there, while `help: string | null` and
+    # ListviewData contract: `label`, `search_placeholder` and `ungrouped_label`
+    # are non-nullable strings there, while `help: string | null` and
     # `placeholder: string | null` use null to mean "not shown". Only wrong types
     # are rejected; which params accept None is unchanged.
     _validate_str("label", label, allow_none=False)
     _validate_str("help", help, allow_none=True)
     _validate_str("placeholder", placeholder, allow_none=True)
     _validate_str("search_placeholder", search_placeholder, allow_none=False)
+    _validate_str("ungrouped_label", ungrouped_label, allow_none=False)
 
     if selection_mode not in _SELECTION_MODES:
         raise ValueError(
@@ -397,6 +401,7 @@ def listview(
     search_placeholder: str = "Search",
     collapsible_groups: bool = False,
     collapsed_groups: list[str] | Literal["all"] | None = None,
+    ungrouped_label: str = "Other",
     sort: Literal["items", "groups", "both"] | None = None,
     sort_ascending: bool = True,
     accept_new_options: bool = False,
@@ -460,12 +465,20 @@ def listview(
     such as ``42`` — and the typed string otherwise (str, mixed or no options).
     An unknown ``default`` follows the same rule; with int options it must be a
     whole number.
+
+    ``ungrouped_label`` (default ``"Other"``) heads the options without a
+    group. Once any option has a ``group``, those options render last, below
+    every group, under this header; the entries added via
+    ``accept_new_options`` join them. A list without groups shows no header.
+    The options of a group named like ``ungrouped_label`` share that block, so
+    no two headers read the same; set another label to keep that group apart.
     """
     _validate_params(
         label=label,
         help=help,
         placeholder=placeholder,
         search_placeholder=search_placeholder,
+        ungrouped_label=ungrouped_label,
         selection_mode=selection_mode,
         label_visibility=label_visibility,
         width=width,
@@ -488,7 +501,7 @@ def listview(
     )
 
     items, id_to_original = normalize_options(options, format_func)
-    items = sort_items(items, sort, sort_ascending)
+    items = sort_items(items, sort, sort_ascending, ungrouped_label)
 
     # The type a new entry comes back as (see new_option_kind). None when adding
     # is off, so the common call skips the pass over the options.
@@ -526,6 +539,7 @@ def listview(
         "search_placeholder": search_placeholder,
         "collapsible_groups": collapsible_groups,
         "collapsed_groups": collapsed_groups,
+        "ungrouped_label": ungrouped_label,
         "accept_new_options": accept_new_options,
         "new_option_kind": kind,
         "max_selections": max_selections,

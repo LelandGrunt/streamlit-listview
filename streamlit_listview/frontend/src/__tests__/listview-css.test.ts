@@ -118,6 +118,7 @@ describe("listview.css base theming", () => {
     const painted = [
       { rule: "\\.listview-body", token: "--listview-surface" },
       { rule: "\\.listview-header", token: "--listview-surface" },
+      { rule: "\\.listview-footer", token: "--listview-surface" },
       { rule: "\\.listview-group-header", token: "--listview-group-surface" },
       {
         rule: "\\.listview-search__input,\\s*\\.listview-new-option__input",
@@ -295,6 +296,28 @@ describe("listview.css base theming", () => {
     );
   });
 
+  it("draws the add-option footer's seam as a divider the focus outline cannot reach", () => {
+    // The mirror image of the pinned header: the add field sits in a footer
+    // below the scroll frame, the body drops its bottom border above it, and
+    // the footer paints the seam along its top edge as a background, which no
+    // border-color rule touches.
+    expect(css).toMatch(/\.listview-footer\s*\{[^}]*position:\s*relative/);
+    expect(css).toMatch(/\.listview-footer\s*\{[^}]*border-top:\s*none/);
+    const seam = css.match(/\.listview-footer::before\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(seam).toMatch(/content:\s*""/);
+    expect(seam).toMatch(/position:\s*absolute/);
+    expect(seam).toMatch(/top:\s*0/);
+    expect(seam).toMatch(/height:\s*1px/);
+    expect(seam).toMatch(/background:\s*var\(--st-border-color/);
+    const body =
+      css.match(
+        /\.listview-body:has\(\+\s*\.listview-footer\)\s*\{[^}]*\}/,
+      )?.[0] ?? "";
+    expect(body).toMatch(/border-bottom-width:\s*0/);
+    expect(body).toMatch(/border-bottom-left-radius:\s*0/);
+    expect(body).toMatch(/border-bottom-right-radius:\s*0/);
+  });
+
   it("drops the listbox's own UA focus outline", () => {
     // Keyboard focus on the listbox drew the browser's outline (auto 1px) as a
     // dark hairline under the search field and along the right edge. The frame
@@ -314,18 +337,30 @@ describe("listview.css base theming", () => {
     );
   });
 
+  it("lights the add-option footer with the rest of the outline", () => {
+    // The add field sits in the footer, outside the body: focus there must
+    // light the whole control, and the footer's own border turns with it.
+    const rule =
+      css.match(
+        /\.listview:has\([^{]*\{[^}]*border-color:\s*var\(--st-primary-color[^}]*\}/,
+      )?.[0] ?? "";
+    expect(rule).toMatch(/\.listview-footer:focus-within/);
+    expect(rule).toMatch(/\)\s*\.listview-footer\s*\{/);
+  });
+
   it("mutes disabled items via opacity", () => {
     expect(css).toContain('[aria-disabled="true"]');
     expect(css).toMatch(/opacity:\s*0\.\d+/);
   });
 
-  it("fades AND deactivates the pinned header together with the body when the widget is disabled", () => {
+  it("fades AND deactivates the pinned header and the add-option footer together with the body when the widget is disabled", () => {
     // Regression: the disabled treatment was scoped to .listview-body only, so a
     // pinned header (pin_search / select_all) kept a fully enabled appearance —
     // the search input's explicit color/background/border override the browser's
-    // disabled styling — above a faded list.
+    // disabled styling — above a faded list. The add-option footer sits outside
+    // the body as well, so it joins the same rule.
     expect(css).toMatch(
-      /\.listview--disabled\s+\.listview-header\s*,\s*\.listview--disabled\s+\.listview-body\s*\{[^}]*opacity:\s*0\.4[^}]*pointer-events:\s*none/,
+      /\.listview--disabled\s+\.listview-header\s*,\s*\.listview--disabled\s+\.listview-body\s*,\s*\.listview--disabled\s+\.listview-footer\s*\{[^}]*opacity:\s*0\.4[^}]*pointer-events:\s*none/,
     );
   });
 
@@ -783,6 +818,12 @@ describe("Milestone C feature styling", () => {
       /\.listview-new-option__hint:not\(:empty\)\s*\{[^}]*padding:/,
     );
     expect(css).not.toMatch(/\.listview-new-option__hint\s*\{[^}]*padding:/);
+  });
+
+  it("leaves the add row without a top border: the footer's seam divides it from the list", () => {
+    const row = css.match(/\.listview-new-option\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(row).not.toBe("");
+    expect(row).not.toMatch(/border-top/);
   });
 
   it("sizes the collapse chevron via --listview-content-font-size, defaulting to 1rem", () => {

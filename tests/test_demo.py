@@ -336,6 +336,7 @@ _BASE_CFG = {
     "search_placeholder": "Search",
     "collapsible_groups": False,
     "collapsed_groups": None,
+    "ungrouped_label": "Other",
     "sort": None,
     "sort_ascending": True,
     "format_preset": None,
@@ -635,6 +636,15 @@ def test_snippet_skips_collapsed_groups_without_collapsible():
     assert 'collapsed_groups="all",' in on
     assert "collapsible_groups=True," in on
     compile(on, "<snippet>", "exec")
+
+
+def test_snippet_emits_a_custom_ungrouped_label_only():
+    custom = codegen.build_snippet(
+        _cfg(ungrouped_label="Sonstige"), _OPTS, builtin_dataset=False
+    )
+    assert 'ungrouped_label="Sonstige",' in custom
+    default = codegen.build_snippet(_cfg(), _OPTS, builtin_dataset=False)
+    assert "ungrouped_label" not in default
 
 
 def test_snippet_emits_show_grid_lines_only_when_false():

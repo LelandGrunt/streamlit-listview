@@ -102,6 +102,7 @@ DEFAULT_CONFIG = {
     "search_placeholder": "Search cities…",
     "collapsible_groups": False,
     "collapsed_groups": None,
+    "ungrouped_label": "Other",
     "sort": None,
     "sort_ascending": True,
     "format_preset": None,
@@ -162,6 +163,7 @@ SIGNATURE = """def listview(
     search_placeholder: str = "Search",
     collapsible_groups: bool = False,
     collapsed_groups: list[str] | Literal["all"] | None = None,
+    ungrouped_label: str = "Other",
     sort: Literal["items", "groups", "both"] | None = None,
     sort_ascending: bool = True,
     accept_new_options: bool = False,
@@ -244,6 +246,12 @@ PARAMS = [
         "Description": "Groups collapsed on first render (initial state only).",
     },
     {
+        "Parameter": "ungrouped_label",
+        "Type": "str",
+        "Default": '"Other"',
+        "Description": "Header of the options without a group, which render last once any option has a group. Entries the user adds and the options of a group with this name render there too.",
+    },
+    {
         "Parameter": "sort",
         "Type": '"items" | "groups" | "both" | None',
         "Default": "None",
@@ -253,7 +261,7 @@ PARAMS = [
         "Parameter": "sort_ascending",
         "Type": "bool",
         "Default": "True",
-        "Description": "Sort direction when sort is set: True = A→Z, False = Z→A. Ungrouped items always render last when groups are sorted.",
+        "Description": "Sort direction when sort is set: True = A→Z, False = Z→A. Options without a group always render last.",
     },
     {
         "Parameter": "accept_new_options",
@@ -855,6 +863,17 @@ def render_groups(cfg, ids, groups):
             "`collapsed_groups` applies only at mount, so changing it "
             "remounts the widget here (clearing the current selection)."
         )
+    cfg["ungrouped_label"] = st.text_input(
+        "Label for options without a group",
+        cfg["ungrouped_label"],
+        disabled=not groups,
+        help=(
+            "Header of the options without a group, which render last once any "
+            "option has a group. Entries users add and a group with this name "
+            "join them. Empty means Other."
+        ),
+        key="cfg_ungrouped_label",
+    )
 
 
 def render_sorting(cfg, ids, groups):
@@ -1077,6 +1096,7 @@ def render_demo():
                 search_placeholder=cfg["search_placeholder"] or "Search",
                 collapsible_groups=cfg["collapsible_groups"],
                 collapsed_groups=cfg["collapsed_groups"],
+                ungrouped_label=cfg["ungrouped_label"] or "Other",
                 sort=cfg["sort"],
                 sort_ascending=cfg["sort_ascending"],
                 accept_new_options=cfg["accept_new_options"],

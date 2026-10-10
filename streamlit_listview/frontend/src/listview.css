@@ -187,12 +187,13 @@
  * Active-widget border: focusing the option list, the search field, or the
  * add-option input turns the control's border the primary color — matching the
  * focused border of st.selectbox / st.multiselect. :has() cross-links the
- * (optionally pinned) header with the body so both edges of the single control
- * outline switch together; the label's help trigger sits outside header/body,
- * so interacting with it never lights the border.
+ * (optionally pinned) header, the body and the (optional) add-option footer, so
+ * every edge of the single control outline switches together; the label's help
+ * trigger sits outside them, so interacting with it never lights the border.
  */
-.listview:has(.listview-header:focus-within, .listview-body:focus-within) .listview-header,
-.listview:has(.listview-header:focus-within, .listview-body:focus-within) .listview-body {
+.listview:has(.listview-header:focus-within, .listview-body:focus-within, .listview-footer:focus-within) .listview-header,
+.listview:has(.listview-header:focus-within, .listview-body:focus-within, .listview-footer:focus-within) .listview-body,
+.listview:has(.listview-header:focus-within, .listview-body:focus-within, .listview-footer:focus-within) .listview-footer {
   border-color: var(--st-primary-color, #ff4b4b);
 }
 
@@ -345,9 +346,11 @@
    own color/background/border, overriding the browser's disabled styling), so
    fading only the body left a crisp, apparently-enabled strip that silently
    ignored input above a faded list — the disabled affordance must not depend on
-   pin_search. The unpinned search sits inside .listview-body and fades with it. */
+   pin_search. The unpinned search sits inside .listview-body and fades with it;
+   the add-option footer sits outside it and fades here too. */
 .listview--disabled .listview-header,
-.listview--disabled .listview-body {
+.listview--disabled .listview-body,
+.listview--disabled .listview-footer {
   opacity: 0.4;
   pointer-events: none;
 }
@@ -841,7 +844,9 @@
  * ── Milestone C: search, pinned header, collapse chevron, new-option row ─────
  * The body DOM is: optional .listview-header (pinned, non-scrolling) above
  * .listview-body (the scroll frame), which wraps an in-flow .listview-search
- * (when not pinned) + the .listview-listbox + an optional .listview-new-option.
+ * (when not pinned) + the .listview-listbox, above an optional
+ * .listview-footer (pinned, non-scrolling) that holds the .listview-new-option
+ * row and its hint.
  * .listview-listbox carries role=listbox and adds NO border of its own — the
  * single bordered scroll frame is .listview-body.
  */
@@ -890,6 +895,41 @@
   border-top-width: 0;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
+}
+
+/* Pinned footer under the scroll frame: the accept_new_options add row and its
+   refusal hint. Inside the frame the add row read as the last row of the last
+   group and scrolled away with the rows; here it stays in view and reads as
+   part of the control. It mirrors the pinned header: it shares the frame's
+   border and rounds the bottom corners instead of the top ones. */
+.listview-footer {
+  position: relative;
+  background: var(--listview-surface);
+  border: 1px solid var(--st-border-color, rgba(49, 51, 63, 0.2));
+  border-top: none;
+  border-bottom-left-radius: var(--st-base-radius, 0.5rem);
+  border-bottom-right-radius: var(--st-base-radius, 0.5rem);
+  transition: border-color 0.15s ease;
+}
+/* The seam between body and footer, painted as a background along the footer's
+   top edge for the reason the header's seam is (see .listview-header::after):
+   focus recolours borders, and a seam drawn as one would light up. */
+.listview-footer::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: var(--st-border-color, rgba(49, 51, 63, 0.2));
+  pointer-events: none;
+}
+/* Above a footer, the body loses its bottom rounding so the seam is flat, and
+   its bottom border, which the seam above replaces. */
+.listview-body:has(+ .listview-footer) {
+  border-bottom-width: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 /* Search field: a themed input + an inline clear button. */
@@ -1044,14 +1084,15 @@
   margin-inline-start: 0;
 }
 
-/* accept_new_options entry row: input at the bottom of the body. Enter adds. */
+/* accept_new_options entry row, in the pinned footer below the scroll frame.
+   Enter adds. The footer's seam divides it from the list, so it draws no line
+   of its own. */
 .listview-new-option {
   position: relative;
   display: flex;
   align-items: center;
   gap: 0.375rem;
   padding: 0.375rem 0.5rem;
-  border-top: 1px solid var(--listview-faded-border-50);
 }
 /* Its input + plus glyph are styled by the shared themed-input recipe above
    (.listview-new-option__input / __icon), so nothing field-specific is left. */

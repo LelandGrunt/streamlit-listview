@@ -1,4 +1,11 @@
-import { useCallback, useId, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { CSSProperties, FC, MouseEvent } from "react";
 import type { FrontendRendererArgs } from "@streamlit/component-v2-lib";
 import type { Id, ListviewData, ListviewItem, ListviewState } from "./types";
@@ -11,7 +18,7 @@ import { NewOptionInput } from "./components/NewOptionInput";
 import { useSelection } from "./hooks/useSelection";
 import { useKeyboardNav } from "./hooks/useKeyboardNav";
 import { useFilter } from "./hooks/useFilter";
-import { useCollapse } from "./hooks/useCollapse";
+import { useCollapse, type GroupKey } from "./hooks/useCollapse";
 import { useScrollToItem } from "./hooks/useScrollToItem";
 import { useColorScheme } from "./hooks/useColorScheme";
 import { useRowHeight } from "./hooks/useRowHeight";
@@ -91,32 +98,31 @@ interface RenderGroup {
   items: ListviewItem[];
 }
 
-function groupItems(items: ListviewItem[]): RenderGroup[] {
-  const groups: RenderGroup[] = [];
-  const indexByName = new Map<string | null, number>();
-  for (const item of items) {
-    const name = item.group ?? null;
-    let idx = indexByName.get(name);
-    if (idx === undefined) {
-      idx = groups.length;
-      indexByName.set(name, idx);
-      groups.push({ name, items: [] });
-    }
-    groups[idx].items.push(item);
-  }
-  return groups;
+/**
+ * The block a row with `group` renders in: its group, or `null` for the block
+ * without a group. A group named like `ungrouped_label` belongs to that block
+ * too: it would otherwise render a second header with the same text, and two
+ * headers the user cannot tell apart are no better than none.
+ */
+function blockKeyOf(
+  group: string | null | undefined,
+  ungroupedLabel: string,
+): GroupKey {
+  return group == null || group === ungroupedLabel ? null : group;
 }
 
 /**
- * The render blocks for `items`, in render order: the caller's options grouped
- * as given, then the accept_new_options rows in a block of their OWN at the
- * very bottom.
+ * The render blocks for `items`, in render order: one block per named group,
+ * in the order the groups first appear, then ONE block for every row without a
+ * group — the caller's ungrouped options and those of the group named like
+ * `ungrouped_label`, then the accept_new_options rows, in the order `items`
+ * lists them.
  *
- * Grouping the two sets separately is what makes the documented promise true —
- * "entries added via accept_new_options are appended at the bottom": a single
- * pass merges each ungrouped added row into the FIRST ungrouped block, which
- * for a list that mixes grouped and ungrouped options can sit ABOVE the group
- * headers, so an added entry appeared in the middle of the list.
+ * The block without a group renders last wherever its rows stand in `items`.
+ * Rendered at its first row's place, it read as part of the group above it, so
+ * a row that belongs to no group looked like a member of that group; in a
+ * grouped list it now also carries a header of its own (`ungrouped_label`).
+ * Last is also where the README puts added entries: "appended at the bottom".
  *
  * ONE function serves the rendered (filtered) rows and the positions
  * (aria-posinset), which count the unfiltered rows: two copies of the block
@@ -124,19 +130,30 @@ function groupItems(items: ListviewItem[]): RenderGroup[] {
  */
 function blocksFor(
   items: ListviewItem[],
-  newOptionItems: ListviewItem[],
+  ungroupedLabel: string,
 ): RenderGroup[] {
-  if (newOptionItems.length === 0) {
-    return groupItems(items);
-  }
-  const addedKeys = new Set(newOptionItems.map((it) => idKey(it.id)));
-  const known: ListviewItem[] = [];
-  const added: ListviewItem[] = [];
+  const blocks: RenderGroup[] = [];
+  const indexByName = new Map<string, number>();
+  const ungrouped: ListviewItem[] = [];
   for (const item of items) {
-    (addedKeys.has(idKey(item.id)) ? added : known).push(item);
+    const key = blockKeyOf(item.group, ungroupedLabel);
+    if (key === null) {
+      ungrouped.push(item);
+      continue;
+    }
+    let idx = indexByName.get(key);
+    if (idx === undefined) {
+      idx = blocks.length;
+      indexByName.set(key, idx);
+      blocks.push({ name: key, items: [] });
+    }
+    blocks[idx].items.push(item);
   }
-  // groupItems([]) is [], so a fully filtered-out set adds no empty block.
-  return [...groupItems(known), ...groupItems(added)];
+  // A filter that leaves no row without a group adds no empty block.
+  if (ungrouped.length > 0) {
+    blocks.push({ name: null, items: ungrouped });
+  }
+  return blocks;
 }
 
 function optionDomId(id: Id): string {
@@ -256,8 +273,9 @@ function findRowNode(body: HTMLElement, domId: string): Element | null {
 const NOT_A_WHOLE_NUMBER = "Enter a whole number";
 
 /**
- * The id of the row a typed `accept_new_options` value refers to, or undefined
- * when the value is genuinely new.
+ * The row a typed `accept_new_options` value refers to, or undefined when the
+ * value is genuinely new. The row, not just its id: the add reveals it, and
+ * that needs the row's group.
  *
  * Folding goes through the shared `foldForMatch` — literally the fold the search
  * filter uses — so "already in the list" and "findable by searching" agree:
@@ -285,17 +303,20 @@ const NOT_A_WHOLE_NUMBER = "Enter a whole number";
  * render order. A disabled row resolves like any other: `selection.add` is inert
  * for it, so typing its label is a no-op rather than a duplicate row.
  */
-function findExistingId(items: ListviewItem[], value: string): Id | undefined {
-  const exact = itemIdByKey(items).get(value);
+function findExistingRow(
+  items: ListviewItem[],
+  value: string,
+): ListviewItem | undefined {
+  const exact = items.find((item) => idKey(item.id) === value);
   if (exact !== undefined) {
     return exact;
   }
   const folded = foldForMatch(value);
   const byLabel = items.find((item) => foldForMatch(item.label) === folded);
   if (byLabel !== undefined) {
-    return byLabel.id;
+    return byLabel;
   }
-  return items.find((item) => foldForMatch(idKey(item.id)) === folded)?.id;
+  return items.find((item) => foldForMatch(idKey(item.id)) === folded);
 }
 
 export const Listview: FC<ListviewProps> = ({
@@ -445,35 +466,88 @@ export const Listview: FC<ListviewProps> = ({
 
   const { visibleItems, isFiltering } = useFilter({ items: allItems, query });
 
-  const groupNames = useMemo(
+  const ungroupedLabel = data.ungrouped_label;
+  // One pass over the caller's options (blocks as in blockKeyOf):
+  //  - groupNames: the named blocks, in the order they first appear;
+  //  - isGrouped: one of the options names a group, the one named like
+  //    ungrouped_label included. Only then does the block without a group
+  //    carry a header and count as a group of its own. Judged on the unfiltered
+  //    options, so a search never adds or drops that header;
+  //  - hasUngroupedOption: one of the options renders in that block.
+  const { groupNames, isGrouped, hasUngroupedOption } = useMemo(() => {
+    const names = new Set<string>();
+    let grouped = false;
+    let ungrouped = false;
+    for (const item of items) {
+      grouped ||= item.group != null;
+      const key = blockKeyOf(item.group, ungroupedLabel);
+      if (key === null) {
+        ungrouped = true;
+      } else {
+        names.add(key);
+      }
+    }
+    return {
+      groupNames: Array.from(names),
+      isGrouped: grouped,
+      hasUngroupedOption: ungrouped,
+    };
+  }, [items, ungroupedLabel]);
+  // The groups useCollapse tracks: every named group, plus `null` for the block
+  // without a group while it carries a header — that is, while some row renders
+  // in it, among the caller's options or the added ones.
+  const groupKeys = useMemo<GroupKey[]>(() => {
+    if (!isGrouped) {
+      return groupNames;
+    }
+    return hasUngroupedOption || newOptionItems.length > 0
+      ? [...groupNames, null]
+      : groupNames;
+  }, [groupNames, isGrouped, hasUngroupedOption, newOptionItems]);
+  // collapsed_groups names headers, so ungrouped_label in it names the block
+  // without a group.
+  const collapsedGroups = useMemo(
     () =>
-      Array.from(
-        new Set(
-          items.map((i) => i.group).filter((g): g is string => g != null),
-        ),
-      ),
-    [items],
+      Array.isArray(data.collapsed_groups)
+        ? data.collapsed_groups.map((name) => blockKeyOf(name, ungroupedLabel))
+        : data.collapsed_groups,
+    [data.collapsed_groups, ungroupedLabel],
   );
   const collapse = useCollapse({
     collapsibleGroups: data.collapsible_groups,
-    collapsedGroups: data.collapsed_groups,
-    groupNames,
+    collapsedGroups,
+    groupKeys,
   });
+  // Opens the block a row with `group` renders in, before a scroll to that row.
+  // A block without a header — the one block of a list without groups — cannot
+  // be collapsed, and expanding its `null` key anyway would count as a
+  // sighting: a later rerun that brings in groups would then skip the
+  // collapsed_groups="all" seed for the block without a group.
+  const expandGroup = collapse.expand;
+  const expandBlock = useCallback(
+    (group: string | null) => {
+      const key = blockKeyOf(group, ungroupedLabel);
+      if (key !== null || isGrouped) {
+        expandGroup(key);
+      }
+    },
+    [expandGroup, isGrouped, ungroupedLabel],
+  );
 
   // The blocks over EVERY row, filtered or not — the order aria-posinset counts
   // in — and the blocks the list renders (see blocksFor). Not filtering, they
   // are the same blocks: useFilter hands back `allItems` itself, so the
   // unfiltered blocks are reused rather than built twice.
   const allBlocks = useMemo(
-    () => blocksFor(allItems, newOptionItems),
-    [allItems, newOptionItems],
+    () => blocksFor(allItems, ungroupedLabel),
+    [allItems, ungroupedLabel],
   );
   const renderGroups = useMemo(
     () =>
       visibleItems === allItems
         ? allBlocks
-        : blocksFor(visibleItems, newOptionItems),
-    [visibleItems, allItems, allBlocks, newOptionItems],
+        : blocksFor(visibleItems, ungroupedLabel),
+    [visibleItems, allItems, allBlocks, ungroupedLabel],
   );
 
   // Each row's one-based place in the whole list, in render order, for
@@ -512,36 +586,42 @@ export const Listview: FC<ListviewProps> = ({
     return byItem;
   }, [allItems]);
 
-  // Each block plus whether it renders collapsed (a group is only visually
-  // collapsed while no search is active — search overrides collapse) and the
-  // chunks its rows render in. Computed once so the render below and
-  // focusableItems cannot disagree, and so the chunks are split only when the
-  // blocks change rather than on every render (each arrow key, each click).
-  // A block keeps the order of `allItems`, so its chunk numbers never decrease
-  // and each one is a single run — unique as a React key within the block.
+  // Each block plus whether it carries a header, whether it renders collapsed
+  // (a group is only visually collapsed while no search is active — search
+  // overrides collapse) and the chunks its rows render in. Computed once so the
+  // render below and focusableItems cannot disagree, and so the chunks are
+  // split only when the blocks change rather than on every render (each arrow
+  // key, each click). A block keeps the order of `allItems`, so its chunk
+  // numbers never decrease and each one is a single run — unique as a React key
+  // within the block.
   const renderBlocks = useMemo(
     () =>
       renderGroups.map((group) => {
+        // A block without a header cannot render collapsed: the header is its
+        // only toggle. That holds even while useCollapse still lists the
+        // block's `null` key as collapsed — a rerun that takes away the last
+        // group prunes the key in an effect, after this render, and the list
+        // would show an empty frame until then.
+        const hasHeader = group.name != null || isGrouped;
         const collapsed =
-          group.name != null &&
-          !isFiltering &&
-          collapse.isCollapsed(group.name);
+          hasHeader && !isFiltering && collapse.isCollapsed(group.name);
         return {
           group,
+          hasHeader,
           collapsed,
           chunks: collapsed
             ? []
             : runsByKey(group.items, (item) => chunkOf.get(item) as number),
         };
       }),
-    [renderGroups, isFiltering, collapse, chunkOf],
+    [renderGroups, isGrouped, isFiltering, collapse, chunkOf],
   );
 
   // Items that can take keyboard focus: the rendered blocks flattened, minus
   // collapsed ones. Derived from the BLOCKS rather than from visibleItems so
   // arrow-key order is exactly the order the rows appear on screen — grouping
   // reorders items whenever a group's options are not contiguous in `options`,
-  // and the added-options block always renders last.
+  // and the block without a group always renders last.
   const focusableItems = useMemo(
     () =>
       renderBlocks.flatMap(({ group, collapsed }) =>
@@ -551,16 +631,19 @@ export const Listview: FC<ListviewProps> = ({
   );
 
   // Bulk-action scope (D3): the post-filter visible set MINUS disabled rows,
-  // in list order. Sourced from visibleItems (NOT focusableItems), so rows in
-  // collapsed groups stay in scope (collapse is visual, not a filter). Because
-  // visibleItems derives from allItems, accept_new_options synthetic rows are
-  // included automatically.
+  // in render order. Sourced from renderGroups (NOT focusableItems), so rows in
+  // collapsed groups stay in scope (collapse is visual, not a filter), and in
+  // the order the rows appear: Select all fills a max_selections cap from the
+  // top of the list as shown, while grouping moves rows away from their place
+  // in the options (the block without a group renders last). Because the
+  // groups derive from allItems, accept_new_options synthetic rows are included
+  // automatically.
   //
   // Gated on select_all, because the toggle is the ONLY consumer of this scope
   // and of everything derived from it (allVisibleSelected / someVisibleSelected /
   // isFull / canToggle all read targetIds and nothing else reads them). With the
   // gate off the empty scope makes those short-circuit, so the whole chain costs
-  // nothing instead of two n-sized allocations plus four passes over every
+  // nothing instead of one n-sized allocation plus three passes over every
   // visible row on each of the two renders a click produces. Python forbids
   // select_all in single mode, so on a long single-select list that work was not
   // merely wasted, it was unreachable-by-construction.
@@ -580,10 +663,16 @@ export const Listview: FC<ListviewProps> = ({
     if (!data.select_all) {
       return NO_TARGET_IDS;
     }
-    return visibleItems
-      .filter((it) => !disabledIds.has(it.id))
-      .map((it) => it.id);
-  }, [data.select_all, disabledIds, visibleItems]);
+    const ids: Id[] = [];
+    for (const group of renderGroups) {
+      for (const item of group.items) {
+        if (!disabledIds.has(item.id)) {
+          ids.push(item.id);
+        }
+      }
+    }
+    return ids;
+  }, [data.select_all, disabledIds, renderGroups]);
 
   // Select-all toggle state (D4), derived off the live selection so it stays
   // correct on the accept_new_options path too. Memoized on exactly what it
@@ -661,9 +750,9 @@ export const Listview: FC<ListviewProps> = ({
   // A list shorter than `height` leaves empty space below its last row, and that
   // space is .listview-body itself — not focusable — so a click there moved focus
   // nowhere and the frame never lit up, where st.text_area focuses on the same
-  // click. Forward it to the listbox. Only a click on the body ITSELF: rows, the
-  // search field and the add-option row are children that already focus their
-  // own target, and taking it would pull the caret out of an input.
+  // click. Forward it to the listbox. Only a click on the body ITSELF: rows and
+  // the in-flow search field are children that already focus their own target,
+  // and taking it would pull the caret out of an input.
   // preventScroll: the listbox is taller than the frame it scrolls in.
   const onBodyClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
     if (event.target === event.currentTarget) {
@@ -750,8 +839,9 @@ export const Listview: FC<ListviewProps> = ({
           // row always renders in a render chunk inside a group block, and the
           // block's first child is either that header or a chunk, so this is a
           // fixed class-name check with none of the id-escaping hazards of the
-          // row lookup; an ungrouped block has no header and keeps the frame
-          // edge. closest(), not parentElement: a row's parent is its chunk.
+          // row lookup; a block without a header (the one block of a list
+          // without groups) keeps the frame edge. closest(), not
+          // parentElement: a row's parent is its chunk.
           const first = (node.closest(".listview-group") as HTMLElement)
             .firstElementChild as Element;
           const stickyHeight = first.classList.contains("listview-group-header")
@@ -832,23 +922,27 @@ export const Listview: FC<ListviewProps> = ({
     toggle(id);
   }, []);
 
-  // On a refused add, NewOptionInput shows a hint below the add row — the last
-  // content of the scroll frame — so the frame scrolls to its end to keep the
-  // hint in view. The body only, never Element.scrollIntoView(), which would
-  // scroll the Streamlit page too (see scrollToId). rAF, so the hint has
-  // committed before scrollHeight is read.
-  const revealHint = useCallback(() => {
-    requestAnimationFrame(() => {
-      const body = bodyRef.current;
-      // Unreachable in practice: the body renders unconditionally. It guards an
-      // unmount racing the rAF.
-      /* v8 ignore next 3 */
-      if (!body) {
-        return;
-      }
-      body.scrollTop = body.scrollHeight;
-    });
-  }, []);
+  // The row an add resolved to, scrolled into view once it has rendered. The
+  // add field sits in the footer, below the scroll frame, so that row can lie
+  // anywhere in the list, and its block may be collapsed. A state and an
+  // effect, not a direct scrollToId call from the handler: the effect runs
+  // after the commit that renders the row, and a fresh object per request
+  // commits even when the add changed nothing else (the typed label of a row
+  // that is already selected). scrollToId keeps its identity across renders
+  // (remeasureRowHeight does), so the effect runs once per request.
+  const [revealRequest, setRevealRequest] = useState<{ id: Id } | null>(null);
+  useEffect(() => {
+    if (revealRequest !== null) {
+      scrollToId(revealRequest.id, "nearest");
+    }
+  }, [revealRequest, scrollToId]);
+  const revealRow = useCallback(
+    (id: Id, group: string | null) => {
+      expandBlock(group);
+      setRevealRequest({ id });
+    },
+    [expandBlock],
+  );
 
   const onAddNewOption = useCallback(
     (value: string): string | null => {
@@ -862,12 +956,13 @@ export const Listview: FC<ListviewProps> = ({
       // whether that row is a known option or an already-added / selected
       // synthetic one. Resolved here in the cold add path, not as a per-render
       // memo over every row.
-      const existingId = findExistingId(allItems, value);
-      if (existingId !== undefined) {
+      const existing = findExistingRow(allItems, value);
+      if (existing !== undefined) {
         // Matches an existing option (a numeric id typed as text, or the label the
         // user can actually see): select that option rather than spawn a
-        // duplicate row.
-        selection.add(existingId);
+        // duplicate row, and show the user where that row is.
+        selection.add(existing.id);
+        revealRow(existing.id, existing.group ?? null);
         return null;
       }
       // Genuinely new. With int options (Python's new_option_kind) the entry must
@@ -878,7 +973,6 @@ export const Listview: FC<ListviewProps> = ({
       const newId =
         data.new_option_kind === "int" ? parseNewIntId(value) : value;
       if (newId === undefined) {
-        revealHint();
         return NOT_A_WHOLE_NUMBER;
       }
       // In multi mode at the cap the add would be rejected by useSelection, so do
@@ -891,7 +985,7 @@ export const Listview: FC<ListviewProps> = ({
       // Remember it so it persists as a row after deselection, then select it.
       setAddedItems((prev) => {
         // Defence in depth, unreachable in practice: once a value is in
-        // addedItems it is also in allItems, so findExistingId above already
+        // addedItems it is also in allItems, so findExistingRow above already
         // returned. It only guards a re-entrant add that closed over a stale
         // allItems within a single React batch. Marked as a guard (condition +
         // early return) so the append below stays measured.
@@ -902,9 +996,11 @@ export const Listview: FC<ListviewProps> = ({
         return [...prev, newOptionRow(newId)];
       });
       selection.add(newId);
+      // A new entry has no group, so it joins the block without a group.
+      revealRow(newId, null);
       return null;
     },
-    [widgetDisabled, allItems, selection, data.new_option_kind, revealHint],
+    [widgetDisabled, allItems, selection, data.new_option_kind, revealRow],
   );
 
   // After a commit that changed the blocks, a skipped chunk whose rows changed
@@ -916,7 +1012,7 @@ export const Listview: FC<ListviewProps> = ({
   useScrollToItem({
     defaultIds: data.default_ids,
     items: allItems,
-    ensureGroupExpanded: collapse.expand,
+    ensureGroupExpanded: expandBlock,
     scrollToId,
   });
 
@@ -1023,85 +1119,101 @@ export const Listview: FC<ListviewProps> = ({
               {data.placeholder ?? ""}
             </div>
           ) : (
-            renderBlocks.map(({ group, chunks }, index) => (
-              <div
-                className="listview-group"
-                // Keyed by POSITION, never by the group name: the name is
-                // user-supplied (Python accepts any str), so any string sentinel
-                // for the ungrouped block — "__ungrouped__" — is forgeable, and a
-                // real group with that name handed two sibling blocks ONE key.
-                // Duplicate keys corrupt React's reconciliation: measured fallout
-                // was blocks that never unmount, phantom rows accumulating across
-                // filter changes, a repeated option DOM id (ambiguous
-                // aria-activedescendant) and rows on screen that did not match the
-                // active query. The added-options block is a second ungrouped
-                // block, so no name-derived scheme could be unique anyway. Blocks
-                // hold no state of their own (collapse state lives in useCollapse,
-                // keyed by name), so a positional key costs nothing.
-                key={index}
-                // Grouping must be perceivable to AT: a named role="group" is the
-                // listbox structure the ARIA practices prescribe, and it carries
-                // the group name that the (aria-hidden) header renders visually.
-                // The ungrouped block gets no group role — there is no name to
-                // give it, and an unnamed group is worse than none.
-                role={group.name != null ? "group" : "presentation"}
-                aria-label={group.name ?? undefined}
-              >
-                {group.name != null && (
-                  <GroupHeader
-                    name={group.name}
-                    count={group.items.length}
-                    collapsible={data.collapsible_groups}
-                    // Passed unconditionally: GroupHeader reads neither prop in
-                    // its non-collapsible variant, and isCollapsed is itself
-                    // gated on collapsibleGroups, so a `collapsible_groups ?
-                    // … : undefined` guard here only restated that twice.
-                    // NOT `renderBlocks`' `collapsed` flag: that one folds in the
-                    // search override, and the chevron must keep showing the
-                    // group's real state while a query is active.
-                    collapsed={collapse.isCollapsed(group.name)}
-                    onToggle={() => collapse.toggle(group.name as string)}
-                  />
-                )}
-                {chunks.map((run) => (
-                  <div
-                    key={run.key}
-                    className="listview-chunk"
-                    role="none"
-                    // The row count the skipped chunk's size estimate multiplies
-                    // by (listview.css). Unitless: React sets a custom property
-                    // as given.
-                    style={
-                      {
-                        "--listview-chunk-rows": run.items.length,
-                      } as CSSProperties
-                    }
-                  >
-                    {run.items.map((item) => (
-                      <ListItem
-                        key={idKey(item.id)}
-                        item={item}
-                        domId={optionDomId(item.id)}
-                        posInSet={rowPosition.get(item) as number}
-                        setSize={setSize}
-                        selected={selection.isSelected(item.id)}
-                        disabled={Boolean(item.disabled) || widgetDisabled}
-                        focused={focusedId === item.id}
-                        muted={selection.isMuted(item.id)}
-                        onSelect={onItemClick}
-                      />
-                    ))}
-                  </div>
-                ))}
-              </div>
-            ))
+            renderBlocks.map(({ group, hasHeader, chunks }, index) => {
+              // A named block shows its group; the block without a group shows
+              // ungrouped_label, its header in a grouped list.
+              const name = group.name ?? data.ungrouped_label;
+              return (
+                <div
+                  className="listview-group"
+                  // Keyed by POSITION, never by the group name: the name is
+                  // user-supplied (Python accepts any str), so any string
+                  // sentinel for the block without a group — "__ungrouped__" —
+                  // is forgeable, and a real group with that name handed two
+                  // sibling blocks ONE key. Duplicate keys corrupt React's
+                  // reconciliation: measured fallout was blocks that never
+                  // unmount, phantom rows accumulating across filter changes, a
+                  // repeated option DOM id (ambiguous aria-activedescendant) and
+                  // rows on screen that did not match the active query. The
+                  // block without a group has no name at all, so no
+                  // name-derived scheme could key it anyway. Blocks hold no
+                  // state of their own (collapse state lives in useCollapse,
+                  // keyed by group name or null), so a positional key costs
+                  // nothing.
+                  key={index}
+                  // Grouping must be perceivable to AT: a named role="group" is
+                  // the listbox structure the ARIA practices prescribe, and it
+                  // carries the name that the (aria-hidden) header renders
+                  // visually. The one block of a list without groups gets no
+                  // group role — it has no header to name it by. Every block
+                  // with a header gets the role, so an empty ungrouped_label
+                  // (the spec allows "") yields an unnamed group
+                  // (aria-label="").
+                  role={hasHeader ? "group" : "presentation"}
+                  aria-label={hasHeader ? name : undefined}
+                >
+                  {hasHeader && (
+                    <GroupHeader
+                      name={name}
+                      count={group.items.length}
+                      collapsible={data.collapsible_groups}
+                      // Passed unconditionally: GroupHeader reads neither prop
+                      // in its non-collapsible variant, and isCollapsed is
+                      // itself gated on collapsibleGroups, so a
+                      // `collapsible_groups ? … : undefined` guard here only
+                      // restated that twice. NOT `renderBlocks`' `collapsed`
+                      // flag: that one folds in the search override, and the
+                      // chevron must keep showing the group's real state while
+                      // a query is active.
+                      collapsed={collapse.isCollapsed(group.name)}
+                      onToggle={() => collapse.toggle(group.name)}
+                    />
+                  )}
+                  {chunks.map((run) => (
+                    <div
+                      key={run.key}
+                      className="listview-chunk"
+                      role="none"
+                      // The row count the skipped chunk's size estimate
+                      // multiplies by (listview.css). Unitless: React sets a
+                      // custom property as given.
+                      style={
+                        {
+                          "--listview-chunk-rows": run.items.length,
+                        } as CSSProperties
+                      }
+                    >
+                      {run.items.map((item) => (
+                        <ListItem
+                          key={idKey(item.id)}
+                          item={item}
+                          domId={optionDomId(item.id)}
+                          posInSet={rowPosition.get(item) as number}
+                          setSize={setSize}
+                          selected={selection.isSelected(item.id)}
+                          disabled={Boolean(item.disabled) || widgetDisabled}
+                          focused={focusedId === item.id}
+                          muted={selection.isMuted(item.id)}
+                          onSelect={onItemClick}
+                        />
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              );
+            })
           )}
         </div>
-
-        {data.accept_new_options && (
-          <NewOptionInput disabled={widgetDisabled} onAdd={onAddNewOption} />
-        )}
       </div>
+
+      {/* The add field sits in a footer below the scroll frame, not at the end
+          of it: there it read as the last row of the last group, and it
+          scrolled out of view with the rows. */}
+      {data.accept_new_options && (
+        <div className="listview-footer">
+          <NewOptionInput disabled={widgetDisabled} onAdd={onAddNewOption} />
+        </div>
+      )}
     </div>
   );
 };

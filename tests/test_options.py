@@ -807,6 +807,41 @@ def test_sort_empty_list_all_modes():
         assert sort_items([], mode, True) == []
 
 
+def test_sort_puts_the_group_named_like_ungrouped_label_in_the_ungrouped_block():
+    # The frontend renders the options of that group and the options without a
+    # group as one block under the ungrouped_label header, so the sort treats
+    # them as one block too: sorted together, and last.
+    items = [
+        {"id": "z", "label": "Zucchini"},
+        {"id": "o", "label": "Olive", "group": "Other"},
+        {"id": "c", "label": "Carrot", "group": "Veg"},
+        {"id": "a", "label": "Avocado"},
+    ]
+    assert [it["id"] for it in sort_items(items, "both", True, "Other")] == [
+        "c",
+        "a",
+        "o",
+        "z",
+    ]
+    assert [it["id"] for it in sort_items(items, "groups", True, "Other")] == [
+        "c",
+        "z",
+        "o",
+        "a",
+    ]
+
+
+def test_sort_keeps_a_group_named_like_another_label_apart():
+    items = [
+        {"id": "z", "label": "Zucchini"},
+        {"id": "o", "label": "Olive", "group": "Other"},
+    ]
+    assert [it["id"] for it in sort_items(items, "groups", True, "N/A")] == [
+        "o",
+        "z",
+    ]
+
+
 def test_sort_does_not_mutate_input():
     items = [
         {"id": "b", "label": "Banana", "group": "Fruit"},

@@ -80,3 +80,35 @@ def test_added_option_persists_after_picking_another_single_mode(page: Page):
     expect(atlantis).to_have_attribute("aria-selected", "false")
     atlantis.click()
     expect(atlantis).to_have_attribute("aria-selected", "true")
+
+
+def test_an_added_entry_renders_under_the_groups_label(page: Page):
+    """The built-in cities all carry a group, so the first added entry opens
+    the block without a group under its header. The Groups section's label
+    field renames that header."""
+    page.get_by_role("radio", name="Behavior", exact=True).click()
+    page.get_by_text("Accept new options", exact=True).click()
+
+    new_option = page.get_by_test_id("stListviewNewOption")
+    expect(new_option).to_be_visible(timeout=10000)
+    new_option.fill("Atlantis")
+    new_option.press("Enter")
+
+    listview = page.get_by_test_id("stListview").first
+    expect(
+        listview.get_by_role("group", name="Other").get_by_test_id(
+            "stListviewOption-Atlantis"
+        )
+    ).to_have_count(1, timeout=10000)
+
+    page.get_by_role("radio", name="Groups", exact=True).click()
+    # exact: the field's help button is labelled "Help for <label>", which a
+    # substring match also finds.
+    label = page.get_by_label("Label for options without a group", exact=True)
+    label.fill("Elsewhere")
+    label.press("Enter")
+    expect(
+        listview.get_by_role("group", name="Elsewhere").get_by_test_id(
+            "stListviewOption-Atlantis"
+        )
+    ).to_have_count(1, timeout=10000)

@@ -37,9 +37,11 @@ describe("useScrollToItem", () => {
     expect(scrollToId).not.toHaveBeenCalled();
   });
 
-  it("does not expand for a default item that has no group", () => {
+  it("opens the block without a group for a default item that has no group", () => {
+    // In a grouped list that block carries a header and can be collapsed; the
+    // container decides whether a block without a header needs opening.
     const { scrollToId, ensureGroupExpanded } = setup(["c"]);
-    expect(ensureGroupExpanded).not.toHaveBeenCalled();
+    expect(ensureGroupExpanded).toHaveBeenCalledWith(null);
     expect(scrollToId).toHaveBeenCalledWith("c");
   });
 
