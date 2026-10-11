@@ -337,10 +337,12 @@ export const Listview: FC<ListviewProps> = ({
 
   // The caller's options, with every item unchanged since the previous render
   // kept as the previous render's OBJECT — and the previous array itself when
-  // nothing changed. Each rerun ships the options as freshly parsed JSON, so
-  // reading `data.items` directly made every rerun of the app (any widget, not
-  // just this one) recompute every memo below that is keyed on the items and
-  // re-render every row: O(N) per rerun for a list whose options never moved.
+  // nothing changed. Every rerun that changes this listview's payload ships the
+  // options as freshly parsed JSON: a parameter change, a click on a keyed
+  // listview, the first rerun after a keyed listview mounts. Reading
+  // `data.items` directly made each such rerun recompute every memo below that
+  // is keyed on the items and re-render every row: O(N) per rerun for a list
+  // whose options never moved.
   // Read the options through `items` only, never `data.items`. The render-body
   // ref write follows the prevNewOptionItemsRef pattern below.
   const prevItemsRef = useRef<ListviewItem[]>(data.items);

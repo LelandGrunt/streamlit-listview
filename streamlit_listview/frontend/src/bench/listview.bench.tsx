@@ -61,10 +61,10 @@ interface BenchBudget {
 
 // tinybench runs a task until BOTH its time budget (default 500 ms) and its
 // iteration count (default 10) are met. Up to 5k rows that is cheap. Above it
-// one iteration costs seconds (a mount in jsdom: 2.4-5.1 s at 50k, 5.6-11.7 s
-// at 100k, grouped-ungrouped), so the count is fixed and the budgets zeroed,
-// with one warm-up iteration instead of five. 100k keeps 50k's 3: each 100k
-// cell already runs about 4 minutes.
+// one iteration costs seconds (a mount in jsdom on 2026-10-11: 2.6-2.8 s at
+// 50k, 6.1-6.7 s at 100k, across the shapes), so the count is fixed and the
+// budgets zeroed, with one warm-up iteration instead of five. 100k keeps 50k's
+// 3: each 100k cell already runs about 4 minutes.
 function budget(n: number): BenchBudget {
   if (n <= 5_000) {
     return {};

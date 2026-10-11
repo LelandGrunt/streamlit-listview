@@ -5,7 +5,10 @@ Driven by e2e/perf/test_bench.py through Playwright. The query string picks the
 cell — ``?n=<rows>&shape=<grouped|ungrouped|disabled>&newopt=<0|1>`` (the
 rows of each shape: ``cells.shape_rows``) — and the list mounts only on
 the "show" button, so the test times the mount itself. "rerun" is an unrelated
-widget interaction: the options arrive unchanged, as freshly parsed JSON.
+widget interaction with the options unchanged. The first such rerun after the
+mount still ships them again, as freshly parsed JSON: the listview is keyed, so
+from that rerun on its payload carries the persisted selection. Later reruns
+that change nothing send Streamlit's cache reference instead.
 "edit" flips one option's label (row N/2), so the rerun it causes ships a
 one-row change; the next "edit" flips it back. ``newopt=1`` renders with
 ``accept_new_options=True`` for the add-option scenario, on a page load of its
@@ -47,7 +50,7 @@ def dataset(n: int, shape: str) -> list:
 
 @st.cache_resource
 def options_bytes(n: int, shape: str) -> int:
-    """Size of the options as the caller passes them — what Streamlit resends every rerun."""
+    """Size of the options as passed: what Streamlit resends when the listview's payload changes."""
     return len(json.dumps(dataset(n, shape)).encode())
 
 

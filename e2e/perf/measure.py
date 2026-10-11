@@ -6,7 +6,10 @@ resolved when the DOM condition holds and one more frame has painted —
 because a Playwright round trip per check would itself be the measurement at
 this scale. CDP's Performance domain adds how long the main thread was busy
 (TaskDuration and its script / style / layout parts), and websocket frames are
-counted because Streamlit resends the whole options payload on every rerun.
+counted because Streamlit resends the whole options payload whenever the
+listview's payload changes: on the first rerun after the keyed listview mounts
+(its persisted selection appears), on a click, and on a parameter change. A
+rerun that changes nothing sends a cache reference of about 1.5 KB.
 ``roundtrip_ms`` ends when the status line shows the rerun; ``settled_ms`` ends
 when the frontend's work after it has finished (long tasks ≥ 50 ms are what it
 can see).

@@ -81,7 +81,7 @@ uv run --extra devel pytest e2e/
 Each test starts a Streamlit subprocess (`e2e/e2e_utils.py::StreamlitRunner`) on a harness app (`e2e/app.py`, `app_features.py`, `app_performance.py`) and needs a built bundle. `pytest e2e/` skips the browser-tier benchmark in `e2e/perf/`.
 
 ### Performance benchmarks (not in CI; no thresholds)
-**Read `BENCHMARKS.md` before running, changing or reading a benchmark.** Both tiers drive the component only through its public surface, so the same files benchmark any checkout. The full matrix takes about 27 minutes in the frontend tier and 28 in the browser tier.
+**Read `BENCHMARKS.md` before running, changing or reading a benchmark.** Both tiers drive the component only through its public surface, so the same files benchmark any checkout. The full matrix takes about 25 minutes in the frontend tier and 24 in the browser tier.
 - **Frontend tier** (vitest `bench` in jsdom, `frontend/src/bench/`): `npm run bench`, for React-side A/B work. It runs React's development build, so its numbers are relative.
 - **Browser tier** (Playwright against a real Streamlit server, `e2e/perf/`): `uv run --extra devel pytest e2e/perf/ --perf-out bench-results/<label>.jsonl`, summarized by `uv run --extra devel python -m e2e.perf.report`. It gives the numbers of record, and only it can judge DOM-size or CSS work. It measures the checkout it runs from.
 - **A delta inside the spread is not a result.** Results go to the gitignored `bench-results/` and are never committed: the numbers are machine-specific. The only gated performance check is `e2e/test_performance.py`.
