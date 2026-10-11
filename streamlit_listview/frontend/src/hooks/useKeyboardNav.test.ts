@@ -1,15 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import type { Mock } from "vitest";
-import { createElement } from "react";
-import {
-  renderHook,
-  act,
-  render,
-  screen,
-  fireEvent,
-  createEvent,
-} from "@testing-library/react";
-import { useKeyboardNav } from "./useKeyboardNav";
+import { renderHook, act } from "@testing-library/react";
+import { GroupNode, useKeyboardNav } from "./useKeyboardNav";
+import type { NavNode } from "./useKeyboardNav";
+import type { GroupKey } from "./useCollapse";
 import type { Id, ListviewItem } from "../types";
 
 const items: ListviewItem[] = [
@@ -24,17 +18,13 @@ type FakeKeyEvent = React.KeyboardEvent<HTMLDivElement> & {
 };
 
 /**
- * A keydown as the listbox really sees it: dispatched AT the listbox, because
- * rows are not focusable and so the listbox itself is what holds DOM focus.
- * Pass `target` to model a keydown that started in a focused descendant control
- * (the collapsible group-header button) and bubbled up.
+ * A keydown as the list really sees it: dispatched AT the listbox or tree,
+ * because neither rows nor headers are focusable, so the list itself is what
+ * holds DOM focus.
  */
-function keyEvent(key: string, target?: EventTarget): FakeKeyEvent {
-  const listbox = document.createElement("div");
+function keyEvent(key: string): FakeKeyEvent {
   return {
     key,
-    target: target ?? listbox,
-    currentTarget: listbox,
     preventDefault: vi.fn(),
     stopPropagation: vi.fn(),
   } as unknown as FakeKeyEvent;
@@ -43,13 +33,17 @@ function keyEvent(key: string, target?: EventTarget): FakeKeyEvent {
 describe("useKeyboardNav", () => {
   it("starts with no focused item", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
+    const { result } = renderHook(() =>
+      useKeyboardNav({ nodes: items, onSelect }),
+    );
     expect(result.current.focusedId).toBeNull();
   });
 
   it("ArrowDown focuses the first focusable item, then skips disabled ones", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
+    const { result } = renderHook(() =>
+      useKeyboardNav({ nodes: items, onSelect }),
+    );
     act(() => result.current.onKeyDown(keyEvent("ArrowDown")));
     expect(result.current.focusedId).toBe("a");
     act(() => result.current.onKeyDown(keyEvent("ArrowDown")));
@@ -59,7 +53,9 @@ describe("useKeyboardNav", () => {
 
   it("ArrowUp moves focus backwards and stops at the first focusable item", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
+    const { result } = renderHook(() =>
+      useKeyboardNav({ nodes: items, onSelect }),
+    );
     act(() => result.current.onKeyDown(keyEvent("End")));
     expect(result.current.focusedId).toBe(4);
     act(() => result.current.onKeyDown(keyEvent("ArrowUp")));
@@ -73,7 +69,9 @@ describe("useKeyboardNav", () => {
 
   it("ArrowDown stops at the last focusable item", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
+    const { result } = renderHook(() =>
+      useKeyboardNav({ nodes: items, onSelect }),
+    );
     act(() => result.current.onKeyDown(keyEvent("End")));
     expect(result.current.focusedId).toBe(4);
     act(() => result.current.onKeyDown(keyEvent("ArrowDown")));
@@ -82,7 +80,9 @@ describe("useKeyboardNav", () => {
 
   it("Home focuses the first focusable item; End focuses the last focusable item", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
+    const { result } = renderHook(() =>
+      useKeyboardNav({ nodes: items, onSelect }),
+    );
     act(() => result.current.onKeyDown(keyEvent("End")));
     expect(result.current.focusedId).toBe(4);
     act(() => result.current.onKeyDown(keyEvent("Home")));
@@ -91,7 +91,9 @@ describe("useKeyboardNav", () => {
 
   it("Enter selects the focused item", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
+    const { result } = renderHook(() =>
+      useKeyboardNav({ nodes: items, onSelect }),
+    );
     act(() => result.current.onKeyDown(keyEvent("ArrowDown")));
     act(() => result.current.onKeyDown(keyEvent("Enter")));
     expect(onSelect).toHaveBeenCalledWith("a");
@@ -99,7 +101,9 @@ describe("useKeyboardNav", () => {
 
   it("Space selects the focused item and is treated the same as Enter", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
+    const { result } = renderHook(() =>
+      useKeyboardNav({ nodes: items, onSelect }),
+    );
     act(() => result.current.onKeyDown(keyEvent("End")));
     act(() => result.current.onKeyDown(keyEvent(" ")));
     expect(onSelect).toHaveBeenCalledWith(4);
@@ -107,14 +111,18 @@ describe("useKeyboardNav", () => {
 
   it("Enter/Space with nothing focused does not call onSelect", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
+    const { result } = renderHook(() =>
+      useKeyboardNav({ nodes: items, onSelect }),
+    );
     act(() => result.current.onKeyDown(keyEvent("Enter")));
     expect(onSelect).not.toHaveBeenCalled();
   });
 
   it("ignores unrelated keys without calling onSelect", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
+    const { result } = renderHook(() =>
+      useKeyboardNav({ nodes: items, onSelect }),
+    );
     act(() => result.current.onKeyDown(keyEvent("a")));
     expect(result.current.focusedId).toBeNull();
     expect(onSelect).not.toHaveBeenCalled();
@@ -124,7 +132,7 @@ describe("useKeyboardNav", () => {
     const onSelect = vi.fn();
     const { result } = renderHook(() =>
       useKeyboardNav({
-        items: [{ id: "x", label: "X", disabled: true }],
+        nodes: [{ id: "x", label: "X", disabled: true }],
         onSelect,
       }),
     );
@@ -137,7 +145,9 @@ describe("useKeyboardNav", () => {
 
   it("ArrowUp from an unfocused state jumps to the last focusable item", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
+    const { result } = renderHook(() =>
+      useKeyboardNav({ nodes: items, onSelect }),
+    );
     expect(result.current.focusedId).toBeNull();
     act(() => result.current.onKeyDown(keyEvent("ArrowUp")));
     expect(result.current.focusedId).toBe(4);
@@ -146,7 +156,7 @@ describe("useKeyboardNav", () => {
   it("clamps a stale focus index when the items list shrinks", () => {
     const onSelect = vi.fn();
     const { result, rerender } = renderHook(
-      ({ list }) => useKeyboardNav({ items: list, onSelect }),
+      ({ list }) => useKeyboardNav({ nodes: list, onSelect }),
       { initialProps: { list: items } },
     );
     act(() => result.current.onKeyDown(keyEvent("End")));
@@ -159,7 +169,7 @@ describe("useKeyboardNav", () => {
   it("after the focusable list shrinks, ArrowDown resumes from the top (not the stale tail)", () => {
     const onSelect = vi.fn();
     const { result, rerender } = renderHook(
-      ({ list }) => useKeyboardNav({ items: list, onSelect }),
+      ({ list }) => useKeyboardNav({ nodes: list, onSelect }),
       { initialProps: { list: items } },
     );
     act(() => result.current.onKeyDown(keyEvent("End")));
@@ -189,7 +199,7 @@ describe("useKeyboardNav", () => {
       { id: "g", label: "G" },
     ];
     const { result, rerender } = renderHook(
-      ({ list }) => useKeyboardNav({ items: list, onSelect }),
+      ({ list }) => useKeyboardNav({ nodes: list, onSelect }),
       { initialProps: { list: full } },
     );
     // Focus the 4th item (index 3) = "d".
@@ -208,7 +218,9 @@ describe("useKeyboardNav", () => {
 
   it("setFocusToId sets focus when the id belongs to a focusable item", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
+    const { result } = renderHook(() =>
+      useKeyboardNav({ nodes: items, onSelect }),
+    );
     expect(result.current.focusedId).toBeNull();
     act(() => result.current.setFocusToId("c"));
     expect(result.current.focusedId).toBe("c");
@@ -219,7 +231,9 @@ describe("useKeyboardNav", () => {
 
   it("setFocusToId is a no-op when the id is disabled or does not exist", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
+    const { result } = renderHook(() =>
+      useKeyboardNav({ nodes: items, onSelect }),
+    );
     // first move focus to a known item so we can verify it does not change
     act(() => result.current.setFocusToId("a"));
     expect(result.current.focusedId).toBe("a");
@@ -235,7 +249,9 @@ describe("useKeyboardNav", () => {
 
   it("resumes arrow navigation from a clicked row", () => {
     const onSelect = vi.fn();
-    const { result } = renderHook(() => useKeyboardNav({ items, onSelect }));
+    const { result } = renderHook(() =>
+      useKeyboardNav({ nodes: items, onSelect }),
+    );
     act(() => result.current.setFocusToId("c"));
     act(() => result.current.onKeyDown(keyEvent("ArrowDown")));
     expect(result.current.focusedId).toBe(4);
@@ -251,7 +267,7 @@ describe("slash and escape", () => {
   it('"/" calls onSlash and prevents default', () => {
     const onSlash = vi.fn();
     const { result } = renderHook(() =>
-      useKeyboardNav({ items, onSelect: vi.fn(), onSlash }),
+      useKeyboardNav({ nodes: items, onSelect: vi.fn(), onSlash }),
     );
     const event = keyEvent("/");
     act(() => result.current.onKeyDown(event));
@@ -262,7 +278,7 @@ describe("slash and escape", () => {
   it("Escape calls onEscape", () => {
     const onEscape = vi.fn();
     const { result } = renderHook(() =>
-      useKeyboardNav({ items, onSelect: vi.fn(), onEscape }),
+      useKeyboardNav({ nodes: items, onSelect: vi.fn(), onEscape }),
     );
     act(() => result.current.onKeyDown(keyEvent("Escape")));
     expect(onEscape).toHaveBeenCalledTimes(1);
@@ -270,7 +286,7 @@ describe("slash and escape", () => {
 
   it("Escape without an onEscape handler does nothing (no throw)", () => {
     const { result } = renderHook(() =>
-      useKeyboardNav({ items, onSelect: vi.fn() }),
+      useKeyboardNav({ nodes: items, onSelect: vi.fn() }),
     );
     const event = keyEvent("Escape");
     act(() => result.current.onKeyDown(event));
@@ -279,7 +295,7 @@ describe("slash and escape", () => {
 
   it('"/" without an onSlash handler does nothing (no throw)', () => {
     const { result } = renderHook(() =>
-      useKeyboardNav({ items, onSelect: vi.fn() }),
+      useKeyboardNav({ nodes: items, onSelect: vi.fn() }),
     );
     const event = keyEvent("/");
     act(() => result.current.onKeyDown(event));
@@ -287,59 +303,220 @@ describe("slash and escape", () => {
   });
 });
 
-describe("keys aimed at a focused descendant control", () => {
-  /**
-   * Mirrors the real DOM: the listbox keydown handler sits on an ANCESTOR of the
-   * collapsible group-header <button>, and that button has no key handling of
-   * its own — it relies on the browser turning Enter/Space into a click, which
-   * a preventDefault() from up here would cancel.
-   */
-  function Harness({ onSelect }: { onSelect: (id: Id) => void }) {
-    const nav = useKeyboardNav({ items, onSelect });
-    return createElement(
-      "div",
-      { role: "listbox", tabIndex: 0, onKeyDown: nav.onKeyDown },
-      createElement("button", { type: "button" }, "Fruit"),
+describe("group headers in a tree", () => {
+  // With collapsible_groups the list is a tree: each group header is a node of
+  // its own, between the rows, and a collapsed group contributes its header
+  // only. Rows name no header; a row's header is the closest one above it.
+  const fruit = new GroupNode("Fruit", true);
+  const veg = new GroupNode("Veg", false); // collapsed: no rows follow
+  const loose = new GroupNode(null, true); // the block without a group
+  const nodes: NavNode[] = [
+    fruit,
+    { id: "apple", label: "Apple", group: "Fruit" },
+    { id: "banana", label: "Banana", group: "Fruit", disabled: true },
+    { id: "cherry", label: "Cherry", group: "Fruit" },
+    veg,
+    loose,
+    { id: "x", label: "X" },
+  ];
+
+  // The node the ring is on: a row id, or for a header its group together
+  // with the row field, which must then read null.
+  function focusOf(nav: ReturnType<typeof useKeyboardNav>) {
+    return nav.focusedGroup === undefined
+      ? nav.focusedId
+      : { group: nav.focusedGroup, row: nav.focusedId };
+  }
+  const header = (group: GroupKey) => ({ group, row: null });
+
+  function setup(
+    list: NavNode[] = nodes,
+    extra: Partial<Parameters<typeof useKeyboardNav>[0]> = {},
+  ) {
+    const onSelect = vi.fn();
+    const onToggleGroup = vi.fn();
+    const scrollToId = vi.fn();
+    const scrollToGroup = vi.fn();
+    const { result, rerender } = renderHook(
+      ({ current }) =>
+        useKeyboardNav({
+          nodes: current,
+          onSelect,
+          onToggleGroup,
+          scrollToId,
+          scrollToGroup,
+          ...extra,
+        }),
+      { initialProps: { current: list } },
     );
+    const press = (key: string) => {
+      const event = keyEvent(key);
+      act(() => result.current.onKeyDown(event));
+      return event;
+    };
+    return {
+      result,
+      rerender,
+      press,
+      onSelect,
+      onToggleGroup,
+      scrollToId,
+      scrollToGroup,
+    };
   }
 
-  it("leaves Enter/Space on a nested button un-prevented and selects nothing", () => {
-    const onSelect = vi.fn();
-    render(createElement(Harness, { onSelect }));
-    const listbox = screen.getByRole("listbox");
-    // Arm the bug: a roving focus exists, so an Enter wrongly claimed by the
-    // listbox would be observable as a selection of an unrelated row.
-    fireEvent.keyDown(listbox, { key: "ArrowDown" });
-    const button = screen.getByRole("button");
-    for (const key of ["Enter", " "]) {
-      const event = createEvent.keyDown(button, { key });
-      fireEvent(button, event);
-      // defaultPrevented is the whole mechanism: it is what used to stop the
-      // browser from activating the button, so the group never collapsed.
-      expect(event.defaultPrevented).toBe(false);
+  it("moves through headers and rows in render order, skipping disabled rows", () => {
+    const { result, press } = setup();
+    const seen = [];
+    for (let step = 0; step < 6; step += 1) {
+      press("ArrowDown");
+      seen.push(focusOf(result.current));
     }
+    expect(seen).toEqual([
+      header("Fruit"),
+      "apple",
+      "cherry",
+      header("Veg"),
+      header(null),
+      "x",
+    ]);
+    press("Home");
+    expect(focusOf(result.current)).toEqual(header("Fruit"));
+    press("ArrowUp");
+    expect(focusOf(result.current)).toEqual(header("Fruit"));
+    press("End");
+    expect(focusOf(result.current)).toBe("x");
+  });
+
+  it("scrolls a header a key lands on through scrollToGroup", () => {
+    const { press, scrollToId, scrollToGroup } = setup();
+    press("ArrowDown");
+    expect(scrollToGroup).toHaveBeenLastCalledWith("Fruit");
+    expect(scrollToId).not.toHaveBeenCalled();
+    press("End");
+    press("ArrowUp");
+    expect(scrollToGroup).toHaveBeenLastCalledWith(null);
+  });
+
+  it("toggles a focused header with Enter or Space and selects nothing", () => {
+    const { result, press, onSelect, onToggleGroup } = setup();
+    act(() => result.current.setFocusToGroup("Veg"));
+    for (const key of ["Enter", " "]) {
+      expect(press(key).preventDefault).toHaveBeenCalled();
+    }
+    expect(onToggleGroup.mock.calls).toEqual([["Veg"], ["Veg"]]);
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it('ignores arrows, Escape and "/" that bubbled up from a nested control', () => {
-    const onSelect = vi.fn();
-    const onEscape = vi.fn();
-    const onSlash = vi.fn();
-    const { result } = renderHook(() =>
-      useKeyboardNav({ items, onSelect, onEscape, onSlash }),
-    );
-    const button = document.createElement("button");
-    act(() => result.current.onKeyDown(keyEvent("ArrowDown", button)));
-    expect(result.current.focusedId).toBeNull();
-    // Deliberate: Escape must not clear the selection (nor "/" steal focus)
-    // while a group-header button is what the user is operating.
-    for (const key of ["Escape", "/"]) {
-      const event = keyEvent(key, button);
-      act(() => result.current.onKeyDown(event));
-      expect(event.preventDefault).not.toHaveBeenCalled();
+  it("ArrowRight opens a collapsed header and keeps the focus on it", () => {
+    const { result, press, onToggleGroup } = setup();
+    act(() => result.current.setFocusToGroup("Veg"));
+    expect(press("ArrowRight").preventDefault).toHaveBeenCalled();
+    expect(onToggleGroup).toHaveBeenCalledWith("Veg");
+    expect(focusOf(result.current)).toEqual(header("Veg"));
+  });
+
+  it("ArrowRight on an open header moves to its first row", () => {
+    const { result, press, onToggleGroup, scrollToId } = setup();
+    act(() => result.current.setFocusToGroup(null));
+    press("ArrowRight");
+    expect(focusOf(result.current)).toBe("x");
+    expect(scrollToId).toHaveBeenLastCalledWith("x");
+    expect(onToggleGroup).not.toHaveBeenCalled();
+  });
+
+  it("ArrowRight does nothing on a row or on an open header without rows", () => {
+    // Every row of "Empty" is disabled, so the next node is another header.
+    const empty = new GroupNode("Empty", true);
+    const { result, press, onToggleGroup } = setup([empty, veg]);
+    act(() => result.current.setFocusToGroup("Empty"));
+    expect(press("ArrowRight").preventDefault).not.toHaveBeenCalled();
+    expect(focusOf(result.current)).toEqual(header("Empty"));
+    const rows = setup();
+    act(() => rows.result.current.setFocusToId("cherry"));
+    expect(rows.press("ArrowRight").preventDefault).not.toHaveBeenCalled();
+    expect(focusOf(rows.result.current)).toBe("cherry");
+    expect(onToggleGroup).not.toHaveBeenCalled();
+    expect(rows.onToggleGroup).not.toHaveBeenCalled();
+  });
+
+  it("ArrowLeft closes an open header and does nothing on a closed one", () => {
+    const { result, press, onToggleGroup } = setup();
+    act(() => result.current.setFocusToGroup("Fruit"));
+    expect(press("ArrowLeft").preventDefault).toHaveBeenCalled();
+    expect(onToggleGroup).toHaveBeenCalledWith("Fruit");
+    act(() => result.current.setFocusToGroup("Veg"));
+    expect(press("ArrowLeft").preventDefault).not.toHaveBeenCalled();
+    expect(onToggleGroup).toHaveBeenCalledTimes(1);
+  });
+
+  it("ArrowLeft on a row moves to its header", () => {
+    const { result, press, onToggleGroup, scrollToGroup } = setup();
+    act(() => result.current.setFocusToId("cherry"));
+    expect(press("ArrowLeft").preventDefault).toHaveBeenCalled();
+    expect(focusOf(result.current)).toEqual(header("Fruit"));
+    expect(scrollToGroup).toHaveBeenLastCalledWith("Fruit");
+    expect(onToggleGroup).not.toHaveBeenCalled();
+  });
+
+  it("ArrowLeft and ArrowRight do nothing in a list without headers", () => {
+    const { result, press, onToggleGroup } = setup(items);
+    act(() => result.current.setFocusToId("c"));
+    for (const key of ["ArrowLeft", "ArrowRight"]) {
+      expect(press(key).preventDefault).not.toHaveBeenCalled();
     }
-    expect(onEscape).not.toHaveBeenCalled();
-    expect(onSlash).not.toHaveBeenCalled();
+    expect(focusOf(result.current)).toBe("c");
+    expect(onToggleGroup).not.toHaveBeenCalled();
+  });
+
+  it("ArrowLeft, ArrowRight and Enter on a header need no toggle handler", () => {
+    const { result, press } = setup(nodes, { onToggleGroup: undefined });
+    act(() => result.current.setFocusToGroup("Veg"));
+    for (const key of ["ArrowRight", "Enter"]) {
+      press(key);
+    }
+    act(() => result.current.setFocusToGroup("Fruit"));
+    press("ArrowLeft");
+    expect(focusOf(result.current)).toEqual(header("Fruit"));
+  });
+
+  it("setFocusToGroup focuses a header and ignores a group it does not list", () => {
+    const { result } = setup();
+    act(() => result.current.setFocusToGroup(null));
+    expect(focusOf(result.current)).toEqual(header(null));
+    act(() => result.current.setFocusToGroup("Meat"));
+    expect(focusOf(result.current)).toEqual(header(null));
+    const flat = setup(items);
+    act(() => flat.result.current.setFocusToGroup(null));
+    expect(flat.result.current.focusedGroup).toBeUndefined();
+  });
+
+  it("hides the ring while a search hides the focused header and restores it after", () => {
+    const { result, rerender } = setup();
+    act(() => result.current.setFocusToGroup("Veg"));
+    rerender({ current: nodes.filter((node) => node !== veg) });
+    expect(result.current.focusedGroup).toBeUndefined();
+    expect(result.current.focusedId).toBeNull();
+    rerender({ current: nodes });
+    expect(focusOf(result.current)).toEqual(header("Veg"));
+  });
+
+  it("follows a header whose node object a render rebuilt", () => {
+    // Listview builds the header nodes afresh whenever the blocks change, so
+    // the focus must name the group, not the node object.
+    const { result, rerender, press, onToggleGroup } = setup();
+    act(() => result.current.setFocusToGroup("Fruit"));
+    rerender({
+      current: nodes.map((node) =>
+        node === fruit ? new GroupNode("Fruit", false) : node,
+      ),
+    });
+    expect(focusOf(result.current)).toEqual(header("Fruit"));
+    // now closed: ArrowLeft has nothing to close, ArrowRight opens it
+    press("ArrowLeft");
+    expect(onToggleGroup).not.toHaveBeenCalled();
+    press("ArrowRight");
+    expect(onToggleGroup).toHaveBeenCalledWith("Fruit");
   });
 });
 
@@ -347,7 +524,7 @@ describe("scrolling the keyboard-focused row into view", () => {
   it("scrolls the row every focus-moving key lands on", () => {
     const scrollToId = vi.fn();
     const { result } = renderHook(() =>
-      useKeyboardNav({ items, onSelect: vi.fn(), scrollToId }),
+      useKeyboardNav({ nodes: items, onSelect: vi.fn(), scrollToId }),
     );
     act(() => result.current.onKeyDown(keyEvent("ArrowDown")));
     expect(scrollToId).toHaveBeenLastCalledWith("a");
@@ -364,7 +541,7 @@ describe("scrolling the keyboard-focused row into view", () => {
     const scrollToId = vi.fn();
     const onEscape = vi.fn();
     const { result } = renderHook(() =>
-      useKeyboardNav({ items, onSelect: vi.fn(), onEscape, scrollToId }),
+      useKeyboardNav({ nodes: items, onSelect: vi.fn(), onEscape, scrollToId }),
     );
     // Clicking an already-visible row must not jog the list.
     act(() => result.current.setFocusToId("c"));
@@ -388,7 +565,7 @@ describe("focus while the focusable list changes", () => {
     const onSelect = vi.fn();
     const { result, rerender } = renderHook(
       ({ items: current }) => {
-        const nav = useKeyboardNav({ items: current, onSelect });
+        const nav = useKeyboardNav({ nodes: current, onSelect });
         seen.push(nav.focusedId);
         return nav;
       },

@@ -111,7 +111,7 @@ window.__bench = {
   },
   search() { return this.root().querySelector('[data-testid="stListviewSearch"]'); },
   newOption() { return this.root().querySelector('[data-testid="stListviewNewOption"]'); },
-  header() { return this.root().querySelector('button.listview-group-header--collapsible'); },
+  header() { return this.root().querySelector('.listview-group-header--collapsible'); },
 };
 """
 

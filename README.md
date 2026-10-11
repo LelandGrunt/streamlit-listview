@@ -35,7 +35,7 @@ A selectable, scrollable **list widget** for Streamlit — with grouping, search
 - **Jump to default** — scrolls the first `default` id into view on first render, and again whenever `default` changes; a collapsed group that holds it opens. The list scrolls, never the surrounding page.
 - **Native theming** — pure `--st-*` CSS variables, so light, dark, and custom themes apply automatically. No Bootstrap, no hardcoded palette.
 - **Markdown labels & help** — the Markdown of Streamlit's own widgets (GFM + Streamlit directives like `:red[…]`, badges, `:material/icon:`, `:streamlit:`, emoji), with three exceptions (see [Markdown](#markdown-label--help)).
-- **Keyboard & screen-reader friendly** — `role="listbox"`/`option`, named `role="group"` per group header, the listbox named after your `label` (also when it is hidden or collapsed), each option's place in the whole list (`aria-posinset`/`aria-setsize`), and `aria-*` state. Arrow keys, Home/End, Enter/Space, `/` and Esc work as listed under [Keyboard](#keyboard).
+- **Keyboard & screen-reader friendly** — `role="listbox"`/`option`, named `role="group"` per group header, the listbox named after your `label` (also when it is hidden or collapsed), each option's place in the whole list (`aria-posinset`/`aria-setsize`), and `aria-*` state. With `collapsible_groups=True` the list is a `role="tree"`: each group is a `treeitem` that reports whether it is open (`aria-expanded`), and its options are the `treeitem`s one level below. Arrow keys, Home/End, Enter/Space, `/` and Esc work as listed under [Keyboard](#keyboard).
 - **Large lists** — the browser lays out and paints only the rows near the visible frame, so in Chromium a list of 100,000 options scrolls at 60 frames per second (see [Large lists](#large-lists)).
 - **Returns what you passed in** — select a dict, get that dict back (metadata and all); an entry the user adds comes back in the same type.
 
@@ -282,15 +282,19 @@ Two consequences to plan for:
 
 Tab into the list, then:
 
-| Key           | Effect                                                                                    |
-| ------------- | ----------------------------------------------------------------------------------------- |
-| ↑ / ↓         | Moves the focus to the previous or next row; disabled rows are skipped.                   |
-| Home / End    | Moves the focus to the first or last row.                                                 |
-| Enter / Space | Selects the focused row, or deselects it when it is selected.                             |
-| `/`           | Moves to the search field (with `enable_search=True`).                                    |
-| Esc           | Clears the search text; with an empty search, clears the selection and calls `on_change`. |
+| Key           | Effect                                                                                                  |
+| ------------- | ------------------------------------------------------------------------------------------------------- |
+| ↑ / ↓         | Moves the focus to the previous or next row; disabled rows are skipped.                                 |
+| Home / End    | Moves the focus to the first or last row.                                                               |
+| Enter / Space | Selects the focused row, or deselects it when it is selected.                                           |
+| `/`           | Moves to the search field (with `enable_search=True`).                                                  |
+| Esc           | Clears the search text; with an empty search, clears the selection and calls `on_change`.               |
+| →             | With `collapsible_groups=True`: opens a closed group; on an open group, moves to the group's first row. |
+| ←             | With `collapsible_groups=True`: closes an open group; on a row, moves to the row's group header.        |
 
 Esc works the same in the search field. A disabled row stays selected when Esc clears the selection.
+
+With `collapsible_groups=True` the group headers take the focus too: ↑ / ↓, Home and End stop on them, and Enter or Space opens or closes the focused group. The list is a single Tab stop.
 
 ### Theming
 

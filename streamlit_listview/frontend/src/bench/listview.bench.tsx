@@ -273,7 +273,7 @@ for (const shape of SHAPES) {
             setup: () => {
               mount();
               const found = view.container.querySelector<HTMLElement>(
-                "button.listview-group-header--collapsible",
+                ".listview-group-header--collapsible",
               );
               precondition(
                 found !== null,

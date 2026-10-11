@@ -63,7 +63,7 @@ function Listbox({
   return (
     <div ref={mounted ? ref : undefined} data-testid="listbox">
       {rows.map((label) => (
-        <div key={label} role="option">
+        <div key={label} className="listview-item">
           {label}
         </div>
       ))}
@@ -80,7 +80,7 @@ function Chunked({ chunks }: { chunks: string[][] }) {
       {chunks.map((rows, key) => (
         <div key={key} className="listview-chunk" data-testid={`chunk-${key}`}>
           {rows.map((label) => (
-            <div key={label} role="option">
+            <div key={label} className="listview-item">
               {label}
             </div>
           ))}

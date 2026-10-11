@@ -167,7 +167,7 @@ flowchart LR
 
 - **Two rules exist in both languages:** row identity and the canonical integer for new entries. Both suites test the canonical-integer rule with the same input table.
 - **The e2e suite** (Playwright) drives a real Streamlit server: harness apps, the demo, and regression tests for fixed rendering bugs. CI's `e2e` job and the push gate run it in Chromium; a manual hook runs it in Firefox and WebKit.
-  - `e2e/test_accessibility.py` scans the widget with axe-core against WCAG 2.1 A and AA, in six states and both themes. Its `color-contrast` rule is the contrast check.
+  - `e2e/test_accessibility.py` scans the widget with axe-core against WCAG 2.1 A and AA, in seven states and both themes. Its `color-contrast` rule is the contrast check.
   - *Gaps and next steps* lists the widget defects that the scan excepts or that make a test skip a browser. A test fails once the scan stops reporting an excepted defect, so the defect's fix removes its entry.
   - The native-parity tests compare the widget's measured colors with the native Streamlit widget on the same page, never with a hardcoded value. They run again under the dark theme.
 - **The benchmarks and the visual comparison** run by hand. [BENCHMARKS.md](BENCHMARKS.md) and [scripts/gif/README.md](scripts/gif/README.md) describe them.
@@ -349,7 +349,7 @@ The tables follow the nine categories of the Harness Inventory and list each of 
 
 | Layer | Def | Status | In this project | Stage | Closed loop |
 |---|:-:|:-:|---|---|---|
-| Accessibility, automated | 🟢 | ✅ | axe-core scans the widget against WCAG 2.1 A and AA in six states and both themes; unit tests assert the listbox roles and ARIA states | push gate, CI | yes |
+| Accessibility, automated | 🟢 | ✅ | axe-core scans the widget against WCAG 2.1 A and AA in seven states and both themes; unit tests assert the listbox and tree roles and the ARIA states | push gate, CI | yes |
 | Contrast checker | 🟢 | ✅ | axe-core's `color-contrast` rule, in both themes | push gate, CI | yes |
 | Cross-browser tests | 🟢 | ◐ | the e2e suite in Firefox and WebKit, a manual hook that the release skill runs | manual | yes |
 | UI prose lint | 🟢 | — | the caller supplies nearly all visible text | — | — |
@@ -470,9 +470,8 @@ mindmap
 
 The package is a public library on PyPI, so the inventory's risk tier 3 (*customer-facing app, public API*) applies. Every 🟢 layer has a check. Three of them run by hand: the link check, the diagram build and the e2e suite in Firefox and WebKit; the release skill runs them before each tag. The supply chain counts as partial: the workflows pin actions by tag on purpose, CI's pre-commit and the release's twine float, and no SBOM ships.
 
-The new checks found two defects of the widget that wait for their own changes. They stay listed in the tests with their reasons until then:
+The new checks found one defect of the widget that waits for its own change. It stays listed in the tests with its reason until then:
 
-- **The group toggle sits inside the listbox.** With `collapsible_groups`, each group header is a button inside the `listbox`, where ARIA allows only options (axe-core's `aria-required-children`).
 - **WebKit does not light the frame on focus.** It does not re-evaluate the frame's `:has(:focus-within)` rule after a focus change inside the shadow root; two e2e tests, one of them also under the dark theme, skip WebKit for it.
 
 Tier 3 still asks for these steps:

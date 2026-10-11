@@ -386,10 +386,9 @@ describe("collapsible groups", () => {
         setStateValue={vi.fn()}
       />,
     );
-    const fruitHeader = screen.getByRole("button", { name: /Fruit/ });
-    await user.click(fruitHeader);
+    await user.click(groupHeader("Fruit"));
     expect(screen.queryByText("Apple")).toBeNull();
-    expect(fruitHeader).toHaveAttribute("aria-expanded", "false");
+    expect(groupItem("Fruit")).toHaveAttribute("aria-expanded", "false");
     // sibling group untouched
     expect(screen.getByText("Carrot")).toBeInTheDocument();
   });
@@ -423,6 +422,241 @@ describe("collapsible groups", () => {
     expect(screen.queryByText("Apple")).toBeNull(); // collapsed initially
     await user.type(screen.getByTestId("stListviewSearch"), "apple");
     expect(screen.getByText("Apple")).toBeInTheDocument();
+  });
+});
+
+describe("collapsible groups make a tree", () => {
+  // A listbox may own only options and groups of options, so a toggle inside
+  // it is invalid ARIA (axe-core's aria-required-children). With
+  // collapsible_groups the list is a WAI-ARIA tree instead: each group is a
+  // treeitem that carries its name and aria-expanded, and its rows are
+  // selectable treeitems one level down, in the group's role="group".
+  const tree = () => screen.getByRole("tree");
+  const active = () => tree().getAttribute("aria-activedescendant");
+  const press = (key: string) => fireEvent.keyDown(tree(), { key });
+  const groupsOf = (root: HTMLElement) =>
+    Array.from(root.querySelectorAll<HTMLElement>('[aria-level="1"]'));
+
+  it("renders the groups as treeitems that own their rows", () => {
+    render(
+      <Listview
+        data={makeData({ collapsible_groups: true, selection_mode: "multi" })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(screen.queryByRole("option")).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(tree()).toHaveAccessibleName("Pick one");
+    expect(tree()).toHaveAttribute("aria-multiselectable", "true");
+    const groups = groupsOf(tree());
+    expect(
+      groups.map((g) => [
+        g.getAttribute("role"),
+        g.getAttribute("aria-label"),
+        g.getAttribute("aria-expanded"),
+        g.getAttribute("aria-posinset"),
+        g.getAttribute("aria-setsize"),
+      ]),
+    ).toEqual([
+      ["treeitem", "Fruit", "true", "1", "2"],
+      ["treeitem", "Veg", "true", "2", "2"],
+    ]);
+    const rowsOf = (g: HTMLElement) =>
+      within(within(g).getByRole("group"))
+        .getAllByRole("treeitem")
+        .map((r) => [
+          r.textContent,
+          r.getAttribute("aria-level"),
+          r.getAttribute("aria-posinset"),
+          r.getAttribute("aria-setsize"),
+        ]);
+    expect(rowsOf(groups[0]!)).toEqual([
+      ["Apple", "2", "1", "2"],
+      ["Banana", "2", "2", "2"],
+    ]);
+    expect(rowsOf(groups[1]!)).toEqual([
+      ["Carrot", "2", "1", "2"],
+      ["Disabled", "2", "2", "2"],
+    ]);
+    // the visible header is hidden from the tree: the treeitem carries the name
+    for (const header of screen.getAllByTestId("stListviewGroup")) {
+      expect(header).toHaveAttribute("aria-hidden", "true");
+    }
+  });
+
+  it("keeps the listbox when collapsible_groups finds no group to collapse", () => {
+    render(
+      <Listview
+        data={baseData({
+          collapsible_groups: true,
+          items: [
+            { id: "x", label: "Loose" },
+            { id: "y", label: "Free" },
+          ],
+        })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("tree")).toBeNull();
+    expect(
+      within(screen.getByRole("listbox"))
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["Loose", "Free"]);
+  });
+
+  it("wraps each block's chunks in a rows element, a role=group only in the tree", () => {
+    const { container, rerender } = render(
+      <Listview data={makeData()} setStateValue={vi.fn()} />,
+    );
+    const wrappers = () =>
+      Array.from(container.querySelectorAll(".listview-group-rows")).map((w) =>
+        w.getAttribute("role"),
+      );
+    // in a listbox the block itself is the group
+    expect(wrappers()).toEqual(["none", "none"]);
+    rerender(
+      <Listview
+        data={makeData({ collapsible_groups: true })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(wrappers()).toEqual(["group", "group"]);
+    for (const row of screen.getAllByTestId(/^stListviewOption-/)) {
+      expect(row.parentElement).toHaveClass("listview-chunk");
+      expect(row.parentElement?.parentElement).toHaveClass(
+        "listview-group-rows",
+      );
+    }
+  });
+
+  it("gives every header its own DOM id, the block without a group's included", () => {
+    // A group named "" and the block without a group must not share an id, or
+    // aria-activedescendant would point at either.
+    const { container } = render(
+      <Listview
+        data={baseData({
+          collapsible_groups: true,
+          items: [
+            { id: "e", label: "Empty", group: "" },
+            { id: "x", label: "Loose" },
+          ],
+        })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    const ids = groupsOf(tree()).map((g) => g.id);
+    expect(ids).toHaveLength(2);
+    expect(new Set(ids).size).toBe(2);
+    press("ArrowDown"); // the header of ""
+    press("ArrowDown"); // Empty
+    press("ArrowDown"); // the header of the block without a group
+    expect(container.querySelector(`[id="${active()}"]`)).toBe(
+      groupItem("Other"),
+    );
+  });
+
+  it("walks headers and rows with the arrow keys and opens and closes groups", () => {
+    render(
+      <Listview
+        data={baseData({ collapsible_groups: true })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    const fruit = groupItem("Fruit").id;
+    press("ArrowDown");
+    expect(active()).toBe(fruit);
+    expect(groupHeader("Fruit")).toHaveClass("listview-group-header--focused");
+    press("ArrowLeft"); // closes Fruit
+    expect(groupItem("Fruit")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Apple")).toBeNull();
+    press("ArrowDown"); // Fruit shows no rows: the next node is Veg
+    expect(active()).toBe(groupItem("Veg").id);
+    expect(groupHeader("Fruit")).not.toHaveClass(
+      "listview-group-header--focused",
+    );
+    press("ArrowUp");
+    press("ArrowRight"); // opens Fruit; the focus stays on its header
+    expect(groupItem("Fruit")).toHaveAttribute("aria-expanded", "true");
+    expect(active()).toBe(fruit);
+    press("ArrowRight"); // into its first row
+    expect(active()).toBe("listview-opt-apple");
+    expect(rowFor("Apple")).toHaveClass("listview-item--focused");
+    press("ArrowLeft"); // back to the header
+    expect(active()).toBe(fruit);
+    press("Enter"); // Enter on a header opens or closes it
+    expect(groupItem("Fruit")).toHaveAttribute("aria-expanded", "false");
+    press(" ");
+    expect(groupItem("Fruit")).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("selects the focused row with Enter", () => {
+    const setStateValue = vi.fn();
+    render(
+      <Listview
+        data={baseData({ collapsible_groups: true })}
+        setStateValue={setStateValue}
+      />,
+    );
+    press("ArrowDown");
+    press("ArrowDown");
+    press("Enter");
+    expect(setStateValue).toHaveBeenLastCalledWith("selection", ["apple"]);
+    expect(rowFor("Apple")).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("puts the keyboard focus on a header a click toggles", async () => {
+    const user = userEvent.setup();
+    render(
+      <Listview
+        data={baseData({ collapsible_groups: true })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    await user.click(groupHeader("Veg"));
+    expect(groupItem("Veg")).toHaveAttribute("aria-expanded", "false");
+    expect(document.activeElement).toBe(tree());
+    expect(active()).toBe(groupItem("Veg").id);
+    // the arrows resume from the header
+    press("ArrowUp");
+    expect(active()).toBe("listview-opt-banana");
+  });
+
+  it("numbers rows within their group and groups among the groups", async () => {
+    // A tree counts each level on its own: a row's place in its group, a
+    // header's among the headers. Both count the unfiltered list, so neither a
+    // collapse nor a search changes a number.
+    const user = userEvent.setup();
+    render(
+      <Listview
+        data={makeData({ collapsible_groups: true, enable_search: true })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    const places = () =>
+      screen
+        .getAllByRole("treeitem")
+        .map((t) => [
+          t.getAttribute("aria-label") ?? t.textContent,
+          t.getAttribute("aria-level"),
+          t.getAttribute("aria-posinset"),
+          t.getAttribute("aria-setsize"),
+        ]);
+    await user.click(groupHeader("Fruit"));
+    expect(places()).toEqual([
+      ["Fruit", "1", "1", "2"],
+      ["Veg", "1", "2", "2"],
+      ["Carrot", "2", "1", "2"],
+      ["Disabled", "2", "2", "2"],
+    ]);
+    fireEvent.change(screen.getByTestId("stListviewSearch"), {
+      target: { value: "dis" },
+    });
+    expect(places()).toEqual([
+      ["Veg", "1", "2", "2"],
+      ["Disabled", "2", "2", "2"],
+    ]);
   });
 });
 
@@ -1170,7 +1404,36 @@ function stubGeometry(
 }
 
 function rowFor(label: string): HTMLElement {
-  return screen.getByText(label).closest('[role="option"]') as HTMLElement;
+  return screen
+    .getByText(label)
+    .closest('[data-testid^="stListviewOption-"]') as HTMLElement;
+}
+
+/** The labels of the rendered rows, options or treeitems, in DOM order. */
+function rowTexts(): (string | null)[] {
+  return screen
+    .queryAllByTestId(/^stListviewOption-/)
+    .map((row) => row.textContent);
+}
+
+/** The clickable header of a group, found by the name it shows. */
+function groupHeader(name: string): HTMLElement {
+  const header = screen
+    .getAllByTestId("stListviewGroup")
+    .find(
+      (h) =>
+        h.querySelector(".listview-group-header__name")?.textContent === name,
+    );
+  expect(header).toBeDefined();
+  return header as HTMLElement;
+}
+
+/**
+ * A group's treeitem in the tree that collapsible_groups makes of the list: it
+ * carries the group name and aria-expanded.
+ */
+function groupItem(name: string): HTMLElement {
+  return screen.getByRole("treeitem", { name });
 }
 
 /**
@@ -1426,10 +1689,7 @@ describe("an add reveals its row", () => {
     );
     expect(screen.queryByText("Carrot")).toBeNull();
     addTyped("carrot");
-    expect(screen.getByRole("button", { name: /Veg/ })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
+    expect(groupItem("Veg")).toHaveAttribute("aria-expanded", "true");
     const body = container.querySelector(".listview-body") as HTMLElement;
     stubGeometry(body, rowFor("Carrot"), { frame: 100, top: 260, height: 20 });
     nextFrame();
@@ -1452,10 +1712,7 @@ describe("an add reveals its row", () => {
     );
     addTyped("Mango");
     expect(screen.getByText("Mango")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Other/ })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
+    expect(groupItem("Other")).toHaveAttribute("aria-expanded", "true");
   });
 
   it("leaves the list alone when the search hides the new entry", () => {
@@ -1570,10 +1827,7 @@ describe("an add reveals its row", () => {
     );
     expect(screen.queryByText("Disabled")).toBeNull();
     addTyped("Disabled");
-    expect(screen.getByRole("button", { name: /Veg/ })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
+    expect(groupItem("Veg")).toHaveAttribute("aria-expanded", "true");
     expect(rowFor("Disabled")).toHaveAttribute("aria-selected", "false");
     expect(setStateValue).not.toHaveBeenCalled();
     const body = container.querySelector(".listview-body") as HTMLElement;
@@ -1645,7 +1899,7 @@ describe("group item counts", () => {
         setStateValue={vi.fn()}
       />,
     );
-    const fruit = screen.getByRole("button", { name: /Fruit/ });
+    const fruit = groupHeader("Fruit");
     expect(screen.queryByText("Apple")).toBeNull(); // rows hidden
     expect(fruit).toHaveTextContent("(2)"); // full count still shown
   });
@@ -2120,31 +2374,19 @@ describe("group blocks", () => {
           setStateValue={vi.fn()}
         />,
       );
-      const header = screen.getByRole("button", { name: /G/ });
+      const header = groupHeader("G");
       await user.click(header);
-      expect(shown()).toEqual([]);
+      expect(rowTexts()).toEqual([]);
       await user.click(header);
-      expect(shown()).toEqual(rowLabels(0, 250));
-      const group = screen.getByRole("group");
-      for (const option of screen.getAllByRole("option")) {
-        expect(option.closest('[role="group"]')).toBe(group);
+      expect(rowTexts()).toEqual(rowLabels(0, 250));
+      // the rows are treeitems of the group's own role="group"
+      const group = within(groupItem("G")).getByRole("group");
+      const treeRows = within(group).getAllByRole("treeitem");
+      expect(treeRows).toHaveLength(250);
+      for (const row of treeRows) {
+        expect(row.closest('[role="group"]')).toBe(group);
       }
     });
-  });
-
-  it("keeps the collapsible header a real button (it cannot be aria-hidden)", () => {
-    render(
-      <Listview
-        data={baseData({ collapsible_groups: true })}
-        setStateValue={vi.fn()}
-      />,
-    );
-    const header = screen.getByRole("button", { name: /Fruit/ });
-    expect(header.getAttribute("aria-hidden")).toBeNull();
-    // its group still carries the name, so the grouping is conveyed either way
-    expect(
-      screen.getAllByRole("group").map((g) => g.getAttribute("aria-label")),
-    ).toEqual(["Fruit", "Veg"]);
   });
 });
 
@@ -2295,9 +2537,8 @@ describe("rows without a group", () => {
         setStateValue={vi.fn()}
       />,
     );
-    const other = screen.getByRole("button", { name: /Other/ });
-    await user.click(other);
-    expect(other).toHaveAttribute("aria-expanded", "false");
+    await user.click(groupHeader("Other"));
+    expect(groupItem("Other")).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByText("Loose")).toBeNull();
     expect(screen.getByText("Apple")).toBeInTheDocument();
   });
@@ -2363,7 +2604,7 @@ describe("rows without a group", () => {
         <Probe />
       </>,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Other/ }));
+    fireEvent.click(groupHeader("Other"));
     expect(screen.queryByText("Loose")).toBeNull();
     rerender(
       <>
@@ -2430,7 +2671,7 @@ describe("rows without a group", () => {
     );
     await user.type(screen.getByTestId("stListviewNewOption"), "Mango");
     await user.keyboard("{Enter}");
-    await user.click(screen.getByRole("button", { name: /Other/ }));
+    await user.click(groupHeader("Other"));
     expect(screen.queryByText("Mango")).toBeNull();
     rerender(
       <Listview
@@ -2441,10 +2682,7 @@ describe("rows without a group", () => {
         setStateValue={setStateValue}
       />,
     );
-    expect(screen.getByRole("button", { name: /Other/ })).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
+    expect(groupItem("Other")).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByText("Mango")).toBeNull();
   });
 });
@@ -2536,10 +2774,7 @@ describe("a group named like ungrouped_label", () => {
     const input = screen.getByTestId("stListviewNewOption");
     fireEvent.change(input, { target: { value: "odd" } });
     fireEvent.keyDown(input, { key: "Enter" });
-    expect(screen.getByRole("button", { name: /Other/ })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
+    expect(groupItem("Other")).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Odd")).toBeInTheDocument();
   });
 
@@ -2639,21 +2874,6 @@ describe("position in the set", () => {
     expect(positions()).toEqual([["Carrot", "3", "4"]]);
   });
 
-  it("counts the rows of a collapsed group", async () => {
-    const user = userEvent.setup();
-    render(
-      <Listview
-        data={makeData({ collapsible_groups: true })}
-        setStateValue={vi.fn()}
-      />,
-    );
-    await user.click(screen.getByRole("button", { name: /Fruit/ }));
-    expect(positions()).toEqual([
-      ["Carrot", "3", "4"],
-      ["Disabled", "4", "4"],
-    ]);
-  });
-
   it("keeps the numbers when a click selects a row", async () => {
     const user = userEvent.setup();
     render(<Listview data={makeData()} setStateValue={vi.fn()} />);
@@ -2719,6 +2939,21 @@ describe("row height for the skipped chunks' size estimate", () => {
     expect(listbox.style.getPropertyValue("--listview-row-height")).toBe(
       "35.5px",
     );
+  });
+
+  it("measures a row of a tree too", () => {
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+      height: 35.5,
+    } as DOMRect);
+    render(
+      <Listview
+        data={makeData({ collapsible_groups: true })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("tree").style.getPropertyValue("--listview-row-height"),
+    ).toBe("35.5px");
   });
 });
 
@@ -2949,6 +3184,104 @@ describe("keyboard scroll stays inside the list body", () => {
     expect(body.scrollTop).toBe(180);
     expect(scrollSpy).not.toHaveBeenCalled();
     scrollSpy.mockRestore();
+  });
+});
+
+describe("keyboard scroll to a group header", () => {
+  // A header is sticky: it shows at the top of the frame while any row of its
+  // group does. A key that lands on a header therefore scrolls only when the
+  // header's group lies wholly outside the frame. The frame is 100 px, the
+  // header 30 px.
+  function setup(scrollTop: number) {
+    const { container, rerender } = render(
+      <Listview
+        data={baseData({ collapsible_groups: true })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    const body = container.querySelector(".listview-body") as HTMLElement;
+    Object.defineProperty(body, "clientHeight", {
+      value: 100,
+      configurable: true,
+    });
+    body.style.overflowY = "auto";
+    body.scrollTop = scrollTop;
+    body.getBoundingClientRect = () => ({ top: 0, height: 100 }) as DOMRect;
+    // The group's block at `top` (content coordinates), `height` px tall.
+    const place = (group: string, top: number, height: number) => {
+      groupItem(group).getBoundingClientRect = () =>
+        ({ top: top - body.scrollTop, height }) as DOMRect;
+      groupHeader(group).getBoundingClientRect = () =>
+        ({ top: 0, height: 30 }) as DOMRect;
+    };
+    const press = (key: string) =>
+      fireEvent.keyDown(screen.getByRole("tree"), { key });
+    return { body, place, press, rerender };
+  }
+
+  it("brings a header below the frame in by its bottom edge", () => {
+    const { body, place, press } = setup(0);
+    press("End"); // Carrot, the last row
+    place("Veg", 260, 50);
+    press("ArrowUp"); // Veg's header
+    expect(body.scrollTop).toBe(190); // 260 + 30 - 100
+  });
+
+  it("brings a group scrolled away above back to the frame's top", () => {
+    const { body, place, press } = setup(200);
+    place("Fruit", 0, 80);
+    press("Home");
+    expect(body.scrollTop).toBe(0);
+  });
+
+  it("leaves a header alone while its group shows in the frame", () => {
+    // Veg starts above the frame's top edge, but its rows reach into the
+    // frame, so its header is stuck at the top.
+    const { body, place, press } = setup(100);
+    press("End");
+    place("Veg", 60, 200);
+    press("ArrowUp");
+    expect(body.scrollTop).toBe(100);
+  });
+
+  describe("when a rerun takes the header away before the frame", () => {
+    const { nextFrame } = queueFrames();
+
+    it("scrolls nothing", () => {
+      const { body, press, rerender } = setup(40);
+      press("ArrowDown"); // Fruit's header; the scroll waits for a frame
+      rerender(
+        <Listview
+          data={baseData({
+            collapsible_groups: true,
+            items: [{ id: "carrot", label: "Carrot", group: "Veg" }],
+          })}
+          setStateValue={vi.fn()}
+        />,
+      );
+      nextFrame();
+      expect(body.scrollTop).toBe(40);
+    });
+  });
+
+  it("finds a row in a tree that is not attached to a document", () => {
+    // The fallback scan looks for rows by class, so it finds a treeitem as it
+    // finds an option.
+    const container = document.createElement("div");
+    render(
+      <Listview
+        data={baseData({ collapsible_groups: true })}
+        setStateValue={vi.fn()}
+      />,
+      { container },
+    );
+    const body = container.querySelector(".listview-body") as HTMLElement;
+    const carrot = within(container)
+      .getByText("Carrot")
+      .closest('[role="treeitem"]') as HTMLElement;
+    stubGeometry(body, carrot, { frame: 100, top: 260, height: 20 });
+    fireEvent.keyDown(within(container).getByRole("tree"), { key: "End" });
+    expect(body.scrollTop).toBe(180); // 260 + 20 - 100
   });
 });
 

@@ -8,6 +8,7 @@ page. The color-contrast rule is the contrast check. test_accessibility_dark.py
 re-collects the module under the dark theme.
 """
 
+import re
 from pathlib import Path
 from typing import Any, cast
 
@@ -53,16 +54,7 @@ INHERITED: dict[tuple[str, str], str] = {}
 # Defects of the widget itself that a separate change fixes: (rule, target) ->
 # the reason. Matched exactly, like INHERITED; every other rule still runs on
 # these elements.
-KNOWN_DEFECTS: dict[tuple[str, str], str] = {
-    (
-        "aria-required-children",
-        'div[data-testid="stBidiComponentIsolated"],.listview-listbox',
-    ): (
-        "collapsible_groups renders each group header as a <button> inside the "
-        "listbox, where ARIA allows only options; moving the toggle out of the "
-        "listbox is a follow-up change"
-    ),
-}
+KNOWN_DEFECTS: dict[tuple[str, str], str] = {}
 
 
 def _violations(page: Page) -> list[dict[str, Any]]:
@@ -111,8 +103,20 @@ def test_a_newly_selected_row_is_accessible(page: Page):
 
 
 def test_keyboard_focus_on_a_row_is_accessible(page: Page):
-    page.get_by_role("listbox", name="Parity list").focus()
+    # The harness's groups are collapsible, so the list is a tree, and the
+    # first ArrowDown lands on the Fruit header.
+    page.get_by_role("tree", name="Parity list").focus()
     page.keyboard.press("ArrowDown")
+    page.keyboard.press("ArrowDown")
+    expect(page.locator(".listview-item--focused")).to_have_count(1)
+    _settle(page)
+    _assert_accessible(page)
+
+
+def test_keyboard_focus_on_a_group_header_is_accessible(page: Page):
+    page.get_by_role("tree", name="Parity list").focus()
+    page.keyboard.press("ArrowDown")
+    expect(page.locator(".listview-group-header--focused")).to_have_count(1)
     _settle(page)
     _assert_accessible(page)
 
@@ -125,7 +129,7 @@ def test_a_search_with_hits_is_accessible(page: Page):
 
 def test_a_search_without_hits_is_accessible(page: Page):
     page.get_by_test_id("stListviewSearch").fill("zzz")
-    expect(page.get_by_role("option")).to_have_count(0)
+    expect(page.get_by_test_id(re.compile(r"^stListviewOption-"))).to_have_count(0)
     _assert_accessible(page)
 
 
@@ -140,8 +144,10 @@ def test_every_known_defect_still_shows(page: Page):
 
 
 def test_a_collapsed_group_is_accessible(page: Page):
-    header = page.get_by_test_id("stListviewGroup").first
-    header.click()
-    expect(header).to_have_attribute("aria-expanded", "false")
+    page.get_by_test_id("stListviewGroup").first.click()
+    # the group's treeitem carries the state; the header is hidden from the tree
+    expect(page.get_by_role("treeitem", name="Fruit")).to_have_attribute(
+        "aria-expanded", "false"
+    )
     _settle(page)
     _assert_accessible(page)

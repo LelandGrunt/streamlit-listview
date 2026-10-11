@@ -127,5 +127,33 @@ describe("ListItem", () => {
     const opt = screen.getByRole("option");
     expect(opt.getAttribute("aria-posinset")).toBe("23456");
     expect(opt.getAttribute("aria-setsize")).toBe("100000");
+    // a listbox has no levels
+    expect(opt.getAttribute("aria-level")).toBeNull();
+  });
+
+  it("renders as a treeitem at its level when it is a row of a tree", () => {
+    // collapsible_groups makes the list a tree: a row is a selectable treeitem
+    // under its group's treeitem.
+    render(
+      <ListItem
+        item={base}
+        domId="listview-opt-a"
+        posInSet={2}
+        setSize={3}
+        level={2}
+        selected={true}
+        disabled={false}
+        focused={false}
+        muted={false}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("option")).toBeNull();
+    const row = screen.getByRole("treeitem");
+    expect(row.getAttribute("aria-level")).toBe("2");
+    expect(row.getAttribute("aria-selected")).toBe("true");
+    expect(row.getAttribute("aria-posinset")).toBe("2");
+    expect(row.getAttribute("aria-setsize")).toBe("3");
+    expect(row.getAttribute("data-testid")).toBe("stListviewOption-a");
   });
 });

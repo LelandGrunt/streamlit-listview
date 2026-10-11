@@ -25,12 +25,23 @@ _INSTANCE_NAME = {
 }
 
 
+def _list(page: Page, instance: str):
+    """The instance's listbox, or its tree when its groups are collapsible."""
+    name = _INSTANCE_NAME[instance]
+    return page.get_by_role("listbox", name=name, exact=True).or_(
+        page.get_by_role("tree", name=name, exact=True)
+    )
+
+
 def _root(page: Page, instance: str):
     """The instance's stListview root (the tests reach parts outside the
-    listbox — search field, list body), found via its uniquely named listbox."""
-    return page.get_by_test_id("stListview").filter(
-        has=page.get_by_role("listbox", name=_INSTANCE_NAME[instance], exact=True)
-    )
+    listbox — search field, list body), found via its uniquely named list."""
+    return page.get_by_test_id("stListview").filter(has=_list(page, instance))
+
+
+def _header(root, group: str):
+    """A group's clickable header."""
+    return root.get_by_test_id("stListviewGroup").filter(has_text=group)
 
 
 def test_search_filters_items(page: Page):
@@ -88,11 +99,47 @@ def test_collapsible_group_toggles(page: Page):
     # Fish starts collapsed (collapsed_groups=["Fish"]) -> its items hidden
     expect(root.get_by_text("Salmon")).to_have_count(0)
     # expand it
-    root.get_by_role("button", name="Fish").click()
+    _header(root, "Fish").click()
     expect(root.get_by_text("Salmon")).to_be_visible()
-    # collapse Fruit
-    root.get_by_role("button", name="Fruit").click()
+    # collapse Fruit; its treeitem carries the state
+    _header(root, "Fruit").click()
     expect(root.get_by_text("Apple")).to_have_count(0)
+    expect(root.get_by_role("treeitem", name="Fruit")).to_have_attribute(
+        "aria-expanded", "false"
+    )
+
+
+def test_the_keyboard_opens_and_closes_a_group(page: Page):
+    # Collapsible groups make the list a tree: the headers are nodes of the
+    # arrow-key order, ArrowLeft closes a group, ArrowRight opens it and steps
+    # into its rows. The tree is one Tab stop; no header is a button.
+    root = _root(page, "collapsible")
+    tree = _list(page, "collapsible")
+    expect(tree.get_by_role("button")).to_have_count(0)
+    tree.focus()
+    page.keyboard.press("ArrowDown")
+    fruit = root.get_by_role("treeitem", name="Fruit")
+    expect(tree).to_have_attribute(
+        "aria-activedescendant", fruit.get_attribute("id") or ""
+    )
+    page.keyboard.press("ArrowLeft")
+    expect(fruit).to_have_attribute("aria-expanded", "false")
+    expect(root.get_by_text("Apple")).to_have_count(0)
+    page.keyboard.press("ArrowRight")
+    expect(fruit).to_have_attribute("aria-expanded", "true")
+    page.keyboard.press("ArrowRight")
+    expect(tree).to_have_attribute("aria-activedescendant", "listview-opt-apple")
+    page.keyboard.press("Enter")
+    expect(root.get_by_test_id("stListviewOption-apple")).to_have_attribute(
+        "aria-selected", "true"
+    )
+    # Fish starts closed: Enter on its header opens it
+    page.keyboard.press("End")
+    expect(root.get_by_role("treeitem", name="Fish")).to_have_attribute(
+        "aria-expanded", "false"
+    )
+    page.keyboard.press("Enter")
+    expect(root.get_by_text("Salmon")).to_be_visible()
 
 
 def test_search_overrides_collapse(page: Page):

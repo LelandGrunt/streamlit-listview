@@ -68,7 +68,9 @@ def _row(page: Page, option_id: str) -> Locator:
 
 
 def _listbox(page: Page) -> Locator:
-    return page.get_by_role("listbox", name="Parity list")
+    # The harness's groups are collapsible, which makes the list a tree; the
+    # element keeps the listview-listbox class in both roles.
+    return page.get_by_role("tree", name="Parity list")
 
 
 def _body(page: Page) -> Locator:
@@ -178,7 +180,8 @@ def test_keyboard_focus_rings_the_row_not_the_listbox(page: Page):
     page.get_by_test_id("stListviewSearch").click()
     page.keyboard.press("Tab")
     assert _listbox(page).evaluate("(el) => el.matches(':focus-visible')")
-    page.keyboard.press("ArrowDown")
+    page.keyboard.press("ArrowDown")  # the Fruit header
+    page.keyboard.press("ArrowDown")  # Apple
     focused = page.locator(".listview-item--focused")
     expect(focused).to_have_count(1)
     assert _style(focused, "::before")["ring"] != "none"
@@ -186,8 +189,27 @@ def test_keyboard_focus_rings_the_row_not_the_listbox(page: Page):
     assert _style(_listbox(page))["outline"] == "none"
 
 
-def test_collapsible_group_headers_draw_no_button_border(page: Page):
-    headers = page.locator("button.listview-group-header")
+def test_collapsible_group_headers_draw_only_their_bottom_line(page: Page):
+    headers = page.locator(".listview-group-header--collapsible")
     expect(headers).to_have_count(2)
     for header in headers.all():
         assert _style(header)["widths"] == ["0px", "0px", "1px"]
+
+
+def test_keyboard_focus_rings_the_group_header(page: Page):
+    # The header takes no DOM focus: the tree does, and the header's class
+    # draws the 2px inset primary ring while the tree shows focus.
+    page.get_by_test_id("stListviewSearch").click()
+    page.keyboard.press("Tab")
+    page.keyboard.press("ArrowDown")
+    header = page.locator(".listview-group-header--focused")
+    expect(header).to_have_count(1)
+    assert "inset" in _style(header)["ring"]
+
+
+def test_a_clicked_group_header_carries_no_focus_ring(page: Page):
+    header = page.get_by_test_id("stListviewGroup").first
+    header.click()
+    # the click DID move the active descendant — the ring is what must not follow
+    expect(header).to_have_class(re.compile(r"\blistview-group-header--focused\b"))
+    assert _style(header)["ring"] == "none"

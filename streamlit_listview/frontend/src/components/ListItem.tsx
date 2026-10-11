@@ -16,6 +16,12 @@ export interface ListItemProps {
   posInSet: number;
   /** Number of rows in the whole, unfiltered list (aria-setsize). */
   setSize: number;
+  /**
+   * The row's aria-level when it is a row of a tree (collapsible_groups): it
+   * then renders as a treeitem, and `posInSet` / `setSize` count its group's
+   * rows. Absent in a listbox, where it renders as an option.
+   */
+  level?: number | undefined;
   selected: boolean;
   disabled: boolean;
   focused: boolean;
@@ -25,7 +31,8 @@ export interface ListItemProps {
 }
 
 /**
- * A single selectable option row (role="option").
+ * A single selectable row: role="option" in a listbox, role="treeitem" in the
+ * tree that collapsible groups make of the list.
  *
  * Clicking a non-disabled item invokes onSelect(id). Disabled items are inert.
  * Selected/disabled visual state rides the aria-selected/aria-disabled
@@ -38,6 +45,7 @@ export const ListItem = memo(function ListItem({
   domId,
   posInSet,
   setSize,
+  level,
   selected,
   disabled,
   focused,
@@ -61,7 +69,8 @@ export const ListItem = memo(function ListItem({
       id={domId}
       className={className}
       data-testid={`stListviewOption-${idKey(item.id)}`}
-      role="option"
+      role={level === undefined ? "option" : "treeitem"}
+      aria-level={level}
       aria-posinset={posInSet}
       aria-setsize={setSize}
       aria-selected={selected}

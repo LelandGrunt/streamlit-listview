@@ -858,11 +858,10 @@ describe("Milestone C feature styling", () => {
   });
 
   it("sizes group headers via --listview-content-font-size with the 0.875 fallback", () => {
+    // One rule for both variants: the collapsible header carries the base
+    // class too, and as a div it has no font of its own to reset.
     expect(css).toMatch(
       /\.listview-group-header\s*\{[^}]*font-size:\s*var\(\s*--listview-content-font-size\s*,\s*calc\(var\(--st-base-font-size[^}]*\*\s*0\.875/,
-    );
-    expect(css).toMatch(
-      /\.listview-group-header--collapsible\s*\{[^}]*font-size:\s*var\(\s*--listview-content-font-size\s*,\s*calc\(var\(--st-base-font-size[^}]*\*\s*0\.875/,
     );
   });
 
@@ -892,16 +891,29 @@ describe("Milestone C feature styling", () => {
     expect(focus).not.toMatch(/box-shadow/);
   });
 
-  it("resets the UA button border on the collapsible group header", () => {
-    // With collapsible_groups the header is a <button>. The header rule set only
-    // border-bottom, so the browser's own button border (2px outset) framed the
-    // top, left and right of every group band. The reset has to come BEFORE the
-    // bottom line in the same block, or it would erase it.
+  it("rings the keyboard-focused group header only while the tree shows focus", () => {
+    // The collapsible header takes no DOM focus: the tree does, and its
+    // aria-activedescendant names the header's group. So the ring keys on the
+    // header's --focused class under the tree's :focus-visible, as the row
+    // ring does, and in the 2px inset primary the header button drew.
+    const ring =
+      css.match(
+        /\.listview-listbox:focus-visible\s+\.listview-group-header--focused\s*\{[^}]*\}/,
+      )?.[0] ?? "";
+    expect(ring).toMatch(
+      /box-shadow:\s*inset 0 0 0 2px var\(--st-primary-color, #ff4b4b\)/,
+    );
+    expect(css).not.toMatch(/\.listview-group-header--collapsible:focus/);
+  });
+
+  it("keeps no button resets on the group header, which is a div", () => {
     const header = css.match(/\.listview-group-header\s*\{[^}]*\}/)?.[0] ?? "";
-    const reset = header.search(/(^|[\s;{])border:\s*0\s*;/);
-    const bottom = header.search(/border-bottom:\s*1px/);
-    expect(reset).toBeGreaterThan(-1);
-    expect(bottom).toBeGreaterThan(reset);
+    expect(header).toMatch(/border-bottom:\s*1px/);
+    expect(header).not.toMatch(/(^|[\s;{])border:\s*0\s*;/);
+    const collapsible =
+      css.match(/\.listview-group-header--collapsible\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(collapsible).toMatch(/cursor:\s*pointer/);
+    expect(collapsible).not.toMatch(/font:\s*inherit|text-align|width:/);
   });
 
   it("styles the search box and the add-option box from ONE shared recipe", () => {

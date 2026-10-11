@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { CSSProperties, FC, MouseEvent } from "react";
+import type { CSSProperties, FC, HTMLAttributes, MouseEvent } from "react";
 import type { FrontendRendererArgs } from "@streamlit/component-v2-lib";
 import type { Id, ListviewData, ListviewItem, ListviewState } from "./types";
 import { WidgetLabel } from "./components/WidgetLabel";
@@ -16,7 +16,8 @@ import { SearchField } from "./components/SearchField";
 import { SelectAllToggle } from "./components/SelectAllToggle";
 import { NewOptionInput } from "./components/NewOptionInput";
 import { useSelection } from "./hooks/useSelection";
-import { useKeyboardNav } from "./hooks/useKeyboardNav";
+import { GroupNode, useKeyboardNav } from "./hooks/useKeyboardNav";
+import type { NavNode } from "./hooks/useKeyboardNav";
 import { useFilter } from "./hooks/useFilter";
 import { useCollapse, type GroupKey } from "./hooks/useCollapse";
 import { useScrollToItem } from "./hooks/useScrollToItem";
@@ -74,7 +75,7 @@ const EMPTY_ID_MAP: Map<string, Id> = new Map();
 // chunk by its first FILTERED row instead remounted the survivors on every
 // scattered narrowing keystroke: 2–3× slower at 50k.) A chunk carries
 // role="none", so assistive technology sees its rows as children of the
-// block's role="group" (or of the listbox), and scrollToId finds the block with
+// block's group (or of the listbox), and scrollToId finds the block with
 // closest(".listview-group"), because a row's parent is its chunk. 100 is the
 // group size that measured fine; at the default 300 px height the browser
 // renders at most two chunks.
@@ -162,6 +163,59 @@ function optionDomId(id: Id): string {
 }
 
 /**
+ * The DOM id of a group's treeitem, for aria-activedescendant. Every named
+ * group's id carries the "listview-grp-" prefix, so the block without a group
+ * gets one no group name can spell, the empty name included.
+ */
+function groupDomId(group: GroupKey): string {
+  return group === null ? "listview-ungrouped" : `listview-grp-${group}`;
+}
+
+/** A block's place among the blocks and its row count, in the unfiltered list. */
+interface BlockPlace {
+  position: number;
+  size: number;
+}
+
+/**
+ * The role and ARIA state of a block's element.
+ *
+ * - With collapsible_groups the list is a WAI-ARIA tree, and each block is a
+ *   treeitem: it carries the group name, aria-expanded and its place among the
+ *   groups, and its rows sit one level down. A listbox may own only options and
+ *   groups of options, so a toggle inside it was invalid ARIA (axe-core's
+ *   aria-required-children); a treeitem is the role that opens and closes.
+ *   aria-expanded follows the group's own state, as the chevron does, also
+ *   while a search shows the rows of a closed group.
+ * - In a listbox, a block under a header is a role="group" named by it: the
+ *   grouping the ARIA practices prescribe. An empty ungrouped_label (the spec
+ *   allows "") yields an unnamed group (aria-label="").
+ * - The one block of a list without groups has no header to name it by, and
+ *   gets no role.
+ */
+function blockAria(
+  group: GroupKey,
+  name: string,
+  hasHeader: boolean,
+  tree: { expanded: boolean; place: BlockPlace; count: number } | null,
+): HTMLAttributes<HTMLDivElement> {
+  if (tree !== null) {
+    return {
+      role: "treeitem",
+      id: groupDomId(group),
+      "aria-label": name,
+      "aria-expanded": tree.expanded,
+      "aria-level": 1,
+      "aria-posinset": tree.place.position,
+      "aria-setsize": tree.count,
+    };
+  }
+  return hasHeader
+    ? { role: "group", "aria-label": name }
+    : { role: "presentation" };
+}
+
+/**
  * The synthetic row an id absent from `options` renders as, under
  * accept_new_options: its own text as the label, because there is no option
  * object to take one from.
@@ -222,8 +276,25 @@ function isStyled(body: HTMLElement): boolean {
 }
 
 /**
- * The rendered row carrying `domId` inside `body`, or null when it is not
- * rendered (filtered out, in a collapsed group).
+ * Where `rect` (a box inside the scrolled content of `body`) starts, measured
+ * from the top of that content: its position relative to the frame, plus
+ * however far the frame is already scrolled. scrollTop is measured from the
+ * padding-box edge while the rect is the border box, so the body's top border
+ * (clientTop) comes out — otherwise every "nearest" scroll landed one
+ * border-width off, clipping the row.
+ */
+function contentTop(body: HTMLElement, rect: DOMRect): number {
+  return (
+    body.scrollTop +
+    rect.top -
+    (body.getBoundingClientRect().top + body.clientTop)
+  );
+}
+
+/**
+ * The rendered element carrying `domId` inside `body` — a row (`selector`
+ * ".listview-item") or a group's block (".listview-group") — or null when it is
+ * not rendered (filtered out, in a collapsed group).
  *
  * Looked up through the tree scope the body lives in. In production that is
  * THIS instance's ShadowRoot (`isolate_styles=True`, Streamlit's default — the
@@ -246,7 +317,11 @@ function isStyled(body: HTMLElement): boolean {
  * than `Array.from(…).find(…)`, which materialized all rows into a fresh array
  * first.
  */
-function findRowNode(body: HTMLElement, domId: string): Element | null {
+function findNode(
+  body: HTMLElement,
+  domId: string,
+  selector: string,
+): Element | null {
   const root = body.getRootNode();
   // A subtree not (yet) attached to a document has its topmost ELEMENT as
   // root, and an element has no id map — the renderer can be invoked on a
@@ -258,9 +333,9 @@ function findRowNode(body: HTMLElement, domId: string): Element | null {
   if (hit !== null && body.contains(hit)) {
     return hit;
   }
-  for (const row of body.querySelectorAll('[role="option"]')) {
-    if (row.id === domId) {
-      return row;
+  for (const node of body.querySelectorAll(selector)) {
+    if (node.id === domId) {
+      return node;
     }
   }
   return null;
@@ -521,6 +596,9 @@ export const Listview: FC<ListviewProps> = ({
     collapsedGroups,
     groupKeys,
   });
+  // A list whose groups open and close is a WAI-ARIA tree (see blockAria); a
+  // list without groups has nothing to open and stays a listbox.
+  const asTree = data.collapsible_groups && isGrouped;
   // Opens the block a row with `group` renders in, before a scroll to that row.
   // A block without a header — the one block of a list without groups — cannot
   // be collapsed, and expanding its `null` key anyway would count as a
@@ -553,29 +631,36 @@ export const Listview: FC<ListviewProps> = ({
     [visibleItems, allItems, allBlocks, ungroupedLabel],
   );
 
-  // Each row's one-based place in the whole list, in render order, for
-  // aria-posinset; aria-setsize is the number of places handed out, which is
-  // every row, filtered or not. (`rowPosition.size` rather than
-  // `allItems.length`: the same number, but oxlint's react/refs rule reads
-  // `allItems`, built from the render-body ref above, captured in the row
-  // callback as a ref read during render.) The browser leaves the rows of
-  // a skipped render chunk out of the accessibility tree, so without them a
-  // screen reader announced "23 of 200" in a list of 100,000. Keyed by the item
-  // object and built from the UNFILTERED blocks: a search keystroke or a click
-  // leaves every value alone, so the memoized rows keep bailing out. A search
-  // therefore announces places in the whole list, not among the matches.
-  const rowPosition = useMemo(() => {
+  // Each row's one-based place, in render order, for aria-posinset: in a
+  // listbox its place in the whole list, whose size (every row, filtered or
+  // not) is aria-setsize; in a tree its place in its group, whose size is
+  // aria-setsize, because a tree counts each level on its own. Each block's
+  // place among the blocks and its row count come with it, for the tree's
+  // group treeitems. (`listSize` rather than `allItems.length`: the same
+  // number, but oxlint's react/refs rule reads `allItems`, built from the
+  // render-body ref above, captured in the row callback as a ref read during
+  // render.) The browser leaves the rows of a skipped render chunk out of the
+  // accessibility tree, so without them a screen reader announced "23 of 200"
+  // in a list of 100,000. Keyed by the item object and built from the
+  // UNFILTERED blocks: a search keystroke or a click leaves every value alone,
+  // so the memoized rows keep bailing out. A search therefore announces places
+  // in the whole list (or group), not among the matches.
+  const { rowPosition, listSize, blockPlace } = useMemo(() => {
     const byItem = new Map<ListviewItem, number>();
+    const byBlock = new Map<GroupKey, BlockPlace>();
     let position = 0;
-    for (const block of allBlocks) {
-      for (const item of block.items) {
+    allBlocks.forEach((block, index) => {
+      byBlock.set(block.name, {
+        position: index + 1,
+        size: block.items.length,
+      });
+      block.items.forEach((item, inBlock) => {
         position += 1;
-        byItem.set(item, position);
-      }
-    }
-    return byItem;
-  }, [allBlocks]);
-  const setSize = rowPosition.size;
+        byItem.set(item, asTree ? inBlock + 1 : position);
+      });
+    });
+    return { rowPosition: byItem, listSize: position, blockPlace: byBlock };
+  }, [allBlocks, asTree]);
 
   // Each row's render chunk: its place among ALL rows, filtered or not, in
   // steps of ROW_CHUNK_SIZE (see there for why it must not follow the filter).
@@ -592,7 +677,7 @@ export const Listview: FC<ListviewProps> = ({
   // Each block plus whether it carries a header, whether it renders collapsed
   // (a group is only visually collapsed while no search is active — search
   // overrides collapse) and the chunks its rows render in. Computed once so the
-  // render below and focusableItems cannot disagree, and so the chunks are
+  // render below and navNodes cannot disagree, and so the chunks are
   // split only when the blocks change rather than on every render (each arrow
   // key, each click). A block keeps the order of `allItems`, so its chunk
   // numbers never decrease and each one is a single run — unique as a React key
@@ -606,11 +691,14 @@ export const Listview: FC<ListviewProps> = ({
         // group prunes the key in an effect, after this render, and the list
         // would show an empty frame until then.
         const hasHeader = group.name != null || isGrouped;
-        const collapsed =
-          hasHeader && !isFiltering && collapse.isCollapsed(group.name);
+        // The group's own state, which the chevron, aria-expanded and the
+        // arrow keys show; `collapsed` folds in the search override.
+        const open = !collapse.isCollapsed(group.name);
+        const collapsed = hasHeader && !isFiltering && !open;
         return {
           group,
           hasHeader,
+          open,
           collapsed,
           chunks: collapsed
             ? []
@@ -620,21 +708,24 @@ export const Listview: FC<ListviewProps> = ({
     [renderGroups, isGrouped, isFiltering, collapse, chunkOf],
   );
 
-  // Items that can take keyboard focus: the rendered blocks flattened, minus
-  // collapsed ones. Derived from the BLOCKS rather than from visibleItems so
-  // arrow-key order is exactly the order the rows appear on screen — grouping
-  // reorders items whenever a group's options are not contiguous in `options`,
-  // and the block without a group always renders last.
-  const focusableItems = useMemo(
+  // The nodes the keyboard moves through: the rows of the rendered blocks,
+  // minus collapsed ones, and in a tree each block's header before its rows.
+  // Derived from the BLOCKS rather than from visibleItems so arrow-key order is
+  // exactly the order the rows appear on screen — grouping reorders items
+  // whenever a group's options are not contiguous in `options`, and the block
+  // without a group always renders last. A header node carries the group's own
+  // state, which ArrowLeft and ArrowRight read.
+  const navNodes = useMemo<NavNode[]>(
     () =>
-      renderBlocks.flatMap(({ group, collapsed }) =>
-        collapsed ? [] : group.items,
-      ),
-    [renderBlocks],
+      renderBlocks.flatMap(({ group, open, collapsed }) => {
+        const rows = collapsed ? [] : group.items;
+        return asTree ? [new GroupNode(group.name, open), ...rows] : rows;
+      }),
+    [renderBlocks, asTree],
   );
 
   // Bulk-action scope (D3): the post-filter visible set MINUS disabled rows,
-  // in render order. Sourced from renderGroups (NOT focusableItems), so rows in
+  // in render order. Sourced from renderGroups (NOT navNodes), so rows in
   // collapsed groups stay in scope (collapse is visual, not a filter), and in
   // the order the rows appear: Select all fills a max_selections cap from the
   // top of the list as shown, while grouping moves rows away from their place
@@ -800,7 +891,7 @@ export const Listview: FC<ListviewProps> = ({
         if (!body) {
           return;
         }
-        const node = findRowNode(body, optionDomId(id));
+        const node = findNode(body, optionDomId(id), ".listview-item");
         if (node === null) {
           return; // row not rendered (e.g. filtered out) → nothing to scroll to
         }
@@ -819,16 +910,7 @@ export const Listview: FC<ListviewProps> = ({
         remeasureRowHeight();
         const frame = body.clientHeight;
         const rowBox = node.getBoundingClientRect();
-        // The row's offset inside the scrolled content: its position relative
-        // to the frame, plus however far the frame is already scrolled.
-        // scrollTop is measured from the padding-box edge while the rect is the
-        // border box, so the body's top border (clientTop) comes out —
-        // otherwise every "nearest" scroll landed one border-width off,
-        // clipping the row.
-        const top =
-          body.scrollTop +
-          rowBox.top -
-          (body.getBoundingClientRect().top + body.clientTop);
+        const top = contentTop(body, rowBox);
         if (block === "center") {
           // Out-of-range assignments are clamped by the browser, so the first
           // and last rows need no special casing.
@@ -840,11 +922,12 @@ export const Listview: FC<ListviewProps> = ({
           // frame's top edge parked it exactly under that header: ArrowUp /
           // Home focused a row the user could not see, and Enter selected it. A
           // row always renders in a render chunk inside a group block, and the
-          // block's first child is either that header or a chunk, so this is a
-          // fixed class-name check with none of the id-escaping hazards of the
-          // row lookup; a block without a header (the one block of a list
-          // without groups) keeps the frame edge. closest(), not
-          // parentElement: a row's parent is its chunk.
+          // block's first child is either that header or the rows' own
+          // element (.listview-group-rows), so this is a fixed class-name
+          // check with none of the id-escaping hazards of the row lookup; a
+          // block without a header (the one block of a list without groups)
+          // keeps the frame edge. closest(), not parentElement: a row's parent
+          // is its chunk.
           const first = (node.closest(".listview-group") as HTMLElement)
             .firstElementChild as Element;
           const stickyHeight = first.classList.contains("listview-group-header")
@@ -882,15 +965,48 @@ export const Listview: FC<ListviewProps> = ({
     [scrollToId],
   );
 
+  // A header the keyboard lands on, scrolled into view. The header is sticky:
+  // it shows at the top of the frame while any row of its group does, so only
+  // a group wholly outside the frame needs a scroll. A group below comes in by
+  // the header's bottom edge, the way a row does; a group scrolled away above
+  // comes back to the frame's top, header and first rows. Measured from the
+  // group's block, which is not sticky. The list body only, as in scrollToId.
+  const scrollToGroup = useCallback((group: GroupKey) => {
+    requestAnimationFrame(() => {
+      const body = bodyRef.current;
+      // Unreachable in practice: it guards an unmount racing the rAF.
+      /* v8 ignore next 3 */
+      if (!body) {
+        return;
+      }
+      const block = findNode(body, groupDomId(group), ".listview-group");
+      if (block === null) {
+        return; // a rerun took the group away before this frame
+      }
+      const header = (
+        block.firstElementChild as HTMLElement
+      ).getBoundingClientRect().height;
+      const box = block.getBoundingClientRect();
+      const top = contentTop(body, box);
+      if (top + header > body.scrollTop + body.clientHeight) {
+        body.scrollTop = top + header - body.clientHeight;
+      } else if (top + box.height - header < body.scrollTop) {
+        body.scrollTop = top;
+      }
+    });
+  }, []);
+
   const nav = useKeyboardNav({
-    items: focusableItems,
+    nodes: navNodes,
     onSelect,
+    onToggleGroup: collapse.toggle,
     onSlash: data.enable_search ? onSlash : undefined,
     onEscape,
     // Keyboard focus is virtual (aria-activedescendant), and browsers only
     // auto-scroll for real DOM focus — so the ring has to be scrolled into view
     // here, through the same helper the jump-to-default path uses.
     scrollToId: scrollFocusIntoView,
+    scrollToGroup,
   });
 
   // Stable identity (empty deps) via a latest-values ref, so the memoized
@@ -924,6 +1040,13 @@ export const Listview: FC<ListviewProps> = ({
     setFocusToId(id);
     toggle(id);
   }, []);
+
+  // A click on a header opens or closes its group and, like a click on a row,
+  // moves the keyboard focus there, so the arrows resume from the header.
+  const onHeaderClick = (group: GroupKey) => {
+    nav.setFocusToGroup(group);
+    collapse.toggle(group);
+  };
 
   // The row an add resolved to, scrolled into view once it has rendered. The
   // add field sits in the footer, below the scroll frame, so that row can lie
@@ -1046,8 +1169,12 @@ export const Listview: FC<ListviewProps> = ({
   // markdown actually renders; WidgetLabel owns the span it points at.
   const labelId = useId();
   const focusedId = nav.focusedId;
-  const activeDescendant =
-    focusedId != null ? optionDomId(focusedId) : undefined;
+  let activeDescendant: string | undefined;
+  if (focusedId !== null) {
+    activeDescendant = optionDomId(focusedId);
+  } else if (nav.focusedGroup !== undefined) {
+    activeDescendant = groupDomId(nav.focusedGroup);
+  }
 
   const searchField = data.enable_search ? (
     <SearchField
@@ -1104,7 +1231,9 @@ export const Listview: FC<ListviewProps> = ({
         <div
           className="listview-listbox"
           ref={listboxRef}
-          role="listbox"
+          // The class stays listview-listbox in a tree: the stylesheet and the
+          // tests address the element by it in both roles.
+          role={asTree ? "tree" : "listbox"}
           aria-labelledby={labelId}
           tabIndex={widgetDisabled ? -1 : 0}
           aria-multiselectable={
@@ -1122,10 +1251,11 @@ export const Listview: FC<ListviewProps> = ({
               {data.placeholder ?? ""}
             </div>
           ) : (
-            renderBlocks.map(({ group, hasHeader, chunks }, index) => {
+            renderBlocks.map(({ group, hasHeader, open, chunks }, index) => {
               // A named block shows its group; the block without a group shows
               // ungrouped_label, its header in a grouped list.
               const name = group.name ?? data.ungrouped_label;
+              const place = blockPlace.get(group.name) as BlockPlace;
               return (
                 <div
                   className="listview-group"
@@ -1144,16 +1274,14 @@ export const Listview: FC<ListviewProps> = ({
                   // keyed by group name or null), so a positional key costs
                   // nothing.
                   key={index}
-                  // Grouping must be perceivable to AT: a named role="group" is
-                  // the listbox structure the ARIA practices prescribe, and it
-                  // carries the name that the (aria-hidden) header renders
-                  // visually. The one block of a list without groups gets no
-                  // group role — it has no header to name it by. Every block
-                  // with a header gets the role, so an empty ungrouped_label
-                  // (the spec allows "") yields an unnamed group
-                  // (aria-label="").
-                  role={hasHeader ? "group" : "presentation"}
-                  aria-label={hasHeader ? name : undefined}
+                  {...blockAria(
+                    group.name,
+                    name,
+                    hasHeader,
+                    asTree
+                      ? { expanded: open, place, count: blockPlace.size }
+                      : null,
+                  )}
                 >
                   {hasHeader && (
                     <GroupHeader
@@ -1164,44 +1292,55 @@ export const Listview: FC<ListviewProps> = ({
                       // in its non-collapsible variant, and isCollapsed is
                       // itself gated on collapsibleGroups, so a
                       // `collapsible_groups ? … : undefined` guard here only
-                      // restated that twice. NOT `renderBlocks`' `collapsed`
-                      // flag: that one folds in the search override, and the
-                      // chevron must keep showing the group's real state while
-                      // a query is active.
-                      collapsed={collapse.isCollapsed(group.name)}
-                      onToggle={() => collapse.toggle(group.name)}
+                      // restated that twice. `open`, NOT `collapsed`: that one
+                      // folds in the search override, and the chevron must
+                      // keep showing the group's real state while a query is
+                      // active.
+                      collapsed={!open}
+                      focused={nav.focusedGroup === group.name}
+                      onToggle={() => onHeaderClick(group.name)}
                     />
                   )}
-                  {chunks.map((run) => (
-                    <div
-                      key={run.key}
-                      className="listview-chunk"
-                      role="none"
-                      // The row count the skipped chunk's size estimate
-                      // multiplies by (listview.css). Unitless: React sets a
-                      // custom property as given.
-                      style={
-                        {
-                          "--listview-chunk-rows": run.items.length,
-                        } as CSSProperties
-                      }
-                    >
-                      {run.items.map((item) => (
-                        <ListItem
-                          key={idKey(item.id)}
-                          item={item}
-                          domId={optionDomId(item.id)}
-                          posInSet={rowPosition.get(item) as number}
-                          setSize={setSize}
-                          selected={selection.isSelected(item.id)}
-                          disabled={Boolean(item.disabled) || widgetDisabled}
-                          focused={focusedId === item.id}
-                          muted={selection.isMuted(item.id)}
-                          onSelect={onItemClick}
-                        />
-                      ))}
-                    </div>
-                  ))}
+                  {/* The rows' own element: the tree's role="group" one level
+                      below the group's treeitem, and nothing in a listbox,
+                      where the block itself is the group. The chunks stay its
+                      children (see ROW_CHUNK_SIZE). */}
+                  <div
+                    className="listview-group-rows"
+                    role={asTree ? "group" : "none"}
+                  >
+                    {chunks.map((run) => (
+                      <div
+                        key={run.key}
+                        className="listview-chunk"
+                        role="none"
+                        // The row count the skipped chunk's size estimate
+                        // multiplies by (listview.css). Unitless: React sets a
+                        // custom property as given.
+                        style={
+                          {
+                            "--listview-chunk-rows": run.items.length,
+                          } as CSSProperties
+                        }
+                      >
+                        {run.items.map((item) => (
+                          <ListItem
+                            key={idKey(item.id)}
+                            item={item}
+                            domId={optionDomId(item.id)}
+                            posInSet={rowPosition.get(item) as number}
+                            setSize={asTree ? place.size : listSize}
+                            level={asTree ? 2 : undefined}
+                            selected={selection.isSelected(item.id)}
+                            disabled={Boolean(item.disabled) || widgetDisabled}
+                            focused={focusedId === item.id}
+                            muted={selection.isMuted(item.id)}
+                            onSelect={onItemClick}
+                          />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               );
             })

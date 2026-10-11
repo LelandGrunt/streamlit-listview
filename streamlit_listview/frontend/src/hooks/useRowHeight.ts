@@ -16,11 +16,12 @@ export const ROW_HEIGHT_PROPERTY = "--listview-row-height";
  * so no rerun can overwrite or remove the property, and every chunk inherits
  * it from there.
  *
- * After every commit the hook checks which element is the first option. A new
+ * After every commit the hook checks which element is the first row (by its
+ * class, so an option of a listbox and a treeitem of a tree alike). A new
  * one — at mount, after a search, a collapse or an options change — is measured
  * at once, so the estimate is exact before the first paint and before the jump
  * to `default` measures where its row lies. The check is one querySelector
- * that stops at the first option, a handful of nodes below the listbox: cheap
+ * that stops at the first row, a handful of nodes below the listbox: cheap
  * on every commit, and it follows the first row through every way it can be
  * replaced, which a dependency list could not name. A commit that keeps its
  * first row measures nothing: a measurement forces a layout, and the observer
@@ -70,7 +71,7 @@ export const ROW_HEIGHT_PROPERTY = "--listview-row-height";
 export function useRowHeight(
   listboxRef: RefObject<HTMLElement | null>,
 ): () => void {
-  /** The first option as of the last commit; null while the list is empty. */
+  /** The first row as of the last commit; null while the list is empty. */
   const rowRef = useRef<Element | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
 
@@ -122,7 +123,7 @@ export function useRowHeight(
       observer.observe(host);
       observerRef.current = observer;
     }
-    const row = host.querySelector('[role="option"]');
+    const row = host.querySelector(".listview-item");
     if (row !== rowRef.current) {
       rowRef.current = row;
       publish();
