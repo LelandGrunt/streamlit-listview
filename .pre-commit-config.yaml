@@ -71,13 +71,14 @@ repos:
         files: ^streamlit_listview/frontend/
         types_or: [ts, tsx, json]
         pass_filenames: false
-      # Checks only; `npm run format` in streamlit_listview/frontend fixes.
+      # Checks only; `npm run format` in streamlit_listview/frontend fixes. It
+      # is the one hook that checks listview.css.
       - id: prettier
         name: prettier --check (frontend)
         entry: npm --prefix streamlit_listview/frontend run --silent format:check
         language: unsupported
         files: ^streamlit_listview/frontend/
-        types_or: [ts, tsx, json]
+        types_or: [ts, tsx, json, css]
         pass_filenames: false
       # Runs only when package.json or package-lock.json changes.
       - id: npm-audit

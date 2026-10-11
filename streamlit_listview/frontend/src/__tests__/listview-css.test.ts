@@ -234,7 +234,7 @@ describe("listview.css base theming", () => {
 
   it("hovers only rows that take a click, like the menu's disabled options", () => {
     expect(css).toMatch(
-      /\.listview-item:not\(\[aria-disabled="true"\],\s*\.listview-item--muted\):hover::before\s*\{[^}]*background:\s*var\(--listview-hover-surface\)/,
+      /\.listview-item:not\(\s*\[aria-disabled="true"\],\s*\.listview-item--muted\s*\):hover::before\s*\{[^}]*background:\s*var\(--listview-hover-surface\)/,
     );
   });
 
