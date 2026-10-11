@@ -6,5 +6,8 @@
 # build backend needs Node.js/npm (absent on Community Cloud) and a frontend
 # bundle that is gitignored. Installing the published wheel instead ships the
 # prebuilt bundle. Bump the pin with each release.
-streamlit>=1.51
+#
+# The demo needs Streamlit 1.56 or later: it passes `required` to st.pills and
+# st.segmented_control. The package itself needs only Streamlit 1.51.
+streamlit>=1.56
 streamlit-listview==1.0.1

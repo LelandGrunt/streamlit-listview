@@ -527,11 +527,10 @@ def render_data(cfg):
             value=cfg["large_size"],
             format_func=lambda n: f"{n:,}",
             help=(
-                "Number of generated options. The list renders every row, so "
-                "larger sizes show its render and scroll cost: at 100,000 rows "
-                "it takes about 3 s to appear on a fast laptop, and each click "
-                "or settings change resends all options (6.75 MB, compressed "
-                "to 0.48 MB on the network)."
+                "Number of generated options. Larger sizes show the list's cost "
+                "at scale: at 100,000 rows it appears in about 1 s in Chromium, "
+                "and each click or settings change that alters the list resends "
+                "all options (6.75 MB, compressed to 0.48 MB on the network)."
             ),
             key="cfg_large_size",
         )
@@ -986,8 +985,8 @@ def render_demo():
     # so on a narrow screen the trailing section pills are simply cut off with
     # nothing hinting that they exist. Nested one container deeper they wrap
     # again — every control in the panel at once, and unlike passing wrap=True
-    # (a 1.63+ parameter) it keeps the demo running on the Streamlit >= 1.51
-    # floor.
+    # (a 1.63+ parameter) it keeps the demo running on its Streamlit >= 1.56
+    # floor (see demo/README.md).
     with config_col, st.container():
         st.subheader(":material/tune: Configuration")
         # A switched-off Theme picker drops out of the pills; a session still

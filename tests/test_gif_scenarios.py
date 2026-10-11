@@ -1,5 +1,6 @@
 """The GIF scenarios (scripts/gif/): clip geometry, catalogue, GIF assembly, options."""
 
+import importlib
 import json
 import subprocess
 import sys
@@ -319,27 +320,50 @@ def test_a_failed_take_names_the_scenario_and_shows_the_server_output(
     assert "NameError: name 'x' is not defined" in message
 
 
-def test_large_list_builds_its_options_on_first_render(monkeypatch):
+@pytest.mark.parametrize("name", list(SCENARIOS))
+def test_scenario_module_builds_no_dataset_at_import(name):
     """Importing the catalogue (generate.py, pytest, every take's server) must not
-    build the 100,000-row list; the scenario's page builds it once, when used."""
-    from scenarios import large_list
+    build a generated dataset: a scenario builds it in a cached function, when its
+    page first needs it. make_large_dataset's rows carry ids "item-NNNNN"."""
+    module = importlib.import_module(f"scenarios.{name.replace('-', '_')}")
+    held = [
+        attr
+        for attr, value in vars(module).items()
+        if isinstance(value, list)
+        and value
+        and isinstance(value[0], dict)
+        and str(value[0].get("id", "")).startswith("item-")
+    ]
+    assert not held, f"scenario {name!r} builds a dataset at import: {held}"
 
-    assert not any(
-        isinstance(value, list) and len(value) == 100_000
-        for value in vars(large_list).values()
-    )
+
+@pytest.mark.parametrize(
+    ("module_name", "size"), [("large_list", 100_000), ("jump_to_default", 1_000)]
+)
+def test_dataset_scenario_builds_its_options_once(monkeypatch, module_name, size):
+    """The scenario's page builds its dataset on first use and keeps it."""
+    module = importlib.import_module(f"scenarios.{module_name}")
     calls = []
 
     def fake_dataset(n):
         calls.append(n)
         return []
 
-    monkeypatch.setattr(large_list, "make_large_dataset", fake_dataset)
-    large_list.options.cache_clear()
-    large_list.options()
-    large_list.options()
-    large_list.options.cache_clear()
-    assert calls == [100_000]
+    monkeypatch.setattr(module, "make_large_dataset", fake_dataset)
+    module.options.cache_clear()
+    module.options()
+    module.options()
+    module.options.cache_clear()
+    assert calls == [size]
+
+
+@pytest.mark.parametrize("name", GALLERY)
+def test_gallery_gif_stays_at_or_below_150_kb(name):
+    """scripts/gif/README.md caps a gallery GIF at 150 KB, so the README loads
+    quickly on GitHub and PyPI. The tour is no gallery GIF and has no cap."""
+    gif = ROOT / "assets" / SCENARIOS[name].gif_file
+    size = gif.stat().st_size
+    assert size <= 150_000, f"{gif.name} is {size:,} bytes, above 150 KB"
 
 
 @pytest.mark.parametrize(

@@ -5,13 +5,24 @@ key, so each pick remounts the listview and the new instance scrolls its
 default into view.
 """
 
+from functools import cache
+
 import streamlit as st
 
 from data import make_large_dataset
 from stage import Scenario, Stage
 
-OPTIONS = make_large_dataset(1_000)
 DEFAULTS = ("item-00042", "item-00500", "item-00987")
+
+
+@cache
+def options() -> list[dict[str, str]]:
+    """The 1,000 options, built on first use and kept for the process.
+
+    Not at import: generate.py, pytest and every take's server import the whole
+    catalogue, and only this scenario's page needs the list.
+    """
+    return make_large_dataset(1_000)
 
 
 def page(take: str) -> None:
@@ -31,7 +42,7 @@ def page(take: str) -> None:
     st.markdown('<div style="height: 24px"></div>', unsafe_allow_html=True)
     listview(
         f"default = `{default}`",
-        OPTIONS,
+        options(),
         selection_mode="single",
         default=default,
         height=300,
