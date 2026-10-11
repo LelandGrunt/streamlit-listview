@@ -1,17 +1,17 @@
 # README GIFs and the visual comparison
 
-Scripts that regenerate the GIFs in the top-level `README.md`, and that record the same scenarios as PNG frames, so that two recordings show what a change did to the widget's look. One more script records the tour of the demo app that opens the README.
+These scripts regenerate the GIFs in the top-level `README.md`. They also record the same scenarios as PNG frames, so that two recordings show what a change did to the widget's look. One more script records the tour of the demo app that opens the README.
 
 ## Parts
 
-- **`scenarios/`**: the catalogue. Each scenario module defines one `SCENARIO`: the Streamlit page it renders, the steps that drive it, and its takes. Eight gallery scenarios write a GIF to `assets/`; three test scenarios (`dark`, `sidebar`, `limits`) only record frames. `_cities.py` holds the city list that several scenarios share.
+- **`scenarios/`**: the catalog. Each scenario module defines one `SCENARIO`: the Streamlit page it renders, the steps that drive it, and its takes. Eight gallery scenarios write a GIF to `assets/`; three test scenarios (`dark`, `sidebar`, `limits`) only record frames. `_cities.py` holds the city list that several scenarios share. The catalog puts `demo/` on `sys.path`: `large-list` and `jump-to-default` build their options with `demo/data.py`'s `make_large_dataset`, and `themes` reads `demo/themes.py` and the demo's theme files, so a change to the demo can change these GIFs.
 - **`stage.py`**: `Take`, `Scenario`, and the `Stage` helper the steps use. It holds locators for the widget's parts, `rerun()` and `settle()` to wait for a state instead of a fixed time, `snap()` to take a frame, `press()`, which shows a key badge with `badge=True` (`badge(None)` removes it), `scroll_list()` and `park_pointer()`. A key change leaves the page without a listview for about one frame after the script run ends, so `settle()` waits for the listview to appear before it waits for quiet; `e2e/test_gif_settle.py` checks it in Chromium.
-- **`app.py`**: the one capture page. It renders the scenario and the take that `LISTVIEW_GIF_SCENARIO` and `LISTVIEW_GIF_TAKE` name (by default `hero` and its first take), hides Streamlit's header, toolbar, main menu and footer, limits the page to 640 px, and ends every run with a hidden run counter that `rerun()` waits on.
+- **`app.py`**: the one capture page. It renders the scenario and the take that `LISTVIEW_GIF_SCENARIO` and `LISTVIEW_GIF_TAKE` name (by default `hero` and its first take), hides Streamlit's header, toolbar, main menu and footer, limits the page to 640 px, and ends every run with a hidden run counter that `rerun()` waits on. Its CSS finds Streamlit's parts by `stHeader`, `stToolbar`, `#MainMenu`, `footer`, `.block-container` and `stElementContainer`.
 - **`capture.py`**: plays one take in Chromium (a 720 × 840 viewport at device scale factor 2) and screenshots the listview's box plus 12 px on each side, and the take's `clip_top` above it.
-- **`make_gif.py`**: scales the frames by 0.5, builds one 256-color palette over all of them, and writes a looping GIF. On its own, `python scripts/gif/make_gif.py FRAMES_DIR OUT.gif [SCALE] [COLORS]` rebuilds a GIF from the frames that `--keep-frames` kept, without a new capture.
+- **`make_gif.py`**: scales the frames by 0.5, builds one 256-color palette over all of them, and writes a looping GIF. On its own, `uv run --extra devel python scripts/gif/make_gif.py FRAMES_DIR OUT.gif [SCALE] [COLORS]` rebuilds a GIF from the frames that `--keep-frames` kept, without a new capture.
 - **`generate.py`**: the command line. It starts one Streamlit server per take, and either builds GIFs or records frames.
 - **`compare.py`**: compares two recordings frame by frame and writes an HTML report.
-- **`screencast.py`**: records the README's tour of the demo app with Streamlit's own *Record screen* and turns the video into `assets/listview-tour.gif`. It uses none of the parts above except `generate.py`'s server start; see [Record the tour](#record-the-tour).
+- **`screencast.py`**: records the README's tour of the demo app with Streamlit's own *Record screen* and turns the video into `assets/listview-tour.gif`. It calls only `_serve` and `_tail` from `generate.py`, but importing `generate.py` loads the whole catalog, so a scenario that fails at import stops the tour too. See [Record the tour](#record-the-tour).
 
 ## Scenarios
 
@@ -31,7 +31,7 @@ Scripts that regenerate the GIFs in the top-level `README.md`, and that record t
 
 ## Regenerate the GIFs
 
-Prereqs, once: Node 24 or later, and from the repo root:
+Prerequisites, once: Node 24 or later, and from the repo root:
 
 ```sh
 npm --prefix streamlit_listview/frontend ci
@@ -39,27 +39,28 @@ npm --prefix streamlit_listview/frontend run build
 LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel playwright install chromium
 ```
 
-Then:
+The generator captures the bundle in `streamlit_listview/frontend/build/`, so build it again after every change under `frontend/src/`; a stale bundle yields GIFs of the old widget. Then:
 
 ```sh
+npm --prefix streamlit_listview/frontend run build
 LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py                       # the hero
 LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py --scenario keyboard   # one gallery GIF
 LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py --gallery             # every gallery GIF
 ```
 
 Options:
-- `--scenario NAME` (repeatable), `--gallery` (every gallery scenario) or `--all` (every scenario, test scenarios included; needs `--record`) choose the scenarios. They exclude each other; without any of them, the command builds the hero.
-- `--out` (one scenario only), `--scale` (`0.5`), `--colors` (`256`) and `--keep-frames`, which keeps the PNG frames under `build/gif-frames/<scenario>/`, shape a GIF, so `--record` refuses them.
+- `--scenario NAME` (repeatable), `--gallery` (every gallery scenario) or `--all` (every scenario, test scenarios included) choose the scenarios. They exclude each other; without any of them, the command builds the hero. A test scenario builds no GIF, so it needs `--record`, and so does `--all`.
+- `--out` (one scenario only; a path that ends in `.gif`), `--scale` (`0.5`; above 0), `--colors` (`256`; 2 to 256) and `--keep-frames`, which keeps the PNG frames under `build/gif-frames/<scenario>/` at the repo root, shape a GIF, so `--record` refuses them.
 - `--record DIR` and `--overwrite` record frames instead of a GIF; see [Compare before and after a change](#compare-before-and-after-a-change).
 - `--port` (`0` picks a free port).
 
-On one machine the output is byte-identical from run to run. Pillow comes with Streamlit, so the commands need no `--with pillow`.
+On one machine an unchanged widget yields byte-identical GIFs from run to run, unless Google Fonts serves the `themes` scenario a changed font. Pillow comes with Streamlit, so the commands need no `--with pillow`.
 
-`tests/test_readme.py` checks that the README links every gallery GIF but the hero, and the tour before *Features in action*; that it names each GIF's title; and that `assets/` holds exactly the gallery GIFs and the tour. The scenarios find the widget by the `data-testid`s and classes that `streamlit_listview/frontend/CLAUDE.md` lists, and by Streamlit's own `stRadio` (the preset switch) and `stElementContainer` (which hides the run counter). A renamed hook or a removed feature breaks a scenario; fix the scenario in the same change rather than drop a step.
+`tests/test_readme.py` checks that the README links every gallery GIF but the hero, and the tour before *Features in action*; that the title of every gallery scenario but the hero appears in the README; and that the GIFs in `assets/` are exactly the gallery GIFs and the tour. The scenarios find the widget by the `data-testid`s and classes that `streamlit_listview/frontend/CLAUDE.md` lists, and by Streamlit's own `stRadio` (the preset switch). A renamed test id or class, or a removed feature, breaks a scenario; fix the scenario in the same change rather than drop a step.
 
 ## Record the tour
 
-`screencast.py` starts the demo (`demo/app.py`), opens it in headless Chromium at 1280 × 800, and starts *Record screen* from the app menu. The tour then runs in real time, about 50 seconds: multi-select, search, collapsible groups, sorting, a default far down the list, the Databricks Brand and Snowflake Brand themes, 100,000 options, and the sidebar. Esc stops the recording, and the script saves the video Streamlit offers for download. ffmpeg turns it into a looping GIF of about 3.5 MB, 960 px wide, sampled at 10 frames per second with repeated frames dropped.
+`screencast.py` starts the demo (`demo/app.py`) with `--client.toolbarMode viewer`, which hides the Deploy button and keeps the app menu. It opens the demo in headless Chromium at 1280 × 800 and starts *Record screen* from the app menu. The tour then runs in real time, about 50 seconds: multi-select, search, collapsible groups, sorting, a default far down the list, the Databricks Brand and Snowflake Brand themes, 100,000 options, and the sidebar. Esc stops the recording, and the script saves the video Streamlit offers for download. ffmpeg turns it into a looping GIF of about 3.5 MB, 960 px wide, sampled at 10 frames per second. Its `mpdecimate` filter drops each frame that barely differs from the one before, and the frame it keeps shows for their time.
 
 ffmpeg is no project dependency. `uv run --with imageio-ffmpeg` adds a copy for one run; without it, the script looks for `ffmpeg` on the PATH and stops before recording if there is none:
 
@@ -68,18 +69,19 @@ npm --prefix streamlit_listview/frontend run build
 LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel --with imageio-ffmpeg python scripts/gif/screencast.py
 ```
 
-Options: `--out` (`assets/listview-tour.gif`), `--width` (`960`, at most 1280), `--fps` (`10`) and `--port` (`0` picks a free port). The video stays in `build/screencast/tour.webm`; a failed tour step leaves `build/screencast/failure.png`.
+Options: `--out` (`assets/listview-tour.gif`; a path that ends in `.gif`), `--width` (`960`; at most 1280), `--fps` (`10`; 1 to 30) and `--port` (`0` picks a free port). The video stays in `build/screencast/tour.webm`; a failed tour step leaves `build/screencast/failure.png`.
 
 What is non-obvious:
-- **Only this tab is recorded.** A tab capture would otherwise ask which source to record. Chromium runs with `--auto-accept-this-tab-capture`, and a script in the page asks `getDisplayMedia` for the current tab and stops any other source before Streamlit's recorder sees it. Never add `--use-fake-ui-for-media-stream`: it answers with the whole monitor, so the video shows the desktop of whoever runs the script. `TAB_ONLY_JS` in `screencast.py` is that script; `tests/test_gif_screencast.py` pins the launch flags, and `e2e/test_screencast_guard.py` checks the guard in Chromium.
+- **Only this tab is recorded.** Streamlit asks `getDisplayMedia` for a video, which would open Chromium's source picker. Chromium runs with `--auto-accept-this-tab-capture`, and a script in the page asks for the current tab instead and stops any other source before Streamlit's recorder sees it; `check_surface` then stops the run with "refused to record". Never add `--use-fake-ui-for-media-stream`: it answers with the whole monitor, so the video shows the desktop of whoever runs the script. `TAB_ONLY_JS` in `screencast.py` is that script; `tests/test_gif_screencast.py` pins the launch flags, and `e2e/test_screencast_guard.py` checks the guard in Chromium.
 - **The page draws the mouse pointer.** A tab capture shows none, so the script draws an arrow that follows the mouse and a ring at each click.
 - **Esc ends the recording**, so the tour never presses it; `Tour.press` refuses the key. A focused select box swallows Esc, so `record()` blurs the focus before the final Esc.
 - **The tour drives the demo by its labels and ids.** Renaming one of them breaks the tour; fix `play_tour` in the same change.
-  - In `demo/app.py`: the section pills, `multi`, *Collapsible groups*, *Sort* and its option `both`, *Default*, *Theme* with *Streamlit default*, and *Render widget in sidebar*.
-  - In `demo/dataset.py`: the *Large* data source. The *Items* slider is found as the first `stSlider` on the page, so no other slider may come before it.
+  - In the widget: the test ids `stListview`, `stListviewOption-<id>`, `stListviewSearch`, `stListviewSearchClear` and `stListviewGroup`, the class `listview-body`, and the `/` key, which focuses the search.
+  - In `demo/app.py`: the section pills, `multi`, *Collapsible groups*, *Sort* and its option `both`, *Default*, *Theme* with *Streamlit default*, *Render widget in sidebar*, and the *Items* slider. The tour finds the slider as the first `stSlider` on the page, so no other slider may come before it. It drags the slider to its right end, so the last entry of `LARGE_SIZES` in `demo/data.py` must stay 100,000.
+  - In `demo/dataset.py`: the *Large* data source.
   - In `demo/.streamlit/config_themes.json`: *Databricks Brand* and *Snowflake Brand*.
   - In `demo/data.py`: the rows `berlin`, `munich`, `cologne` and `seattle`, and `item-99999` of the Large dataset.
-  - In Streamlit: `stMainMenu`, `stMainMenuItem-recordScreencast`, `stCountdown`, the buttons *Start recording!* and *Save video to disk*, and the app root's `data-test-script-state`.
+  - In Streamlit: the test ids `stMainMenu`, `stMainMenuItem-recordScreencast`, `stCountdown`, `stCheckbox` (the toggles), `stSelectbox`, `stMultiSelect`, `stSlider` and `stSidebar`; the ARIA roles of the pills, select boxes and slider; the buttons *Start recording!* and *Save video to disk*; and the app root's `data-test-script-state`.
 - **The theme switcher must be on.** With `LISTVIEW_DEMO_THEME_SWITCHER=0`, the demo hides its Theme section, and the tour fails.
 - **Each run differs.** The tour runs in real time, so two runs never produce the same GIF, even of an unchanged widget. Regenerate it when the demo or the widget changes visibly, look at the result, and commit it only then.
 - **Every version bump needs a new tour.** The demo shows the installed version next to its title, and the tour records it. Record the tour after the bump has reached the editable install (`uv run` re-installs the project once `pyproject.toml` changes), and check the badge in the GIF.
@@ -88,24 +90,32 @@ What is non-obvious:
 
 ## Compare before and after a change
 
+Build the bundle before each recording:
+
 ```sh
+npm --prefix streamlit_listview/frontend run build
 LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py --all --record bench-results/visual/before
-# change the widget, then: npm --prefix streamlit_listview/frontend run build
+# change the widget, then build again:
+npm --prefix streamlit_listview/frontend run build
 LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py --all --record bench-results/visual/after
 LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/compare.py bench-results/visual/before bench-results/visual/after
 ```
 
-`--record DIR` writes each scenario's frames and `frames.json` to `DIR/<scenario>/`, and `meta.json` last, so a directory without it holds no complete recording. It refuses a directory that holds a recording unless `--overwrite` is given; `--overwrite` without `--record` is a usage error. `compare.py` pairs frames by scenario, take and step name, prints the frames that differ and a count per status, and writes `report.html` into the second recording (`--report` picks another path). The report shows before, after, and the changed pixels in red. `--threshold N` ignores channel differences up to N (0 to 255). Exit codes: 0 every frame is the same; 1 a frame differs or exists in one recording only; 2 invalid input, or a report that cannot be written.
+- **`--record DIR`** writes each scenario's frames and `frames.json` to `DIR/<scenario>/`, and `meta.json` last, so a directory without it holds no complete recording. It refuses a directory that holds a recording unless `--overwrite` is given; `--overwrite` without `--record` is a usage error.
+- **`compare.py`** pairs frames by scenario, take and step name, prints the frames that differ and a count per status, and writes `report.html` into the second recording (`--report` picks another path).
+- **The report** shows each frame that differs before and after. For two frames of the same size it adds the after frame dimmed, with the changed pixels in red.
+- **`--threshold N`** ignores channel differences up to N (0 to 255, default 0).
+- **Exit codes:** 0 every frame is the same; 1 a frame differs or exists in one recording only; 2 invalid input, or a report that cannot be written.
 
-Compare only recordings from one machine: fonts and the Chromium version change pixels, and the report warns when the two recordings name different Chromium versions or platforms. A difference is not a failure; an intended change reports too, and a person judges it.
+Compare only recordings from one machine: fonts and the Chromium version change pixels, and `compare.py` and the report warn when the two recordings name different Chromium versions or platforms. A difference is not a failure; an intended change reports too, and a person judges it.
 
 ## Add a scenario
 
-1. Write `scenarios/<name>.py` (the file name uses underscores, the scenario name hyphens) with `page(take)`, `play(stage)` and `SCENARIO = Scenario(...)`. Import `listview` inside `page()`, never at the top of the module: importing `streamlit_listview` declares the component, which works only inside a Streamlit server, and `generate.py` imports the whole catalogue in a plain process. `test_generate_imports_outside_a_streamlit_server` fails on a top-level import.
+1. Write `scenarios/<name>.py` (the file name uses underscores, the scenario name hyphens) with `page(take)`, `play(stage)` and `SCENARIO = Scenario(...)`. A helper module that defines no scenario starts with an underscore, as `_cities.py` does. Import `listview` inside `page()`, never at the top of the module: importing `streamlit_listview` declares the component, which works only inside a Streamlit server, and `generate.py` imports the whole catalog in a plain process. `test_generate_imports_outside_a_streamlit_server` fails on a top-level import.
    - `Scenario` takes `name`, `title` (the README caption), `gallery`, `page`, `play`, and optionally `takes`, `page_config` (extra `st.set_page_config` arguments, without `page_title` or `layout`) and `gif_name` (only the hero keeps an older file name).
-   - Each `Take` is one server run: `name` (passed to `page(take)` and readable as `stage.take`), `server_args` (extra `streamlit run` flags, such as `--theme.base dark`) and `clip_top` (CSS pixels the frame reaches above the listview, for the help popover). A gallery scenario's GIF keeps the first take's frame size: a later take with a smaller widget shows a little more of the page below it, and one with a larger widget stops the run, so put the take with the largest widget first.
-   - Build a dataset inside a cached function, not at import: every take's server and `generate.py` import the whole catalogue. `tests/test_gif_scenarios.py` checks that no scenario module holds a generated dataset after import.
-2. Add it to `SCENARIOS` in `scenarios/__init__.py`, gallery scenarios before test scenarios, and to the lists at the top of `tests/test_gif_scenarios.py`.
+   - Each `Take` is one server run: `name` (unique within the scenario, passed to `page(take)` and readable as `stage.take`), `server_args` (extra `streamlit run` flags, such as `--theme.base dark`) and `clip_top` (CSS pixels the frame reaches above the listview, for the help popover). The page must leave that much room above the listview, as `markdown.py` does; the frame cannot start above the page. A gallery scenario's GIF keeps the first take's frame size: a later take with a smaller widget shows a little more of the page below it, and one with a larger widget stops the run, so put the take with the largest widget first.
+   - Build a dataset inside a cached function, not at import: every take's server and `generate.py` import the whole catalog. `tests/test_gif_scenarios.py` checks that no scenario module holds `make_large_dataset` rows (ids `item-…`) after import, and `test_dataset_scenario_builds_its_options_once` checks each scenario it lists; add a new dataset scenario there.
+2. Add it to `SCENARIOS` in `scenarios/__init__.py` and to the lists at the top of `tests/test_gif_scenarios.py`: gallery scenarios first (the hero, then the order of the README's *Features in action* table), then test scenarios. Add a row to the table in [Scenarios](#scenarios).
 3. Wrap every action that reaches Python in `with stage.rerun():`, and give every frame a step name that is unique within its take.
 4. Record the scenario twice and compare the two recordings. They must be identical; a difference means a step does not wait for its state.
-5. For a gallery scenario, generate the GIF, keep it at or below 150 KB (`tests/test_gif_scenarios.py` checks the size), and add it to the README's *Features in action* table.
+5. For a gallery scenario, generate the GIF and keep it at or below 150,000 bytes (`tests/test_gif_scenarios.py` checks the size; `generate.py` reports KiB, so it reports this limit as 146 KB). Add it to the README's *Features in action* table.
