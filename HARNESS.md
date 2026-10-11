@@ -133,7 +133,7 @@ flowchart LR
 - **Prettier** checks the frontend format, `listview.css` included; `npm run format` fixes it.
 - **typos** checks the spelling of every text file against a list of common misspellings and fixes what it can. Its exceptions live under `[tool.typos]` in `pyproject.toml`, each with its reason.
 - **markdownlint-cli2** checks every Markdown file against `.markdownlint-cli2.jsonc`: the default rules, without a line-length limit.
-- **The complexity limit:** ruff's C901 and oxlint's `complexity` cap a function at a cyclomatic complexity of 10. The eleven functions above it when the cap came in carry a suppression with the reason; an unused suppression fails, so each goes once its function drops below 10.
+- **The complexity limit:** ruff's C901 and oxlint's `complexity` cap a function at a cyclomatic complexity of 10. Nine functions that were above it when the cap came in still carry a suppression with the reason; an unused suppression fails, so each goes once its function drops below 10.
 
 ### Dependency scanning and pinning
 
@@ -323,7 +323,7 @@ The tables follow the nine categories of the Harness Inventory and list each of 
 
 | Layer | Def | Status | In this project | Stage | Closed loop |
 |---|:-:|:-:|---|---|---|
-| Complexity metrics | 🟢 | ✅ | ruff C901 and oxlint `complexity`, limit 10; eleven older functions carry a suppression with the reason | pre-commit, push gate, CI | yes |
+| Complexity metrics | 🟢 | ✅ | ruff C901 and oxlint `complexity`, limit 10; nine older functions carry a suppression with the reason | pre-commit, push gate, CI | yes |
 | API contract lint | 🟡 | — | no HTTP API | — | — |
 | Fagan inspection | 🔴 | — | one maintainer | — | — |
 | Code review | 🔴 | ◐ | the maintainer reviews and pushes; GitHub requires no pull request | maintainer | indirect |

@@ -4,6 +4,7 @@ import {
   disabledIdSet,
   idKey,
   itemIdByKey,
+  optionDomId,
   parseNewIntId,
 } from "./ids";
 
@@ -29,6 +30,13 @@ describe("idKey", () => {
   it("maps a numeric id and its string form onto the same key", () => {
     expect(idKey(7)).toBe("7");
     expect(idKey("7")).toBe(idKey(7));
+  });
+});
+
+describe("optionDomId", () => {
+  it("builds the row's DOM id from its row-identity key", () => {
+    expect(optionDomId("a")).toBe("listview-opt-a");
+    expect(optionDomId(7)).toBe(optionDomId("7"));
   });
 });
 

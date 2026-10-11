@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 /**
  * A group as this hook tracks it: its name, or `null` for the block of rows
  * without a group, which carries a header of its own in a grouped list (see
- * `blocksFor` in Listview.tsx). `null` is no string, so no group name a caller
+ * `blocksFor` in utils/blocks.ts). `null` is no string, so no group name a caller
  * passes can collide with that block, not even one spelled like its header.
  */
 export type GroupKey = string | null;

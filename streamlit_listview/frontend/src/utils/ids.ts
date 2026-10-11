@@ -1,3 +1,4 @@
+import type { GroupKey } from "../hooks/useCollapse";
 import type { Id, ListviewItem } from "../types";
 
 /**
@@ -23,6 +24,26 @@ export function sameIds(a: Id[], b: Id[]): boolean {
  */
 export function idKey(id: Id): string {
   return String(id);
+}
+
+/**
+ * The DOM id of a row: its `id` attribute, what `aria-activedescendant` names
+ * and what the scroll lookup (`useScrollToId`) finds it by. Built on `idKey`,
+ * so a numeric id and its string form name the same element. It carries no
+ * instance prefix: each instance renders into its own ShadowRoot, which scopes
+ * the ids (see `findRowNode` in `hooks/useScrollToId.ts`).
+ */
+export function optionDomId(id: Id): string {
+  return `listview-opt-${idKey(id)}`;
+}
+
+/**
+ * The DOM id of a group's treeitem, for aria-activedescendant. Every named
+ * group's id carries the "listview-grp-" prefix, so the block without a group
+ * gets one no group name can spell, the empty name included.
+ */
+export function groupDomId(group: GroupKey): string {
+  return group === null ? "listview-ungrouped" : `listview-grp-${group}`;
 }
 
 /**

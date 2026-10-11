@@ -1,7 +1,7 @@
 import type { FC } from "react";
 
 export interface SelectAllToggleProps {
-  /** Visible label text; also the accessible name. Owned by Listview.tsx. */
+  /** Visible label text; also the accessible name. Owned by hooks/useSelectAll.ts. */
   label: string;
   onClick: () => void;
   disabled: boolean;
@@ -12,7 +12,7 @@ export interface SelectAllToggleProps {
  * Not a checkbox (D2). Placement-agnostic: it renders only a button and the
  * container decides where it lives. The label is always a prop, never
  * hardcoded here, so the two literals ("Select all" / "Deselect all") stay
- * owned solely by Listview.tsx.
+ * owned solely by hooks/useSelectAll.ts.
  */
 export const SelectAllToggle: FC<SelectAllToggleProps> = ({
   label,

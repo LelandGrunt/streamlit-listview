@@ -1,7 +1,7 @@
 /** Switches a render chunk to `content-visibility: hidden` (listview.css). */
 export const FORGET_CLASS = "listview-chunk--forget";
 
-/** Selects the render chunks below a listbox (`div.listview-chunk`, Listview.tsx). */
+/** Selects the render chunks below a listbox (`div.listview-chunk`, components/GroupBlock.tsx). */
 export const CHUNK_SELECTOR = ".listview-chunk";
 
 /** True when the browser skips the chunk's rows (content-visibility: auto). */
