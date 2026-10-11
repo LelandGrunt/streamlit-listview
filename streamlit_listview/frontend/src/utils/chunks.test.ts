@@ -66,7 +66,7 @@ describe("forgetHeights", () => {
     nextFrame();
     // still hidden while the browser runs the rendering update that drops
     // the remembered height
-    expect(chunks[0].classList.contains(FORGET_CLASS)).toBe(true);
+    expect(chunks[0]!.classList.contains(FORGET_CLASS)).toBe(true);
     nextFrame();
     expect(chunks.map((c) => c.classList.contains(FORGET_CLASS))).toEqual([
       false,

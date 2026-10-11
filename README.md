@@ -131,7 +131,7 @@ def listview(
     args=None,
     kwargs=None,
     key=None,                         # strongly recommended (see Keying)
-) -> dict | str | int | list | None: ...
+) -> dict[str, Any] | str | int | list[Any] | None: ...
 ```
 <!-- fmt:on -->
 
@@ -411,4 +411,4 @@ Apache-2.0 (see [`LICENSE`](https://github.com/LelandGrunt/streamlit-listview/bl
 
 ## AI
 
-Built with Claude Code (models Opus 4.8, 5 and 5.5, and Fable 5) and the superpowers plugin.
+Built with Claude Code (models Opus 4.8, 5 and 5.5, and Fable 5 and 5.1) and the superpowers plugin.

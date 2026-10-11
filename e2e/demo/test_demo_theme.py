@@ -15,6 +15,7 @@ so the assertions never depend on how a color happens to be spelled.
 
 import json
 from pathlib import Path
+from typing import cast
 
 import pytest
 import toml
@@ -104,16 +105,18 @@ def pick_theme(page: Page, name: str) -> None:
 
 
 def primary(page: Page) -> str:
-    return page.evaluate(_PRIMARY)
+    return cast(str, page.evaluate(_PRIMARY))
 
 
 def rgb(page: Page, color: str) -> str:
     """A literal CSS color as the browser spells it (rgb())."""
-    return page.evaluate(f"(color) => ({_PAINT})(document.body, color)", color)
+    return cast(
+        str, page.evaluate(f"(color) => ({_PAINT})(document.body, color)", color)
+    )
 
 
 def font(page: Page) -> str:
-    return page.evaluate(f"getComputedStyle({_ROOT}).fontFamily")
+    return cast(str, page.evaluate(f"getComputedStyle({_ROOT}).fontFamily"))
 
 
 def expect_primary(page: Page, color: str) -> None:

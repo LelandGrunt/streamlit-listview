@@ -257,7 +257,7 @@ git worktree remove --force ../bench-baseline
 
 ### The frontend table
 
-```
+```text
  ✓ src/bench/listview.bench.tsx > grouped n=50000 93551ms
      name                    hz       min       max      mean   …     rme  samples
    · rerun_unchanged     5.1684    160.84    325.88    193.48   …  ±15.28%       15  [3.55x] ⇑
@@ -271,14 +271,14 @@ git worktree remove --force ../bench-baseline
 
 ### The browser report
 
-```
+```text
 n      shape      scenario      metric      median   low     high    reps
 50000  ungrouped  search_clear  painted_ms  839      819     2,138   3
 ```
 
 Comparing two files gives both medians, both ranges and the difference, `B − A`:
 
-```
+```text
 n      shape      scenario      metric      A median  A range        B median  B range      Δ       Δ %
 50000  ungrouped  search_clear  painted_ms  3,838     3,827..3,873   839       819..2,138   -2,999  -78%
 ```

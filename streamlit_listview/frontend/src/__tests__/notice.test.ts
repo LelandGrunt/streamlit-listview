@@ -22,4 +22,10 @@ describe("NOTICE attribution", () => {
     expect(notice).toContain("HelpCircle");
     expect(notice).toMatch(/MIT/);
   });
+
+  it("points to the licenses of the bundled npm packages", () => {
+    expect(notice).toContain(
+      "streamlit_listview/frontend/build/THIRD_PARTY_LICENSES.md",
+    );
+  });
 });

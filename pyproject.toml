@@ -79,6 +79,16 @@ fail_under = 100
 # step with [tool.ty.environment] extra-paths.
 src = [".", "demo", "scripts", "scripts/gif"]
 
+[tool.ruff.lint]
+# C901 caps the cyclomatic complexity of a function at 10, the limit oxlint's
+# `complexity` sets in the frontend. A function above it when the cap came in
+# carries `# noqa: C901` with the reason; split it on the next change and
+# remove the noqa.
+extend-select = ["C901"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
 [tool.ruff.lint.per-file-ignores]
 # listview() reports every invalid argument as a ValueError, wrong types
 # included: the suite matches on the messages, and a TypeError would break
@@ -95,6 +105,26 @@ extra-paths = ["demo", "scripts", "scripts/gif"]
 # Check every platform's branches, so the hook on Windows and CI on Linux
 # report the same diagnostics.
 python-platform = "all"
+
+[tool.ty.rules]
+# Two rules beyond ty's defaults keep Any out of typed code: a bare generic
+# (`dict`, `list`) and a typed function that returns Any. Two more stay off:
+# truthiness-test-of-none-union (`if name:` on `str | None` is idiomatic) and
+# missing-override-decorator (@override needs typing_extensions on 3.10).
+missing-type-argument = "error"
+unsound-return-statement = "error"
+
+# typos (a pre-commit hook) checks the spelling of every text file and fixes
+# what it can. Accept a word here only when it is right. A public name with a
+# typo (a listview() parameter, a data-testid, a demo label) stays: callers, the
+# e2e suite and the GIF scenarios depend on it. Each accepted word carries its
+# reason in a comment.
+[tool.typos.files]
+extend-exclude = ["*.lock", "package-lock.json", "assets/"]
+
+[tool.typos.default.extend-words]
+# tests/test_push_gate.py writes "Café" as "Caf\u00e9", so typos sees "Caf".
+caf = "caf"
 
 [tool.setuptools.packages.find]
 include = ["streamlit_listview*"]

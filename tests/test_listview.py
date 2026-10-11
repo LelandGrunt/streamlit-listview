@@ -1056,7 +1056,7 @@ def _ts_interface_fields(source: str, name: str) -> set[str]:
         re.DOTALL | re.MULTILINE,
     )
     assert block, f"interface {name} not found in {TYPES_TS.name}"
-    fields = set()
+    fields: set[str] = set()
     for line in block.group(1).splitlines():
         declaration = line.split("//", 1)[0].strip()  # drop trailing comments
         match = re.match(r"(\w+)\??\s*:", declaration)

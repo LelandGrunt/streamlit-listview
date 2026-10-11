@@ -17,7 +17,21 @@
     // `as any` switches the type checker off; each use needs a disable comment
     // with its reason.
     "typescript/no-explicit-any": "error",
+    // Caps the cyclomatic complexity at 10, as ruff's C901 does in Python. A
+    // function above it when the cap came in carries a disable comment with
+    // the reason; split it on the next change.
+    "eslint/complexity": ["error", { "max": 10 }],
+    // noUncheckedIndexedAccess makes every array[i] possibly undefined. In
+    // production code, check the element or call elementAt (utils/arrays.ts);
+    // a `!` would silence the check. Tests and benchmarks may assert.
+    "typescript/no-non-null-assertion": "error",
     // Style only: asks for type parameters on every vi.fn() (183 in the suite).
     "vitest/require-mock-type-parameters": "off"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "src/test/**", "src/bench/**"],
+      "rules": { "typescript/no-non-null-assertion": "off" }
+    }
+  ]
 }

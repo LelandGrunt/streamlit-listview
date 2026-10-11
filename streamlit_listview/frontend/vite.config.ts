@@ -35,6 +35,11 @@ export default defineConfig(() => {
       // Collapse all imported CSS into a single extracted asset so the
       // css="index-*.css" glob resolves to exactly one file.
       cssCodeSplit: false,
+      // The bundle carries the code of the npm packages it imports, and their
+      // licenses (MIT and others) require their notices in every copy. Vite
+      // writes each bundled package with its license text into this file,
+      // which ships next to the bundle; verify_wheel.py requires it.
+      license: { fileName: "THIRD_PARTY_LICENSES.md" },
       lib: {
         entry: "./src/index.tsx",
         name: "Listview",

@@ -41,12 +41,12 @@ import {
 
 const sizes = subsetFromEnv(
   "LISTVIEW_BENCH_SIZES",
-  process.env.LISTVIEW_BENCH_SIZES,
+  process.env["LISTVIEW_BENCH_SIZES"],
   SIZES,
 );
 const shapes = subsetFromEnv(
   "LISTVIEW_BENCH_SHAPES",
-  process.env.LISTVIEW_BENCH_SHAPES,
+  process.env["LISTVIEW_BENCH_SHAPES"],
   SHAPES,
 );
 
@@ -92,7 +92,7 @@ for (const shape of SHAPES) {
     const selected = shapes.includes(shape) && sizes.includes(n);
     describe.skipIf(!selected)(`${shape} n=${n}`, () => {
       const base = makeLargeDataset(n, shape);
-      const last = base[n - 1].id;
+      const last = base[n - 1]!.id;
       const opts = budget(n);
       const cheapOpts = cheapBudget(n);
 
@@ -133,11 +133,11 @@ for (const shape of SHAPES) {
         },
       );
 
-      const first = base[0].id;
-      const second = base[1].id;
+      const first = base[0]!.id;
+      const second = base[1]!.id;
       // "04999": the zero-padded number of the last label; no other label
       // contains it, so the query leaves exactly one row.
-      const needle = base[n - 1].label.slice("Item ".length);
+      const needle = base[n - 1]!.label.slice("Item ".length);
       const mid = n >> 1;
 
       // One mounted instance per scenario. `setup` (untimed; once before the
@@ -183,7 +183,7 @@ for (const shape of SHAPES) {
       // compares a payload of NEW objects against them — the real rerun path —
       // while building the copy stays out of the timed body.
       let turn = 0;
-      bench("rerun_unchanged", () => rerenderWith(ring[turn++ & 1]), {
+      bench("rerun_unchanged", () => rerenderWith(ring[turn++ & 1]!), {
         ...cheapOpts,
         setup: () => {
           mount();
@@ -195,14 +195,14 @@ for (const shape of SHAPES) {
 
       // An edited and an unedited copy, alternated: every iteration is then a
       // one-row change against the previous payload.
-      bench("rerun_one_changed", () => rerenderWith(ring[turn++ & 1]), {
+      bench("rerun_one_changed", () => rerenderWith(ring[turn++ & 1]!), {
         ...cheapOpts,
         setup: () => {
           mount();
           const edited = freshCopy(base);
           edited[mid] = {
-            ...edited[mid],
-            label: `${edited[mid].label} (edited)`,
+            ...edited[mid]!,
+            label: `${edited[mid]!.label} (edited)`,
           };
           ring = [edited, freshCopy(base)];
           turn = 0;
@@ -242,16 +242,16 @@ for (const shape of SHAPES) {
       bench(
         "click_select",
         () => {
-          fireEvent.click(targets[turn++ & 1]);
+          fireEvent.click(targets[turn++ & 1]!);
         },
         {
           ...cheapOpts,
           setup: () => {
             mount();
             targets = [row(first) as HTMLElement, row(second) as HTMLElement];
-            fireEvent.click(targets[1]);
+            fireEvent.click(targets[1]!);
             precondition(
-              targets[1].getAttribute("aria-selected") === "true",
+              targets[1]!.getAttribute("aria-selected") === "true",
               "a click selects the row",
             );
             turn = 0;

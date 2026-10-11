@@ -19,7 +19,7 @@ import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TypeVar
+from typing import Any, TypeVar
 
 SIZES: tuple[int, ...] = (100, 1_000, 5_000, 10_000, 25_000, 50_000, 100_000)
 # The frontend tier's SHAPES (src/bench/fixtures.ts) in the same order; see
@@ -72,7 +72,7 @@ def cells(sizes: Sequence[int], shapes: Sequence[str]) -> list[Cell]:
     return [Cell(n, shape) for shape in shapes for n in sizes]
 
 
-def shape_rows(rows: list[dict], shape: str) -> list[dict]:
+def shape_rows(rows: list[dict[str, Any]], shape: str) -> list[dict[str, Any]]:
     """A cell's options, derived from ``make_large_dataset``'s grouped rows.
 
     ``grouped`` passes the rows through; ``ungrouped`` drops the group;
@@ -148,7 +148,7 @@ def describe_checkout(root: Path) -> str:
     return completed.stdout.strip() or "unknown"
 
 
-def append_record(path: Path, record: dict) -> None:
+def append_record(path: Path, record: dict[str, Any]) -> None:
     """Append one JSON line, creating the results directory (gitignored, so absent on a fresh clone)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as fh:

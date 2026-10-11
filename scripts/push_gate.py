@@ -36,6 +36,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from typing import cast
 
 import verify_wheel
 
@@ -116,7 +117,7 @@ def demo_pins(requirements: str) -> list[str]:
     THE parse for the demo pin: tests/test_packaging.py calls it too, so the
     gate and the test agree on what counts as a pin.
     """
-    return DEMO_PIN.findall(requirements)
+    return cast(list[str], DEMO_PIN.findall(requirements))
 
 
 def dist_names(version: str) -> tuple[str, str]:
@@ -133,13 +134,13 @@ def dist_names(version: str) -> tuple[str, str]:
 def expected_version(test_packaging: str) -> str | None:
     """`EXPECTED_VERSION` in tests/test_packaging.py, or None."""
     match = EXPECTED_VERSION.search(test_packaging)
-    return match.group(1) if match else None
+    return cast(str, match.group(1)) if match else None
 
 
 def lock_version(lock: str) -> str | None:
     """The version that uv.lock records for this project, or None."""
     match = LOCK_ENTRY.search(lock)
-    return match.group(1) if match else None
+    return cast(str, match.group(1)) if match else None
 
 
 def _project_version(pyproject: str | None) -> str | None:
@@ -153,7 +154,7 @@ def _found(value: str | None) -> str:
     return "none" if value is None else value
 
 
-def version_findings(read: Read, today: date) -> tuple[str | None, list[str]]:
+def version_findings(read: Read, today: date) -> tuple[str | None, list[str]]:  # noqa: C901 -- older than the complexity limit; split it when you next change it
     """The version of a commit and every flaw in its version information.
 
     The root pyproject.toml is the source of truth. Without its version the
@@ -635,12 +636,16 @@ Runner = Callable[[Step, Path, dict[str, str]], int]
 
 
 def suite_steps(version: str, wheel_dir: Path) -> list[Step]:
-    """What CI runs: ci.yml's lint job, then its test-build-verify job.
+    """What CI runs: ci.yml's lint job, its test-build-verify job, and its e2e
+    job's browser suite in Chromium.
 
     `npm ci` comes first: the pre-commit hooks for the frontend need
-    node_modules, as in CI's lint job.
+    node_modules, as in CI's lint job. `playwright install chromium` does
+    nothing when the browser is present.
     """
     wheel = wheel_dir / f"streamlit_listview-{version}-py3-none-any.whl"
+    devel = ("uv", "run", "--locked", "--extra", "devel")
+    skip_npm = (("LISTVIEW_SKIP_NPM_BUILD", "1"),)
     return [
         Step("npm ci", ("npm", "ci"), cwd=FRONTEND),
         Step(
@@ -651,19 +656,15 @@ def suite_steps(version: str, wheel_dir: Path) -> list[Step]:
         Step("npm test", ("npm", "test"), cwd=FRONTEND),
         Step(
             "pytest",
-            (
-                "uv",
-                "run",
-                "--locked",
-                "--extra",
-                "devel",
-                "pytest",
-                "tests/",
-                "--cov",
-                "--cov-report=term-missing",
-            ),
-            env=(("LISTVIEW_SKIP_NPM_BUILD", "1"),),
+            (*devel, "pytest", "tests/", "--cov", "--cov-report=term-missing"),
+            env=skip_npm,
         ),
+        Step(
+            "playwright install",
+            (*devel, "playwright", "install", "chromium"),
+            env=skip_npm,
+        ),
+        Step("e2e", (*devel, "pytest", "e2e/"), env=skip_npm),
         Step("wheel build", ("uv", "build", "--wheel", "--out-dir", str(wheel_dir))),
         Step(
             "verify_wheel.py",

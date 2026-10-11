@@ -55,11 +55,6 @@ describe("listview.css base theming", () => {
         pct: "40%",
       },
       {
-        token: "--listview-faded-text-50",
-        source: "--st-text-color",
-        pct: "50%",
-      },
-      {
         token: "--listview-faded-border-50",
         source: "--st-border-color",
         pct: "50%",
@@ -841,10 +836,11 @@ describe("Milestone C feature styling", () => {
     expect(css).toMatch(
       /\.listview-group-header__count\b[^{]*\{[^}]*font-weight:\s*400/,
     );
-    // more muted than the name: the shared 50% faded-text token (mixed once, in
-    // the root token block — see the faded-shade test above)
+    // the shared 70% faded-text token (mixed once, in the root token block —
+    // see the faded-shade test above): 4.8:1 against the light group band, the
+    // WCAG AA minimum for normal text being 4.5:1; 50% gave 2.8:1
     expect(css).toMatch(
-      /\.listview-group-header__count\b[^{]*\{[^}]*color:\s*var\(--listview-faded-text-50\)/,
+      /\.listview-group-header__count\b[^{]*\{[^}]*color:\s*var\(--listview-faded-text-70\)/,
     );
     // separated from the name by a NON-ZERO logical-start margin in the static
     // header (the exact gap is cosmetic; the contract is only that there is one,

@@ -45,6 +45,7 @@ Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](h
 - **In a grouped list, the options without a group render last, under their own header.** Before, they rendered without a header where the first of them stood in `options`, so an option placed first, such as "All cities", sat above every group. It now renders at the end. `collapsed_groups="all"` collapses this header too, and so does a list that names `ungrouped_label`.
 - **The add field of `accept_new_options` sits in a footer below the list** and stays in view while the list scrolls. The widget grows by the height of that footer; `height` still sets the height of the scrolling list. After an add, the list opens the block the entry appears in and scrolls to the entry.
 - **Select all adds the rows in the order shown, so a `max_selections` cap takes them from the top of the list.** Before, it took the options in the order you passed them, which grouping can rearrange.
+- **`listview()` declares the element types in its signature:** `args` is a `tuple[Any, ...]`, `kwargs` a `dict[str, Any]`, and the return type `dict[str, Any] | str | int | list[Any] | None`. A strict type checker, such as pyright in strict mode, then sees no partially unknown types in a call.
 
 ### Fixed
 
@@ -53,6 +54,7 @@ Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](h
 - **Options without a group and entries added via `accept_new_options` show that they belong to no group.** In a grouped list they looked like members of the last group above them, and only the returned value showed otherwise. The add field below the rows looked like part of that group too.
 - **The demo clears the selection when you pick another data source or Large size.** Before, the selection outlived its dataset: with **Accept new options** on, every row selected in the old dataset stayed selected as an added entry. Edits to the **Custom** options keep the selection, so the demo still shows how a keyed listview corrects its selection when `options` change.
 - **The demo names the Streamlit version it needs: 1.56 or later.** It passes `required` to `st.pills` and `st.segmented_control`, which Streamlit 1.56 added, so Streamlit 1.51 to 1.55 stop it with a `TypeError`. `demo/requirements.txt` now asks for Streamlit 1.56; the package itself still runs on Streamlit 1.51.
+- **The item count in a group header is easier to read in a light theme.** It contrasts with the group band at 4.8:1, up from 2.8:1, and meets the 4.5:1 that WCAG AA sets for normal text.
 
 ### Security
 

@@ -11,13 +11,17 @@ permissions:
 jobs:
   # The checks the local pre-commit hook runs, on every file: ruff (lint +
   # format), ty and uv audit for Python; tsc, oxlint, Prettier and npm audit for
-  # the frontend. The hook is opt-in per clone and `--no-verify` skips it, so
-  # this job is the gate. It also catches an advisory published against an
-  # unchanged lockfile. The frontend hooks need node_modules, not the bundle.
+  # the frontend; gitleaks over the history of HEAD; typos and markdownlint-cli2
+  # over the text and Markdown files. The hook is opt-in per clone and
+  # `--no-verify` skips it, so this job is the gate. It also catches an advisory
+  # published against an unchanged lockfile. The frontend hooks need
+  # node_modules, not the bundle.
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # gitleaks-history scans the whole history of HEAD
 
       - name: Set up Node
         uses: actions/setup-node@v7
@@ -34,6 +38,14 @@ jobs:
         uses: astral-sh/setup-uv@v10.2.0
         with:
           python-version: "3.12"
+
+      # pre-commit builds gitleaks from source and installs every hook; the
+      # cache keeps those environments until the hook versions change.
+      - name: Cache the pre-commit environments
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
 
       - name: Lint, format, type-check, audit (pre-commit)
         run: uvx pre-commit run --all-files --show-diff-on-failure
@@ -105,6 +117,49 @@ jobs:
           name: streamlit-listview-wheel
           path: dist/*.whl
           if-no-files-found: error
+
+  # The browser suite: Playwright against a real Streamlit server, in Chromium.
+  # The push gate runs the same suite before a push to GitHub; Firefox and
+  # WebKit run by hand (the manual pre-commit hook e2e-browsers).
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30 # a hung Streamlit server would otherwise run for hours
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: streamlit_listview/frontend/package-lock.json
+
+      # The bundle, and axe-core for e2e/test_accessibility.py, come from here.
+      - name: Install frontend dependencies
+        working-directory: streamlit_listview/frontend
+        run: npm ci
+
+      - name: Build frontend bundle
+        working-directory: streamlit_listview/frontend
+        run: npm run build
+
+      - name: Set up uv + Python
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Create venv and install (editable, dev extras)
+        env:
+          LISTVIEW_SKIP_NPM_BUILD: "1" # bundle already built above
+        run: |
+          uv venv
+          uv pip install -e ".[devel]"
+
+      - name: Install Chromium for Playwright
+        run: .venv/bin/python -m playwright install --with-deps chromium
+
+      - name: Browser tests (Playwright, Chromium)
+        run: .venv/bin/python -m pytest e2e/
 
   # Every push to main must leave GitHub on a released version: consistent
   # version information, a changelog without "Unreleased", the release tag and

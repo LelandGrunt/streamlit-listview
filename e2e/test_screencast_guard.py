@@ -7,6 +7,7 @@ stands in for the browser's getDisplayMedia, so no capture really starts.
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 from playwright.sync_api import Page
@@ -15,6 +16,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts" / "gif"))
 
 from screencast import TAB_ONLY_JS
+
+# The tour records in Chromium (screencast.py launches it), so the guard runs
+# only there; Playwright's WebKit offers no MediaDevices for the stub to patch.
+pytestmark = pytest.mark.only_browser("chromium")
 
 # A getDisplayMedia that records the constraints it gets and returns one track
 # reporting ``surface``; installed before the guard, which wraps it.
@@ -53,7 +58,7 @@ def go_to_app():
     """No Streamlit server: the guard is page JavaScript (overrides conftest)."""
 
 
-def _capture(page: Page, surface: str) -> dict:
+def _capture(page: Page, surface: str) -> dict[str, Any]:
     # MediaDevices exists only in a secure context, so the page gets an https
     # address; the route answers it, nothing goes to the network.
     page.route(

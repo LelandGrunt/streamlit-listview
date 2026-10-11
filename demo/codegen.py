@@ -8,6 +8,7 @@ import inspect
 import json
 import math
 from collections.abc import Callable
+from typing import Any
 
 import data
 import dataset
@@ -53,7 +54,7 @@ DEPENDENT_PARAMS = {
 # DEPENDENT_PARAMS rules are derived (skip == not enabled); the rest are
 # snippet-only — the demo deliberately keeps their cfg values (a disabled
 # search-placeholder field stays populated) rather than resetting them.
-_SKIP_WHEN: dict[str, Callable[[dict], bool]] = {
+_SKIP_WHEN: dict[str, Callable[[dict[str, Any]], bool]] = {
     name: (lambda c, enabled=enabled: not enabled(c))
     for name, (enabled, _reset) in DEPENDENT_PARAMS.items()
 }
@@ -153,7 +154,7 @@ def _large_options_block(n):
     )
 
 
-def build_snippet(config, options, builtin_dataset):
+def build_snippet(config, options, builtin_dataset):  # noqa: C901 -- older than the complexity limit; split it when you next change it
     defs = []  # function-definition blocks placed above the call
     head_kwargs = []  # raw-identifier kwargs: format_func, on_change
 

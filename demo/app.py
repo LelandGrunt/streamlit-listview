@@ -974,7 +974,7 @@ SECTIONS = {
 }
 
 
-def render_demo():
+def render_demo():  # noqa: C901 -- older than the complexity limit; split it when you next change it
     demo_col, config_col = st.columns([2, 1], gap="large")
 
     # Render configuration first so the demo column knows the option ids/groups.

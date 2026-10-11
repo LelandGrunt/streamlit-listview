@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { Id, ListviewItem } from "../types";
+import { elementAt } from "../utils/arrays";
 import { idKey, sameIds } from "../utils/ids";
 
 export interface UseScrollToItemArgs {
@@ -42,7 +43,7 @@ export function useScrollToItem({
     if (!changed || defaultIds.length === 0) {
       return;
     }
-    const targetId = defaultIds[0];
+    const targetId = elementAt(defaultIds, 0);
     // Matched by row identity (idKey), not by raw id: `defaultIds` comes from
     // Python's `default`, the one id list that can spell a row differently than
     // `items` does (accept_new_options permits `default="7"` against an int id

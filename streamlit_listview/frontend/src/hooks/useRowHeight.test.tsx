@@ -49,7 +49,7 @@ let renderedRows = new Set<string>();
 
 /** What useRowHeight returned on each render of Listbox, oldest first. */
 let remeasures: Array<() => void> = [];
-const remeasure = () => remeasures[remeasures.length - 1]();
+const remeasure = () => remeasures[remeasures.length - 1]!();
 
 function Listbox({
   rows,
@@ -150,14 +150,14 @@ describe("useRowHeight", () => {
     // resizes whenever the rows do.
     render(<Listbox rows={["Apple", "Banana"]} />);
     expect(FakeResizeObserver.instances).toHaveLength(1);
-    expect(FakeResizeObserver.instances[0].observed).toEqual([listbox()]);
+    expect(FakeResizeObserver.instances[0]!.observed).toEqual([listbox()]);
   });
 
   it("measures the first row again a frame after the listbox resizes", () => {
     render(<Listbox rows={["Apple", "Banana"]} />);
     const [observer] = FakeResizeObserver.instances;
     rowHeight = 48;
-    observer.notify();
+    observer!.notify();
     // Not in the callback: a write there resizes the listbox again within the
     // same rendering update, which ends the browser's delivery loop with an
     // undelivered notification and a window error event.
@@ -177,7 +177,7 @@ describe("useRowHeight", () => {
     // invalidate the style of every chunk for nothing.
     render(<Listbox rows={["Apple"]} />);
     const setProperty = vi.spyOn(listbox().style, "setProperty");
-    FakeResizeObserver.instances[0].notify();
+    FakeResizeObserver.instances[0]!.notify();
     nextFrame();
     expect(setProperty).not.toHaveBeenCalled();
   });
@@ -188,7 +188,7 @@ describe("useRowHeight", () => {
     rerender(<Listbox rows={["Banana"]} />);
     expect(published()).toBe("56px");
     expect(FakeResizeObserver.instances).toHaveLength(1);
-    expect(FakeResizeObserver.instances[0].disconnected).toBe(false);
+    expect(FakeResizeObserver.instances[0]!.disconnected).toBe(false);
   });
 
   it("leaves a commit that keeps its first row to the observer", () => {
@@ -198,7 +198,7 @@ describe("useRowHeight", () => {
     rowHeight = 48;
     rerender(<Listbox rows={["Apple", "Banana", "Cherry"]} />);
     expect(published()).toBe("35.5px");
-    FakeResizeObserver.instances[0].notify();
+    FakeResizeObserver.instances[0]!.notify();
     nextFrame();
     expect(published()).toBe("48px");
   });
@@ -206,14 +206,14 @@ describe("useRowHeight", () => {
   it("disconnects when the list unmounts", () => {
     const { unmount } = render(<Listbox rows={["Apple"]} />);
     unmount();
-    expect(FakeResizeObserver.instances[0].disconnected).toBe(true);
+    expect(FakeResizeObserver.instances[0]!.disconnected).toBe(true);
   });
 
   it("writes nothing for a measurement due after the list unmounts", () => {
     const { unmount } = render(<Listbox rows={["Apple"]} />);
     const host = listbox();
     rowHeight = 48;
-    FakeResizeObserver.instances[0].notify();
+    FakeResizeObserver.instances[0]!.notify();
     unmount();
     nextFrame();
     expect(host.style.getPropertyValue(ROW_HEIGHT_PROPERTY)).toBe("35.5px");

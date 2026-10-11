@@ -3,29 +3,35 @@
 These rules extend the root `CLAUDE.md`. The comments in `__init__.py` and `_options.py` give the reasons in more detail.
 
 ## Files
+
 - `__init__.py` declares the component at import time and defines `listview(...)`. `_validate_params` checks the parameters. `listview()` then normalizes and sorts the options, resolves the defaults (`_resolve_default_ids`), reads a keyed instance's persisted selection (`_persisted_selection`), ships a `data` dict to the frontend and maps the returned ids back to the original objects. Without options and without `accept_new_options`, it disables the widget and defaults the placeholder to "No options to select".
 - `_options.py` holds the option rules: the id gate and row identity (`_validate_id`, `_id_key`); `normalize_options` (id, label, group and disabled validation, and the collision guard); the label (`_is_usable_label`, `_label_for`); new entries (`_parse_new_int_id`, `new_option_kind`, `_new_entry`); `map_selection` (ids to original objects); and `sort_items`.
 - `pyproject.toml` ships in the wheel. Streamlit reads it at runtime to resolve the asset globs (`asset_dir = "frontend/build"`). Its `name` must equal the distribution name after PEP 503 normalization (root `CLAUDE.md`, *Architecture*).
 
 ## Parameters
+
 - **Every invalid argument raises `ValueError`, a wrong type included, never `TypeError`.** Callers catch `ValueError`, and the tests match on the message text, so the wording is part of the contract. For this reason ruff's `TRY004` is off for the package.
 - **`_validate_params` checks the type of every parameter that ships in `data`.** The frontend judges the flags by JavaScript truthiness (`enable_search="no"` turns the search on), a value that JSON cannot carry blanks the widget, and a non-`str` `label` breaks the render without a Python traceback.
 
 ## Ids
+
 - **An id is exactly a `str` or an `int`.** `_validate_id` refuses `float`, `None` and every other type, and refuses `bool` explicitly, because it subclasses `int`. An `int` id satisfies `abs(id) <= 2**53 - 1`. Ids must be unique as rendered.
 - **All three rules have one cause:** the frontend keys rows by JavaScript `String(id)`, and the payload crosses a JSON boundary. An id that shares its string with another, spells differently in JavaScript or loses precision as a double would render ambiguously. An id that JSON cannot carry blanks the widget, because Streamlit's serializer swallows the `TypeError`.
 - **`_validate_id` is the one per-id gate.** It checks option ids, `default` ids and the ids `_persisted_selection` reads back from `st.session_state[key]`: a default or a persisted id seeds the frontend selection directly, so it crosses the same boundary. A malformed persisted list degrades to `None` as a whole; it never raises. `_new_entry` also asks it about every returned id that `map_selection` keeps as a new entry, because a modified page can send any JSON value; an id that fails comes back as its `str()`.
 
 ## Row identity
+
 - **`_id_key` mirrors the frontend's `idKey`.** `str()` agrees with JavaScript `String()` for exactly the ids above. Every Python question about row identity goes through `_id_key`: the collision guard, `_resolve_default_ids` (membership and de-duplication) and `map_selection`. Python `==` calls `"1"` and `1` distinct, while the frontend renders and counts them as one row. **Never write a second `str(id)` for identity.**
 - **`_resolve_default_ids` ships each matched default in the option's own spelling** (`default="1"` against the int option `1` ships `1`). The frontend canonicalizes its selection on the first render and commits any difference, so a seed in another spelling costs an extra rerun and a spurious `on_change` at mount. A default that names no option ships as the caller wrote it.
 - **`map_selection` applies the frontend's reconciliation on the way out** (root `CLAUDE.md`, *Invariants that span both languages*). It resolves each id by `_id_key` to its option, drops unknown ids (or keeps them as new entries under `accept_new_options`), collapses duplicate row keys, and truncates a multi selection to `max_selections`, keeping the earliest-selected ids. It must agree with `reconcileSelection` in `frontend/src/hooks/useSelection.ts`. A `default` with more ids than `max_selections` raises, but `map_selection` truncates: a keyed selection made under a looser cap is not the caller's error, and an exception would stop a running app.
 
 ## New entries (`accept_new_options`)
+
 - **A new entry comes back in the type of the other options.** `new_option_kind` infers that type from the options as passed: `"dict"` when all are dicts, `"int"` when all are ints, `"str"` otherwise (strings, mixed or none). `listview()` computes it only when adding is on and ships it as `data["new_option_kind"]`. `_new_entry` builds the value: `{"id": x, "label": str(x)}` (the frontend's synthetic row) for `"dict"`, and `str(x)` for `"str"`. For `"int"` it returns an `int` id as it is and a canonical integer string as its `int`; any other string stays a `str`, such as an entry added while the options had another type.
 - **A string becomes an `int` only through `_parse_new_int_id`**, the canonical-integer rule. It uses `re.fullmatch`, because `$` admits a trailing newline; `[0-9]`, because `\d` matches every Unicode digit; and at most 16 digits before `int()`, which raises past 4,300 digits. The frontend's `parseNewIntId` is the other copy, and both suites run the same input table. With int options the add field refuses anything else, and `_resolve_default_ids` raises on an unknown `default` that fails the rule. An unknown default that passes it ships as written (`default="42"` seeds `"42"`), and `map_selection` returns it as `42`.
 
 ## The `format_func` contract
+
 - **It maps an option to its display label and receives the option as passed:** the dict for a dict option, the scalar for a `str` or `int` option. A label can therefore use any field the option carries, which the id alone cannot reach.
 - **It runs only when an option has no usable `label`;** an explicit `label` wins. **`{"label": None}` and `{"label": nan}` still reach the formatter**, because `_is_usable_label` rejects them. That is the shape `df.to_dict("records")` gives a NULL cell, the most likely real-world dict option. A formatter written for plain values (`str.upper`, `LABELS.get`, anything `@lru_cache`d) raises on such a dict; `_label_for` wraps the failure in a `ValueError` that names the option.
 - **The default is `None`, not `str`,** which would render a dict's repr. `None` labels by `str(id)`. That `str(item_id)` in `_label_for` is display, and deliberately not `_id_key`: routing it through `_id_key` would tie the default label to the row-key spelling forever.

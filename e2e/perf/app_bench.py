@@ -24,6 +24,7 @@ import json
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import streamlit as st
 
@@ -44,7 +45,7 @@ newopt = qp.get("newopt", "0") == "1"
 
 
 @st.cache_resource
-def dataset(n: int, shape: str) -> list:
+def dataset(n: int, shape: str) -> list[dict[str, Any]]:
     return shape_rows(make_large_dataset(n), shape)
 
 

@@ -10,7 +10,7 @@ The package has two languages: a thin Python wrapper (`streamlit_listview/`) and
 
 ## Where the detailed rules live
 
-A `CLAUDE.md` in a subdirectory loads when Claude reads a file in that directory. The last three entries load only on request: read them before working in their area.
+A `CLAUDE.md` in a subdirectory loads when Claude reads a file in that directory. The last four entries load only on request: read them before working in their area.
 
 | File | Covers |
 |---|---|
@@ -20,35 +20,54 @@ A `CLAUDE.md` in a subdirectory loads when Claude reads a file in that directory
 | `.claude/skills/release/SKILL.md` | the release checklist (`/release`) |
 | `BENCHMARKS.md` | the performance benchmarks: concept, how to run, compare and read them |
 | `scripts/gif/README.md` | the README GIFs, the tour and the visual comparison |
+| `HARNESS.md` | the quality harness: every check, the stages it runs at, the gaps |
 
 ## Commands
 
 Always go through `uv`: the system `python` on `PATH` may lack this project's dependencies. The test and dev dependencies live in the `devel` extra, so `uv run pytest` fails; run `uv run --extra devel pytest`.
 
 ### Checks before each commit
+
 ```sh
 uv tool install pre-commit                  # once per machine
 pre-commit install --allow-missing-config   # once per clone; worktrees share the hook
 pre-commit run --all-files                  # every check on every file, as CI runs it
 pre-commit run ty --all-files               # a single hook
 ```
-`.pre-commit-config.yaml` runs ruff (`check --fix` and `format`) on the staged Python files and ty over the whole project on every commit, and `uv audit` when `uv.lock` or `pyproject.toml` is staged. tsc and oxlint run when a staged `.ts`, `.tsx` or `.json` file lies under `streamlit_listview/frontend/`, Prettier when a staged `.ts`, `.tsx`, `.json` or `.css` file does, and `npm audit` when its `package.json` or `package-lock.json` is staged. These four need `npm ci` there first; without it, the `frontend-deps` hook stops the commit and says so. For `listview.css`, Prettier checks the syntax and the format; `npm test` checks the rules, through `listview-css.test.ts`. The configuration lives in `[tool.ruff]` and `[tool.ty]` in the root `pyproject.toml` and in `streamlit_listview/frontend/.oxlintrc.json`.
-- **When a hook fails, fix the finding and commit again. Never pass `--no-verify`.** A ruff fix leaves the file modified: stage it and commit again. The Prettier hook only checks: run `npm run format`, stage, and commit again.
+
+`.pre-commit-config.yaml` runs ruff (`check --fix` and `format`) on the staged Python files; ty over the whole project and gitleaks over the staged changes and the history of `HEAD` on every commit; and `uv audit` when `uv.lock` or `pyproject.toml` is staged. tsc and oxlint run when a staged `.ts`, `.tsx` or `.json` file lies under `streamlit_listview/frontend/`, Prettier when a staged `.ts`, `.tsx`, `.json` or `.css` file does, and `npm audit` when its `package.json` or `package-lock.json` is staged. These four need `npm ci` there first; without it, the `frontend-deps` hook stops the commit and says so. For `listview.css`, Prettier checks the syntax and the format; `npm test` checks the rules, through `listview-css.test.ts`. typos checks the spelling of every staged text file and fixes what it can; its exceptions live under `[tool.typos]` in `pyproject.toml`. markdownlint-cli2 checks every staged Markdown file against the rules in `.markdownlint-cli2.jsonc`. The configuration lives in `[tool.ruff]` and `[tool.ty]` in the root `pyproject.toml` and in `streamlit_listview/frontend/.oxlintrc.json`.
+
+- **When a hook fails, fix the finding and commit again. Never pass `--no-verify`.** A ruff or typos fix leaves the file modified: stage it and commit again. The Prettier hook only checks: run `npm run format`, stage, and commit again. The markdownlint-cli2 hook only checks as well: fix the Markdown by hand.
 - **Suppress a finding only on purpose, on the narrowest scope, with its reason:** `# noqa: CODE` or `# ty: ignore[rule]` on the line, or a per-file ignore in `pyproject.toml`; in the frontend, `// eslint-disable-next-line rule -- reason` (oxlint reads the ESLint syntax). An unused suppression fails the check; remove it when its finding goes away.
+- **A secret that gitleaks reports stops the work.** Remove it, and rotate it if it left the machine. A false positive goes into `.gitleaksignore`: its fingerprint, below a comment that gives the reason. pre-commit builds gitleaks with Go on its first run; behind a proxy that breaks downloads from `proxy.golang.org`, run that first install as `GOPROXY=direct pre-commit run gitleaks --all-files`.
+- **A function stays at a cyclomatic complexity of 10 or below** (ruff C901, oxlint `complexity`). A function above it when the limit came in carries a suppression with the reason; split it on the next change and remove the suppression.
 - **Line endings:** a Windows checkout has CRLF endings, and Prettier (`endOfLine: auto`) fails a file with mixed endings. A shell `>>` append writes LF into a CRLF file; `npm run format` evens it out.
 - **`ruff format` also formats the `python` blocks in Markdown files.** `<!-- fmt:off -->` / `<!-- fmt:on -->` keeps the README's signature block aligned.
 - **oxlint, not ESLint:** TypeScript 7 ships no JavaScript compiler API, which typescript-eslint needs.
 - **A new directory of modules imported by name** (as `demo/` and `scripts/` are, through `sys.path` inserts) goes into both ty's `extra-paths` and ruff's `src`.
 - **A commit that only deletes frontend files runs no frontend hook.** CI's `lint` job catches what the deletion breaks.
 
+### Manual checks (before each release)
+
+```sh
+pre-commit run --hook-stage manual --all-files                        # every manual check
+pre-commit run --hook-stage manual markdown-link-check --all-files    # one of them
+```
+
+These hooks need the network or their own browser, so no commit, CI run or push runs them: `markdown-link-check` checks the links of every Markdown file, `mermaid` renders every Mermaid diagram, and `e2e-browsers` runs the e2e suite in Firefox and WebKit. The release skill runs them before the tag.
+
 ### Tests
+
 Python, gated at 100 % coverage over `streamlit_listview`, `demo` and `scripts/push_gate.py` (except `demo/app.py`, which the e2e suite exercises):
+
 ```sh
 uv run --extra devel pytest tests/                                   # the unit suite
 uv run --extra devel pytest tests/ --cov --cov-report=term-missing   # with the coverage gate
 uv run --extra devel pytest tests/test_listview.py::test_name        # one test
 ```
+
 Frontend, from `streamlit_listview/frontend/`; `npm test` itself enforces 100 % statements, branches, functions and lines:
+
 ```sh
 npm run build && npm test              # what CI runs: build FIRST
 npx vitest run src/Listview.test.tsx   # one test file
@@ -59,9 +78,11 @@ npm run lint                           # oxlint
 npm run format                         # prettier --write
 npm run format:check                   # prettier --check (the pre-commit hook)
 ```
+
 **`npm test` needs a built bundle.** `src/__tests__/single-file-build.test.ts` asserts on the gitignored `build/` directory and fails with `ENOENT … scandir '…/frontend/build'` without it. `npm run build` empties `build/` first, so the test always sees the bundle of the current sources. Mark an unreachable defensive guard with `/* v8 ignore */`.
 
 ### Build and install
+
 ```sh
 npm ci                                  # once, in streamlit_listview/frontend/
 npm run build                           # clean + typecheck + production vite build -> frontend/build/
@@ -69,34 +90,45 @@ npm run dev                             # vite build --watch
 uv pip install -e . --force-reinstall   # from the root; the build backend runs npm run build
 uv build                                # wheel + sdist; also builds the frontend
 ```
+
 **The bundle is gitignored.** `streamlit_listview/frontend/build/` is generated, and `git reset` never touches it. After editing anything under `frontend/src/`, run `npm run build` and restart Streamlit; a running app shows the old bundle until then.
 
-**The in-tree build backend (`_build_backend.py`) runs `npm run build` for wheel, sdist and editable builds,** after `npm ci` when `node_modules` is missing; without npm on `PATH` it fails. With `LISTVIEW_SKIP_NPM_BUILD=1`, or without `frontend/src` (a wheel built from the sdist), it skips npm and packages the bundle in `build/`. It then fails unless `build/` holds exactly one `index-*.js` and one `index-*.css`. It cannot tell a stale bundle, so set the variable only when the bundle is current.
+**The in-tree build backend (`_build_backend.py`) runs `npm run build` for wheel, sdist and editable builds,** after `npm ci` when `node_modules` is missing; without npm on `PATH` it fails. With `LISTVIEW_SKIP_NPM_BUILD=1`, or without `frontend/src` (a wheel built from the sdist), it skips npm and packages the bundle in `build/`. It then fails unless `build/` holds exactly one `index-*.js` and one `index-*.css`. It cannot tell a stale bundle, so set the variable only when the bundle is current. Before a wheel build it deletes setuptools' staged copy in `build/lib`, which would otherwise ship files of an earlier build.
 
-### e2e (Playwright; not in CI)
+### e2e (Playwright)
+
 ```sh
 uv run --extra devel playwright install   # once
 uv run --extra devel pytest e2e/
 ```
+
 Each test module serves one Streamlit script through `e2e/e2e_utils.py::StreamlitRunner`: a harness app (`e2e/app*.py`), `demo/app.py` (the modules in `e2e/demo/`), `example.py`, or `e2e/perf/app_bench.py`. `e2e/conftest.py` boots one server per script, flags and environment and shares it across modules (`_servers`). A new harness for a module directly under `e2e/` needs an entry in `LISTVIEW_COUNTS` there. Every run needs a built bundle. `pytest e2e/` skips the browser-tier benchmark in `e2e/perf/` unless `--perf-out` is given.
 
+CI's `e2e` job and the push gate run the suite in Chromium. `e2e/test_accessibility.py` loads axe-core from `streamlit_listview/frontend/node_modules`, so it needs `npm ci` there. Firefox and WebKit run by hand: `pre-commit run --hook-stage manual e2e-browsers --all-files` (`playwright install` above installs all three browsers). A test that holds only in some browsers carries `@pytest.mark.only_browser` or `@pytest.mark.skip_browser` with its reason.
+
 ### Performance benchmarks (not in CI; no thresholds)
+
 **Read `BENCHMARKS.md` before running, changing or reading a benchmark.** Both tiers drive the component only through its public surface, so the same files benchmark any checkout. The full matrix takes about 25 minutes per tier.
+
 - **Frontend tier** (vitest `bench` in jsdom, `frontend/src/bench/`): `npm run bench`, for React-side A/B work. It runs React's development build, so its numbers are relative.
 - **Browser tier** (Playwright against a real Streamlit server, `e2e/perf/`): `uv run --extra devel pytest e2e/perf/ --perf-out bench-results/<label>.jsonl`, summarized by `uv run --extra devel python -m e2e.perf.report bench-results/<label>.jsonl`, or compared with a second results file given after it. It gives the numbers of record, and only it can judge DOM-size or CSS work. It measures the checkout it runs from.
 - **A delta inside the spread is not a result.** Results go to the gitignored `bench-results/` and are never committed: the numbers are machine-specific. The only gated performance check is `e2e/test_performance.py`.
 
 ### Visual comparison (not in CI; one machine only)
+
 The GIF scenarios in `scripts/gif/` double as a before/after check of the widget's look. Build the bundle before each recording:
+
 ```sh
 LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py --all --record bench-results/visual/before
 # change the widget, run npm run build, then:
 LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py --all --record bench-results/visual/after
 uv run --extra devel python scripts/gif/compare.py bench-results/visual/before bench-results/visual/after   # exit 0 same, 1 differs, 2 invalid input
 ```
+
 `--record` refuses a directory that holds a recording; `--overwrite` replaces it. A difference is not a failure: an intended change reports too, and a person judges `report.html`. Fonts and the Chromium version change pixels, so compare only recordings from one machine, and never commit them.
 
 ### Run the demo
+
 ```sh
 uv run --extra devel streamlit run demo/app.py   # needs the package installed and a built bundle
 ```
@@ -118,42 +150,52 @@ uv run --extra devel streamlit run demo/app.py   # needs the package installed a
 - **The GIF scenarios, the tour and the e2e suite find the widget by its `data-testid`s and `listview-*` classes, and the demo by its labels.** Before you rename one, search `e2e/` and `scripts/gif/` for it, and fix every use in the same change.
 
 ## CI (`.github/workflows/ci.yml`)
-Three jobs run in parallel. `lint` runs `uvx pre-commit run --all-files --show-diff-on-failure`. `test-build-verify` runs, in order: `npm ci`, `npm run build`, `npm test`, an editable install with `LISTVIEW_SKIP_NPM_BUILD=1`, `pytest tests/` with the coverage gate, a wheel build from a clean bundle, and `scripts/verify_wheel.py`. That script checks the wheel's contents: exactly one `index-*.js` and one `index-*.css` under `frontend/build/` and nothing else there, the manifest, the license files, and no `_build_backend.py`. It also checks that the file name carries the version of the root `pyproject.toml`. `push-gate` runs on a push to `main` only: `python3 scripts/push_gate.py check main` checks the version information and the release state (see *Pushing to GitHub*). **The build must precede `npm test`** (see *Tests*). The e2e suite does not run in CI. Actions are referenced by version tag, not by SHA, on purpose.
+
+Four jobs run in parallel. `lint` runs `uvx pre-commit run --all-files --show-diff-on-failure`. `test-build-verify` runs, in order: `npm ci`, `npm run build`, `npm test`, an editable install with `LISTVIEW_SKIP_NPM_BUILD=1`, `pytest tests/` with the coverage gate, a wheel build from a clean bundle, and `scripts/verify_wheel.py`. That script checks the wheel's contents: under `frontend/build/` exactly one `index-*.js`, one `index-*.css` and `THIRD_PARTY_LICENSES.md` (the licenses of the bundled npm packages), and nothing else there; the manifest; the license files; and no `_build_backend.py`. It also checks that the file name carries the version of the root `pyproject.toml`. `push-gate` runs on a push to `main` only: `python3 scripts/push_gate.py check main` checks the version information and the release state (see *Pushing to GitHub*). `e2e` builds the bundle, installs the package and Chromium, and runs `pytest e2e/`; the push gate runs the same suite. **The build must precede `npm test`** (see *Tests*). Actions are referenced by version tag, not by SHA, on purpose.
 
 ## Releasing
+
 A `v*.*.*` tag pushed to GitHub publishes to PyPI through Trusted Publishing (`.github/workflows/release.yml`). **Cut a release with the `release` skill** (`.claude/skills/release/SKILL.md`). Five files assert the version, and `uv.lock` and `CHANGELOG.md` must agree with them; the release job fails when one of the seven disagrees. The order of the pushes matters.
 
 ### Pushing to GitHub
+
 GitHub `main` shows released code only: Streamlit Community Cloud runs the hosted demo from it and installs the version that `demo/requirements.txt` pins from PyPI. A pre-push hook, `scripts/push_gate.py`, checks every push to GitHub (a remote URL that contains `github.com`). A push passes four stages; each stage reports all of its findings, and a stage runs only when the earlier ones passed:
+
 1. **Refs:** only `main` and a new tag `v<version>`; no deletion, no force push, no moved tag.
 2. **Local state:** a command-line confirmation that names the version; the push sends `HEAD` of a clean tree; the seven version files agree (see *Releasing*); the changelog dates the version and contains no "Unreleased".
 3. **Remote state:** the release order: the tag, then the PyPI release, then `main`. **`main` must carry the library code of its release tag,** so between releases GitHub `main` takes no change to the shipped package; docs, tests, the demo and the scripts may change.
-4. **The suite:** CI's checks, run locally on the pushed commit: `npm ci`, `pre-commit run --all-files`, the build, `npm test`, `pytest tests/` with the coverage gate, a wheel build and `verify_wheel.py`. It takes minutes and needs npm, uv and uvx on `PATH`.
+4. **The suite:** CI's checks, run locally on the pushed commit: `npm ci`, `pre-commit run --all-files`, the build, `npm test`, `pytest tests/` with the coverage gate, the e2e suite in Chromium, a wheel build and `verify_wheel.py`. It takes minutes and needs npm, uv and uvx on `PATH`.
 
 CI's `push-gate` job and `release.yml` repeat the version and release checks on GitHub.
+
 ```sh
 uv run --no-project python scripts/push_gate.py install       # once per clone; the worktrees share the hook
 git branch --set-upstream-to=azure/main main                  # in a clone with an Azure DevOps remote `azure`
 git -c listview.pushGithub=<version> push origin v<version>   # then the same for main, once PyPI serves the version
 ```
+
 - **Never pass `--no-verify`.** CI reports such a push on `main`, but by then the commit is public.
 - **`git push --dry-run` runs the hook and sends nothing.** Use it to see what the gate says.
 - **The suite runs once per commit.** `.git/push-gate/passed` lists the commits that passed; delete the file to force a new run.
 
 ## Docs
-`README.md` documents the public API, `demo/README.md` the playground, `CHANGELOG.md` the user-visible changes per release (Keep a Changelog format), and `BENCHMARKS.md` the benchmarks. Update `BENCHMARKS.md` when a benchmark tier changes.
 
-**Writing rule: every technical document in this repository (`README.md`, `demo/README.md`, `CHANGELOG.md`, `BENCHMARKS.md`, every `CLAUDE.md` and every skill under `.claude/skills/`) follows plain English according to Strunk & White, *The Elements of Style*.** In practice: short sentences with one idea each; the active voice; statements in positive form (say what the code does, not what it no longer does); definite, concrete words and the measured number rather than "fast" or "large"; omit needless words and qualifiers ("very", "really", "simply"); parallel form for coordinate items (table columns, bullet lists, the halves of a comparison); no colloquialisms or metaphors the reader must decode ("under the hood", "canaries" without a gloss); jargon defined for the document's audience — a changelog reader is a Python user, not a React developer. Why: users and coding agents read these files in every session, so a sentence that has to be read twice costs everyone, and a vague one leads to a wrong change. Review a draft against this rule before committing it.
+`README.md` documents the public API, `demo/README.md` the playground, `CHANGELOG.md` the user-visible changes per release (Keep a Changelog format), `BENCHMARKS.md` the benchmarks, and `HARNESS.md` the quality checks. Update `BENCHMARKS.md` when a benchmark tier changes, and `HARNESS.md` when a check is added, removed or moved to another stage.
+
+**Writing rule: every technical document in this repository (`README.md`, `demo/README.md`, `CHANGELOG.md`, `BENCHMARKS.md`, `HARNESS.md`, every `CLAUDE.md` and every skill under `.claude/skills/`) follows plain English according to Strunk & White, *The Elements of Style*.** In practice: short sentences with one idea each; the active voice; statements in positive form (say what the code does, not what it no longer does); definite, concrete words and the measured number rather than "fast" or "large"; omit needless words and qualifiers ("very", "really", "simply"); parallel form for coordinate items (table columns, bullet lists, the halves of a comparison); no colloquialisms or metaphors the reader must decode ("under the hood", "canaries" without a gloss); jargon defined for the document's audience — a changelog reader is a Python user, not a React developer. Why: users and coding agents read these files in every session, so a sentence that has to be read twice costs everyone, and a vague one leads to a wrong change. Review a draft against this rule before committing it.
 
 **Keep the `CLAUDE.md` files short.** Claude loads them into every session that touches their directory. A rule goes into the `CLAUDE.md` of the directory it concerns; only a rule that spans directories goes into this file. State the rule and the one reason a reader needs to keep it. Measurements, dates and the history of a fix belong in the commit message, in `BENCHMARKS.md` or in a comment next to the code.
 
 ### README GIFs (`assets/*.gif`)
+
 **Regenerate the hero GIF (`assets/listview-demo.gif`) in the same commit as any change to how the widget looks or behaves.** The PyPI pages of 1.0.0 and 1.0.1 link it at `HEAD`, so a style change merged without a new GIF advertises a widget the code no longer renders. The rule covers `listview.css`, the markup in `Listview.tsx` and `components/`, the Markdown renderer, any hook whose effect the user sees, a Python default that changes rendering, and `scripts/gif/` itself. A refactor, a performance change or a test change needs no new GIF.
+
 ```sh
 npm --prefix streamlit_listview/frontend run build
 LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py                                  # the hero
 LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel --with imageio-ffmpeg python scripts/gif/screencast.py   # the tour
 ```
+
 - **Build first.** The generator captures the bundle in `frontend/build/`; a stale bundle yields a GIF of the old widget.
 - **Commit the hero GIF only when its frames show a real change.** On one machine an unchanged widget yields a byte-identical file. Another machine's fonts or a newer Chromium change pixels too.
 - **The tour** (`assets/listview-tour.gif`) differs on every run. Regenerate it when the demo changes visibly and with every version bump, because it shows the version badge.
@@ -162,7 +204,9 @@ LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel --with imageio-ffmpeg python scri
 `scripts/gif/README.md` covers the scenarios, the tour and how to add a scenario.
 
 ## Components V2 references
+
 This repo hand-rolls the V2 stack. The official docs help to cross-check boilerplate (registration, the `FrontendRenderer` contract, packaging) but say nothing about this repo's invariants; for those, trust the `CLAUDE.md` files. **Most search hits still describe the legacy v1 iframe API.** `declare_component`, `Streamlit.setComponentValue`, `withStreamlitConnection`, `streamlit-component-lib` and a frontend dev server on `:3001` mark v1 material; ignore it.
+
 - **V2 concepts** (registration, state vs. triggers, theming): <https://docs.streamlit.io/develop/concepts/custom-components/components-v2>. `setStateValue` persists state; `setTriggerValue` fires and forgets.
 - **API reference:** <https://docs.streamlit.io/develop/api-reference/custom-components>. `index.tsx` implements the `FrontendRenderer` type from the npm package `@streamlit/component-v2-lib` and takes `FrontendRendererArgs` from it; `ListviewState` in `types.ts` satisfies its `FrontendState`.
 - **React + TypeScript tutorial** (V2 as of 2026-06): <https://docs.streamlit.io/develop/tutorials/custom-components/template-react>.

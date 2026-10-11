@@ -25,8 +25,8 @@
      defined ONCE here and inherited by every descendant that needs it, because
      each was previously spelled out in full at up to six sites — placeholder
      copy, the help icon, the search/add glyphs, the clear button (60%); the
-     disabled label, group headers and the empty state (70%, 40%); the group
-     item count (text 50%); every hairline separator (border 50%) — so a change
+     disabled label, group headers, the group item count and the empty state
+     (70%, 40%); every hairline separator (border 50%) — so a change
      to one shade meant finding all of them. Add a token here rather than
      another copy of a recipe. */
   --listview-faded-text-60: color-mix(
@@ -42,11 +42,6 @@
   --listview-faded-text-40: color-mix(
     in srgb,
     var(--st-text-color, #31333f) 40%,
-    transparent
-  );
-  --listview-faded-text-50: color-mix(
-    in srgb,
-    var(--st-text-color, #31333f) 50%,
     transparent
   );
   --listview-faded-border-50: color-mix(
@@ -1138,7 +1133,9 @@
 .listview-group-header__count {
   margin-inline-start: 0.375rem;
   font-weight: 400;
-  color: var(--listview-faded-text-50);
+  /* 70%, not 50%: the count must reach WCAG AA's 4.5:1 on the light group
+     band (4.8:1; 50% gave 2.8:1). The normal weight sets it off the name. */
+  color: var(--listview-faded-text-70);
 }
 /* The collapsible header is flex with gap: 0.375rem, which already separates
    the count; drop the margin there so the spacing is not doubled. */

@@ -9,6 +9,7 @@ import re
 import sys
 import zipfile
 from pathlib import Path
+from typing import cast
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -41,7 +42,7 @@ def project_version(pyproject_text: str) -> str:
     match = re.search(r'(?m)^version\s*=\s*"([^"]+)"', pyproject_text)
     if not match:
         raise ValueError("no [project].version field found")
-    return match.group(1)
+    return cast(str, match.group(1))
 
 
 def _expected_version() -> str:
@@ -101,14 +102,23 @@ def main() -> None:
         "built index-*.css",
     )
 
+    # The bundle carries the code of the frontend's npm packages, and their
+    # licenses require their notices in every copy: Vite writes them into
+    # THIRD_PARTY_LICENSES.md next to the bundle.
+    has(
+        lambda n: n == "streamlit_listview/frontend/build/THIRD_PARTY_LICENSES.md",
+        "the third-party license file frontend/build/THIRD_PARTY_LICENSES.md",
+    )
+
     # The package-data glob is frontend/build/**/* — the wheel packages
     # EVERYTHING under build/, so a file slipped in beside the bundle between
     # compile and `uv build` would ship (and be attested) silently. The
-    # single-chunk build emits exactly one index-*.js plus one index-*.css,
-    # both directly under build/; with the exactly-one checks above this pins
-    # the wheel's build/ contents to exactly that set.
+    # single-chunk build emits exactly one index-*.js plus one index-*.css and
+    # the license file, all directly under build/; with the checks above this
+    # pins the wheel's build/ contents to exactly that set.
     bundle_entry = re.compile(
-        r"^streamlit_listview/frontend/build/index-[^/]+\.(?:js|css)$"
+        r"^streamlit_listview/frontend/build/"
+        r"(?:index-[^/]+\.(?:js|css)|THIRD_PARTY_LICENSES\.md)$"
     )
     unexpected = sorted(
         n
@@ -121,7 +131,7 @@ def main() -> None:
             f"FAIL: wheel {wheel.name} ships unexpected files under "
             f"frontend/build/: {', '.join(unexpected)}"
         )
-    print("  ok: frontend/build/ carries nothing beside the two bundle files")
+    print("  ok: frontend/build/ carries nothing beside the bundle and its licenses")
 
     has(
         lambda n: n == "streamlit_listview/pyproject.toml",

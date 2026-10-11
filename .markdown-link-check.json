@@ -1,0 +1,16 @@
+{
+  "retryOn429": true,
+  "retryCount": 3,
+  "fallbackRetryDelay": "30s",
+  "timeout": "20s",
+  "aliveStatusCodes": [200, 206],
+  "replacementPatterns": [
+    {
+      "pattern": "^https://raw\\.githubusercontent\\.com/LelandGrunt/streamlit-listview/HEAD/",
+      "replacement": "{{BASEURL}}/"
+    }
+  ],
+  "ignorePatterns": [
+    { "pattern": "^https://st-listview-demo\\.streamlit\\.app" }
+  ]
+}

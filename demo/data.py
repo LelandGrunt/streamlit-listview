@@ -54,7 +54,7 @@ GROUPS = group_names(CITIES)
 LARGE_SIZES = (100, 500, 1_000, 2_500, 5_000, 10_000, 25_000, 50_000, 100_000)
 
 
-def make_large_dataset(n):
+def make_large_dataset(n: int) -> list[dict[str, str]]:
     """Generate a deterministic list of n grouped options for the performance demo.
 
     Ids are zero-padded so they sort and search predictably; items are grouped in

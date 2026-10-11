@@ -121,7 +121,7 @@ describe("reuseUnchangedItems", () => {
       label: `Row ${i}`,
     }));
     const next: ListviewItem[] = prev.map((item) => ({ ...item }));
-    next[2] = { ...next[2], disabled: true };
+    next[2] = { ...next[2]!, disabled: true };
     const mapSet = vi.spyOn(Map.prototype, "set");
     try {
       const out = reuseUnchangedItems(prev, next);
@@ -159,6 +159,6 @@ describe("runsByKey", () => {
 
   it("keeps the elements' identity, which the memoized rows rely on", () => {
     const a = { id: "a", label: "A" };
-    expect(runsByKey([a], () => 0)[0].items[0]).toBe(a);
+    expect(runsByKey([a], () => 0)[0]!.items[0]).toBe(a);
   });
 });

@@ -105,6 +105,7 @@ def _good_entries() -> list[str]:
     return [
         "streamlit_listview/frontend/build/index-abc123.js",
         "streamlit_listview/frontend/build/index-abc123.css",
+        "streamlit_listview/frontend/build/THIRD_PARTY_LICENSES.md",
         "streamlit_listview/pyproject.toml",
         f"{_DIST_INFO}/licenses/LICENSE",
         f"{_DIST_INFO}/licenses/NOTICE",
@@ -138,6 +139,15 @@ def test_verify_wheel_rejects_a_missing_css_bundle(monkeypatch, tmp_path):
     with pytest.raises(SystemExit) as exc:
         _verify(monkeypatch, _fake_wheel(tmp_path, entries))
     assert "exactly one built index-*.css, found 0 (none)" in str(exc.value)
+
+
+def test_verify_wheel_rejects_a_missing_license_file(monkeypatch, tmp_path):
+    # The bundle carries the code of the frontend's npm packages, and their
+    # licenses require their notices in every copy.
+    entries = [e for e in _good_entries() if not e.endswith("THIRD_PARTY_LICENSES.md")]
+    with pytest.raises(SystemExit) as exc:
+        _verify(monkeypatch, _fake_wheel(tmp_path, entries))
+    assert "missing the third-party license file" in str(exc.value)
 
 
 def test_verify_wheel_rejects_an_extra_file_under_build(monkeypatch, tmp_path):

@@ -31,6 +31,13 @@ from pathlib import Path
 
 _FRONTEND = Path(__file__).resolve().parent / "streamlit_listview" / "frontend"
 
+# setuptools stages a wheel's files in build/lib and never deletes there: a
+# bundle whose hash changed, or a module deleted since, would ship from an
+# earlier build's copy beside the current files.
+_STALE_PACKAGE = (
+    Path(__file__).resolve().parent / "build" / "lib" / "streamlit_listview"
+)
+
 
 def _backend():
     """Return setuptools' build backend (imported lazily; present at build time)."""
@@ -152,6 +159,7 @@ def prepare_metadata_for_build_editable(metadata_directory, config_settings=None
 
 def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     _run_npm_build()
+    shutil.rmtree(_STALE_PACKAGE, ignore_errors=True)
     return _backend().build_wheel(wheel_directory, config_settings, metadata_directory)
 
 

@@ -3,17 +3,21 @@
 These rules extend the root `CLAUDE.md`. `demo/README.md` describes the playground for its users.
 
 ## The widget key
+
 - **`app.py` folds the dataset, `collapsed_groups`, `default` and a reset nonce into `widget_key`.** A keyed widget keeps its state across parameter changes, so only a new key makes a changed `default` or `collapsed_groups` take effect (root `CLAUDE.md`, *Invariants that span both languages*). The key spells the values with `!r`: `str()` gives `None` and `"None"`, or `1` and `"1"`, the same key, and the remount would not happen.
 - **The dataset enters the key through `dataset.dataset_identity`:** the data source, plus the size for Large. A selection kept across a source switch would keep every old id as a new entry under `accept_new_options`. Edits to the Custom options text stay out of the key, so they show the in-place reconciliation.
 - **The sidebar placement stays out of the key,** so a move between the sidebar and the main body keeps the selection, as the tour's last step shows.
 
 ## Presets and generated code
+
 - **Each preset in `data.py` inlines its own dict unwrap.** `codegen` emits only `inspect.getsource(func)`, so a preset that calls a shared helper would raise `NameError` in the snippet a user copies out. That is no license to copy the label precedence rule into the demo; it lives in `streamlit_listview/_options.py` only.
 - **The demo spots an inert preset by counting the calls `listview` makes through `data.FormatProbe`,** never by inspecting the options. A preset is inert when every option carries its own label, so nothing on screen changes.
 - **`SECTIONS`, `PARAMS`, `SIGNATURE` and `CUSTOM_EXAMPLE_FIELDS` in `app.py` stay literals,** because `tests/test_demo.py` reads them through the AST. A new `listview` parameter needs a row in `PARAMS` and an entry in `SIGNATURE`, each with the parameter's real default.
 
 ## The theme switcher (`themes.py`)
+
 The Theme section overlays a `demo/.streamlit/config_theme_<name>.toml` onto Streamlit's live config. The component needs nothing for it: `useColorScheme` and the inherited `--st-*` variables follow a live theme change.
+
 - **A switch is process-global.** Streamlit has no per-session theme: every rerun builds its theme from the global config, so a switch reaches every session on its next rerun, the hosted demo's other visitors included. The UI says so. The switch goes through the internal `streamlit.config.set_option` (the public `st.set_option` refuses theme options), and only `themes.py` calls it.
 - **The picker and the header caption mirror `SERVER_THEME.active`, never session state.** `render_theme` writes the server's theme into the widget key before rendering, and only `on_change` switches. A picker driven by its own session state would show a stale pick, and applying it again would undo another session's switch. The caption names the theme only while a theme file is applied.
 - **A switch reaches the browser one rerun late.** Streamlit sends a run's theme before the widget callbacks run, and `st.rerun()` inside a callback does nothing. So `_switch_theme` sets a flag, and the top of `app.py` reruns. Each rerun checks the 24-hour expiry (`THEME_TTL`) the same way; a timer thread would change nothing that anyone sees before their next rerun.
@@ -25,9 +29,11 @@ The Theme section overlays a `demo/.streamlit/config_theme_<name>.toml` onto Str
 - **Tests:** `tests/test_demo.py` pins every theme file to real Streamlit option keys, because a typo only logs a warning and drops the color. It builds each theme as Streamlit does, because a rejected value (such as a Google Fonts URL that names two families) raises on every rerun, and it checks that `config_themes.json` names exactly the shipped files. `e2e/demo/test_demo_theme.py` and `test_demo_theme_off.py` each set a module-level `EXTRA_ENV`, which `e2e/conftest.py` uses to boot a server of their own, because a theme left applied would leak into the other demo modules, which share one server.
 
 ## Deployment
+
 - **`requirements.txt` pins the released `streamlit-listview` version** that Streamlit Community Cloud and the Codespaces dev container install; the `release` skill bumps it. It holds exactly one `streamlit-listview==` pin, which `tests/test_packaging.py` and the push gate compare with the root version. It sits next to `app.py` so that Community Cloud picks it before the root `uv.lock`, which would build the repo and needs npm.
 - **The demo needs Streamlit 1.56 or later; the package needs 1.51.** The demo passes `required=` to `st.pills` and `st.segmented_control`, which Streamlit 1.56 added, so `requirements.txt` asks for `streamlit>=1.56`. Use no newer Streamlit API in the demo, or raise the floor there and in `demo/README.md`. For this reason `app.py` nests the config panel in a container instead of passing `wrap=True`, a Streamlit 1.63 parameter.
 - **The title's version badge reads the installed distribution** (`importlib.metadata.version`), so the README tour shows the version it was recorded with.
 
 ## The README tour depends on the labels
+
 `scripts/gif/screencast.py` drives the demo by the labels and ids that `scripts/gif/README.md` lists under *Record the tour*: labels in `app.py`, the Large source in `dataset.py`, the theme display names in `config_themes.json`, and row ids in `data.py`. It finds the Items slider as the first `stSlider` on the page, so add no slider before it, and drags it to its right end, so the last entry of `LARGE_SIZES` must stay 100,000. Renaming one of them breaks the tour; fix `play_tour` in the same change.

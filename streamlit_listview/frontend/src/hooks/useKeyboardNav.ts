@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import type { Id, ListviewItem } from "../types";
+import { elementAt } from "../utils/arrays";
 
 export interface UseKeyboardNavArgs {
   /** Visible items in render order; disabled items are skipped for focus. */
@@ -8,15 +9,15 @@ export interface UseKeyboardNavArgs {
   /** Invoked when Enter/Space selects the focused item. */
   onSelect: (id: Id) => void;
   /** "/" pressed in the listbox (e.g. focus the search field). Optional. */
-  onSlash?: () => void;
+  onSlash?: (() => void) | undefined;
   /** Escape pressed in the listbox (e.g. clear search then selection). Optional. */
-  onEscape?: () => void;
+  onEscape?: (() => void) | undefined;
   /**
    * Scroll a row into view (container-provided, the same helper the
    * jump-to-default path uses). Called ONLY when a key moves focus — never for
    * `setFocusToId`, so clicking a row cannot jog the list. Optional.
    */
-  scrollToId?: (id: Id) => void;
+  scrollToId?: ((id: Id) => void) | undefined;
 }
 
 export interface UseKeyboardNavResult {
@@ -119,7 +120,7 @@ export function useKeyboardNav({
   // row the user cannot see.
   const moveFocusTo = useCallback(
     (index: number) => {
-      const id = focusable[index].id;
+      const id = elementAt(focusable, index).id;
       setFocused(id);
       scrollToId?.(id);
     },
@@ -127,6 +128,7 @@ export function useKeyboardNav({
   );
 
   const onKeyDown = useCallback(
+    // eslint-disable-next-line complexity -- older than the complexity limit; split it when you next change it
     (event: KeyboardEvent<HTMLDivElement>) => {
       // Keys aimed at a focused descendant control belong to that control. This
       // handler sits on an ancestor of the collapsible group-header <button>, so
@@ -185,7 +187,7 @@ export function useKeyboardNav({
         case "Spacebar": {
           event.preventDefault();
           if (current >= 0) {
-            onSelect(focusable[current].id);
+            onSelect(elementAt(focusable, current).id);
           }
           break;
         }

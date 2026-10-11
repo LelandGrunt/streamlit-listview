@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { ListviewItem } from "../types";
+import { elementAt } from "../utils/arrays";
 import { foldForMatch } from "../utils/text";
 
 export interface UseFilterArgs {
@@ -52,7 +53,7 @@ export function useFilter({ items, query }: UseFilterArgs): UseFilterResult {
       return items;
     }
     return items.filter((_item, index) =>
-      foldedLabels[index].includes(normalized),
+      elementAt(foldedLabels, index).includes(normalized),
     );
   }, [items, foldedLabels, normalized]);
 

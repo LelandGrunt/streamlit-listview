@@ -23,6 +23,14 @@ describe("single-file build output", () => {
     expect(css).toHaveLength(1);
   });
 
+  it("ships the licenses of the bundled packages", () => {
+    const text = readFileSync(
+      resolve(buildDir, "THIRD_PARTY_LICENSES.md"),
+      "utf8",
+    );
+    expect(text).toMatch(/^## react - \d+\.\d+\.\d+ \(MIT\)$/m);
+  });
+
   it("keeps the render chunks' content-visibility rule through the CSS minifier", () => {
     // lightningcss rewrites what it understands (it breaks prefers-color-scheme
     // and light-dark() in the shadow tree, see CLAUDE.md), so the declarations

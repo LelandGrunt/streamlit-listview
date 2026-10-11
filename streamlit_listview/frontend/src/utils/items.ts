@@ -1,4 +1,5 @@
 import type { Id, ListviewItem } from "../types";
+import { elementAt } from "./arrays";
 
 /**
  * True iff two items carry the same fields with the same values.
@@ -44,6 +45,7 @@ function sameItem(a: ListviewItem, b: ListviewItem): boolean {
  * change, because the id is what maps a selection back to the Python option,
  * and a Map already keeps the two spellings apart.
  */
+// eslint-disable-next-line complexity -- older than the complexity limit; split it when you next change it
 export function reuseUnchangedItems(
   prev: ListviewItem[],
   next: ListviewItem[],
@@ -62,7 +64,7 @@ export function reuseUnchangedItems(
   const m = prev.length;
   const limit = Math.min(n, m);
   let i = 0;
-  while (i < limit && sameItem(prev[i], next[i])) {
+  while (i < limit && sameItem(elementAt(prev, i), elementAt(next, i))) {
     i += 1;
   }
   // Every row of `next` matched positionally — but only an equal LENGTH makes
@@ -74,15 +76,16 @@ export function reuseUnchangedItems(
   // eslint-disable-next-line unicorn/no-new-array -- preallocates n slots; this runs on every render, at up to 100,000 rows
   const out: ListviewItem[] = new Array<ListviewItem>(n);
   for (let j = 0; j < i; j++) {
-    out[j] = prev[j];
+    out[j] = elementAt(prev, j);
   }
   let prevById: Map<Id, ListviewItem> | null = null;
   for (let j = i; j < n; j++) {
-    const item = next[j];
-    if (j < m && prev[j].id === item.id) {
-      // Still at its position: ids are unique, so prev[j] IS the previous
+    const item = elementAt(next, j);
+    const before = prev[j]; // undefined once j passes the end of prev
+    if (before !== undefined && before.id === item.id) {
+      // Still at its position: ids are unique, so `before` IS the previous
       // object for this id, and the index cannot know anything more.
-      out[j] = sameItem(prev[j], item) ? prev[j] : item;
+      out[j] = sameItem(before, item) ? before : item;
       continue;
     }
     if (prevById === null) {

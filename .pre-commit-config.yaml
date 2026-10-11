@@ -45,6 +45,45 @@ repos:
       - id: uv-audit
         args: [--locked, --preview-features=audit-command]
 
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      # The staged changes, before each commit.
+      - id: gitleaks
+      # The history of HEAD. In CI and in the push gate nothing is staged, so
+      # only this hook catches a secret that a commit with --no-verify let in.
+      # gitleaks is written in Go; pre-commit installs Go on its first run.
+      - id: gitleaks
+        alias: gitleaks-history
+        name: gitleaks (history of HEAD)
+        entry: gitleaks git --redact --verbose --log-opts=HEAD
+        pass_filenames: false
+        always_run: true
+
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.50.3
+    hooks:
+      # Fixes what it can (--write-changes): stage the file and commit again.
+      # Its exceptions live under [tool.typos] in pyproject.toml.
+      - id: typos
+
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.23.3
+    hooks:
+      # Checks only: fix the document by hand. The rules live in
+      # .markdownlint-cli2.jsonc.
+      - id: markdownlint-cli2
+
+  # Checks the links of every Markdown file, by hand: the result depends on
+  # other websites, so no commit, CI run or push waits for it. Run it with
+  # pre-commit run --hook-stage manual markdown-link-check --all-files
+  - repo: https://github.com/tcort/markdown-link-check
+    rev: v3.15.0
+    hooks:
+      - id: markdown-link-check
+        args: [--config, .markdown-link-check.json, --quiet]
+        stages: [manual]
+
   - repo: local
     hooks:
       # Without node_modules the hooks below fail with a bare "command not
@@ -87,3 +126,22 @@ repos:
         language: unsupported
         files: ^streamlit_listview/frontend/package(-lock)?\.json$
         pass_filenames: false
+      # Renders every Mermaid diagram of the Markdown files, by hand: mmdc
+      # starts its own Chromium. Run it with
+      # pre-commit run --hook-stage manual mermaid --all-files
+      - id: mermaid
+        name: mermaid diagrams render (manual)
+        entry: node scripts/check_mermaid.mjs
+        language: node
+        additional_dependencies: ["@mermaid-js/mermaid-cli@12.0.0"]
+        types: [markdown]
+        stages: [manual]
+      # The e2e suite in Firefox and WebKit, by hand. Install the two browsers
+      # once with `uv run --extra devel playwright install firefox webkit`.
+      - id: e2e-browsers
+        name: e2e suite in Firefox and WebKit (manual)
+        entry: uv run --locked --extra devel pytest e2e/ --browser firefox --browser webkit
+        language: unsupported
+        pass_filenames: false
+        always_run: true
+        stages: [manual]

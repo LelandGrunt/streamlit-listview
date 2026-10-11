@@ -149,7 +149,7 @@ def _label_for(
         raise ValueError(f"{source} failed for option {option!r}: {exc}") from exc
 
 
-def normalize_options(
+def normalize_options(  # noqa: C901 -- older than the complexity limit; split it when you next change it
     options: Iterable[Any] | None,
     format_func: Callable[[Any], str] | None,
 ) -> tuple[list[dict[str, Any]], dict[Any, Any]]:

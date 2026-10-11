@@ -22,6 +22,7 @@ import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 Key = tuple[int, str, str, str]  # (n, shape, scenario, metric)
 
@@ -56,7 +57,7 @@ class Row:
         return 100.0 * delta / self.a.median
 
 
-def load(path: Path) -> list[dict]:
+def load(path: Path) -> list[dict[str, Any]]:
     return [
         json.loads(line)
         for line in path.read_text(encoding="utf-8").splitlines()
@@ -68,7 +69,7 @@ def _number(value) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
-def flatten(record: dict) -> dict[tuple[str, str], float]:
+def flatten(record: dict[str, Any]) -> dict[tuple[str, str], float]:
     """(scenario, metric) -> value for every numeric measurement in one record.
 
     Top-level numbers (dom_nodes, heap_mb) get the empty metric name.
@@ -86,7 +87,7 @@ def flatten(record: dict) -> dict[tuple[str, str], float]:
     return out
 
 
-def record_shape(record: dict) -> str:
+def record_shape(record: dict[str, Any]) -> str:
     """The record's shape. A record written before the ``disabled`` shape existed
     carries only ``grouped``, and then had exactly two shapes to tell apart."""
     if "shape" in record:
@@ -94,7 +95,7 @@ def record_shape(record: dict) -> str:
     return "grouped" if record["grouped"] else "ungrouped"
 
 
-def summarize(records: Iterable[dict]) -> dict[Key, Stats]:
+def summarize(records: Iterable[dict[str, Any]]) -> dict[Key, Stats]:
     samples: dict[Key, list[float]] = {}
     for record in records:
         shape = record_shape(record)

@@ -439,7 +439,7 @@ describe("useSelection (reconciliation)", () => {
     });
     expect(result.current.atCap).toBe(true);
 
-    rerender({ items: [abc[2]] });
+    rerender({ items: [abc[2]!] });
     expect(result.current.selection).toEqual([]);
     expect(setStateValue).toHaveBeenCalledWith("selection", []);
     expect(result.current.atCap).toBe(false);
@@ -550,7 +550,7 @@ describe("useSelection (reconciliation)", () => {
       initialSelection: ["a"],
     });
     rerender({
-      items: [{ id: "a", label: "A", disabled: true }, abc[1], abc[2]],
+      items: [{ id: "a", label: "A", disabled: true }, abc[1]!, abc[2]!],
     });
     expect(result.current.selection).toEqual(["a"]);
     expect(setStateValue).not.toHaveBeenCalled();
@@ -569,7 +569,7 @@ describe("useSelection (reconciliation)", () => {
     });
     expect(setStateValue).not.toHaveBeenCalled();
     rerender({ items: [...abc] });
-    rerender({ items: [abc[1], abc[0], abc[2]] });
+    rerender({ items: [abc[1]!, abc[0]!, abc[2]!] });
     expect(result.current.selection).toEqual(["a", "b"]);
     expect(setStateValue).not.toHaveBeenCalled();
   });

@@ -3,6 +3,10 @@ Copyright 2026 Leland Grunt
 
 This product includes software developed by third parties, attributed below.
 
+The wheel also bundles the npm packages that the frontend imports.
+streamlit_listview/frontend/build/THIRD_PARTY_LICENSES.md names each of them
+with its version, its license and the license text.
+
 ===============================================================================
 Streamlit — Apache License, Version 2.0
 ===============================================================================

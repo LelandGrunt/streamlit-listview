@@ -3,6 +3,7 @@
 import re
 import sys
 from pathlib import Path
+from typing import cast
 
 ROOT = Path(__file__).resolve().parent.parent
 README = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -19,7 +20,7 @@ from scenarios import SCENARIOS
 def _first(pattern: str, text: str) -> str:
     m = re.search(pattern, text)
     assert m, f"no match for {pattern!r}"
-    return m.group(1)
+    return cast(str, m.group(1))
 
 
 def test_readme_does_not_promise_added_entries_come_back_as_strings():

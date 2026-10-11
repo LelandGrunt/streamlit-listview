@@ -47,6 +47,7 @@ LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py   
 ```
 
 Options:
+
 - `--scenario NAME` (repeatable) or `--all` (every scenario) choose the scenarios. They exclude each other; without either, the command builds the hero. A test scenario builds no GIF, so it needs `--record`, and so does `--all`.
 - `--out` (one scenario only; a path that ends in `.gif`), `--scale` (`0.5`; above 0), `--colors` (`256`; 2 to 256) and `--keep-frames`, which keeps the PNG frames under `build/gif-frames/<scenario>/` at the repo root, shape a GIF, so `--record` refuses them.
 - `--record DIR` and `--overwrite` record frames instead of a GIF; see [Compare before and after a change](#compare-before-and-after-a-change).
@@ -70,6 +71,7 @@ LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel --with imageio-ffmpeg python scri
 Options: `--out` (`assets/listview-tour.gif`; a path that ends in `.gif`), `--width` (`960`; at most 1280), `--fps` (`10`; 1 to 30) and `--port` (`0` picks a free port). The video stays in `build/screencast/tour.webm`; a failed tour step leaves `build/screencast/failure.png`.
 
 What is non-obvious:
+
 - **Only this tab is recorded.** Streamlit asks `getDisplayMedia` for a video, which would open Chromium's source picker. Chromium runs with `--auto-accept-this-tab-capture`, and a script in the page asks for the current tab instead and stops any other source before Streamlit's recorder sees it; `check_surface` then stops the run with "refused to record". Never add `--use-fake-ui-for-media-stream`: it answers with the whole monitor, so the video shows the desktop of whoever runs the script. `TAB_ONLY_JS` in `screencast.py` is that script; `tests/test_gif_screencast.py` pins the launch flags, and `e2e/test_screencast_guard.py` checks the guard in Chromium.
 - **The page draws the mouse pointer.** A tab capture shows none, so the script draws an arrow that follows the mouse and a ring at each click.
 - **Esc ends the recording**, so the tour never presses it; `Tour.press` refuses the key. A focused select box swallows Esc, so `record()` blurs the focus before the final Esc.

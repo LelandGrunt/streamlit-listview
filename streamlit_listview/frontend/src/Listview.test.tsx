@@ -864,7 +864,7 @@ describe("accept_new_options", () => {
     rerender(
       <Listview
         data={baseData({
-          items: [items[0], items[2]],
+          items: [items[0]!, items[2]!],
           accept_new_options: true,
           selection_mode: "multi",
         })}
@@ -876,7 +876,7 @@ describe("accept_new_options", () => {
     rerender(
       <Listview
         data={baseData({
-          items: [items[0], items[1]],
+          items: [items[0]!, items[1]!],
           accept_new_options: true,
           selection_mode: "multi",
         })}
@@ -1989,7 +1989,7 @@ describe("group blocks", () => {
       "Veg",
     ]);
     expect(
-      within(groups[0])
+      within(groups[0]!)
         .getAllByRole("option")
         .map((o) => o.textContent),
     ).toEqual(["Apple", "Banana"]);
@@ -2032,7 +2032,7 @@ describe("group blocks", () => {
         // of the listbox) for assistive technology
         expect(chunk.getAttribute("role")).toBe("none");
         // one block holds every chunk
-        expect(chunk.parentElement).toBe(chunks[0].parentElement);
+        expect(chunk.parentElement).toBe(chunks[0]!.parentElement);
         // the row count the skipped chunk's size estimate multiplies by
         expect(chunk.style.getPropertyValue("--listview-chunk-rows")).toBe(
           String(chunk.children.length),
@@ -2204,7 +2204,7 @@ describe("rows without a group", () => {
       "Other",
     ]);
     expect(
-      within(groups[2])
+      within(groups[2]!)
         .getAllByRole("option")
         .map((o) => o.textContent),
     ).toEqual(["Loose"]);

@@ -19,6 +19,7 @@ import sys
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import cast
 
 from playwright.sync_api import Locator, Page, ViewportSize, sync_playwright
 
@@ -144,7 +145,7 @@ class Tour:
         self.y = VIEWPORT["height"] / 2
 
     def runs(self) -> int:
-        return self.page.evaluate("window.__tourRuns")
+        return cast(int, self.page.evaluate("window.__tourRuns"))
 
     @contextmanager
     def rerun(self) -> Generator[None]:
@@ -404,7 +405,7 @@ def find_ffmpeg() -> str:
     adds it for one run, hence the import by name.
     """
     try:
-        return importlib.import_module("imageio_ffmpeg").get_ffmpeg_exe()
+        return cast(str, importlib.import_module("imageio_ffmpeg").get_ffmpeg_exe())
     except ModuleNotFoundError:
         pass
     found = shutil.which("ffmpeg")

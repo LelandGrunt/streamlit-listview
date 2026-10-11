@@ -135,7 +135,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
-def _choose(ap: argparse.ArgumentParser, args: argparse.Namespace) -> list[Scenario]:
+def _choose(ap: argparse.ArgumentParser, args: argparse.Namespace) -> list[Scenario]:  # noqa: C901 -- older than the complexity limit; split it when you next change it
     """The scenarios the options name; a usage error for a combination that fails."""
     if args.all and args.scenario:
         ap.error("choose one of --all and --scenario")

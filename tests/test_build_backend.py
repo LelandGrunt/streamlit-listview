@@ -149,3 +149,41 @@ def test_npm_missing_raises_runtimeerror(monkeypatch, tmp_path):
     with pytest.raises(RuntimeError, match="Node.js"):
         bb._run_npm_build()
     assert called == [], "npm must not be invoked when it is not on PATH"
+
+
+def test_build_wheel_drops_the_stale_package_copy(monkeypatch, tmp_path):
+    # setuptools stages a wheel's files in build/lib and never deletes there, so
+    # a bundle or a module from an earlier build would ship beside the current
+    # files.
+    stale = tmp_path / "build" / "lib" / "streamlit_listview"
+    (stale / "frontend" / "build").mkdir(parents=True)
+    (stale / "frontend" / "build" / "index-old123.js").write_text("// old", "utf-8")
+    (stale / "_removed_module.py").write_text("# deleted since", encoding="utf-8")
+    monkeypatch.setattr(bb, "_STALE_PACKAGE", stale)
+    monkeypatch.setattr(bb, "_run_npm_build", lambda: None)
+    seen = []
+
+    class Backend:
+        def build_wheel(self, *args):
+            seen.append(stale.exists())
+            return "streamlit_listview-1.0.1-py3-none-any.whl"
+
+    monkeypatch.setattr(bb, "_backend", Backend)
+    assert bb.build_wheel("dist") == "streamlit_listview-1.0.1-py3-none-any.whl"
+    assert seen == [False]
+
+
+def test_the_stale_copy_is_the_whole_staged_package():
+    assert bb._STALE_PACKAGE == ROOT / "build" / "lib" / "streamlit_listview"
+
+
+def test_build_wheel_needs_no_earlier_build(monkeypatch, tmp_path):
+    monkeypatch.setattr(bb, "_STALE_PACKAGE", tmp_path / "build" / "lib")
+    monkeypatch.setattr(bb, "_run_npm_build", lambda: None)
+
+    class Backend:
+        def build_wheel(self, *args):
+            return "streamlit_listview-1.0.1-py3-none-any.whl"
+
+    monkeypatch.setattr(bb, "_backend", Backend)
+    assert bb.build_wheel("dist") == "streamlit_listview-1.0.1-py3-none-any.whl"

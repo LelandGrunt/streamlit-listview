@@ -22,10 +22,10 @@ describe("makeLargeDataset", () => {
       label: "Item 00000",
       group: "Batch 000",
     });
-    expect(items[99].group).toBe("Batch 000");
-    expect(items[100].group).toBe("Batch 001");
-    expect(items[200].group).toBe("Batch 002");
-    expect(items[249].id).toBe("item-00249");
+    expect(items[99]!.group).toBe("Batch 000");
+    expect(items[100]!.group).toBe("Batch 001");
+    expect(items[200]!.group).toBe("Batch 002");
+    expect(items[249]!.id).toBe("item-00249");
     expect(new Set(items.map((item) => item.id)).size).toBe(250);
   });
 
@@ -55,8 +55,8 @@ describe("makeLargeDataset", () => {
     );
     const disabled = items.filter((item) => item.disabled);
     expect(disabled).toHaveLength(25);
-    expect(disabled[1].id).toBe("item-00015");
-    expect(disabled[24].id).toBe("item-00245");
+    expect(disabled[1]!.id).toBe("item-00015");
+    expect(disabled[24]!.id).toBe("item-00245");
     expect(items.map(({ disabled: _flag, ...row }) => row)).toEqual(
       makeLargeDataset(250, "grouped"),
     );
@@ -69,7 +69,7 @@ describe("makeLargeDataset", () => {
     for (const n of SIZES) {
       const items = makeLargeDataset(n, "disabled");
       for (const i of [0, 1, n >> 1, n - 1]) {
-        expect(items[i].disabled).toBe(false);
+        expect(items[i]!.disabled).toBe(false);
       }
     }
   });
@@ -82,7 +82,7 @@ describe("makeLargeDataset", () => {
   // spell a six-digit id that sorts before `item-99999`. tests/test_demo.py
   // pins the demo's largest size to the same bound.
   it("keeps ids unique and in row order at the largest size", () => {
-    const n = SIZES[SIZES.length - 1];
+    const n = SIZES[SIZES.length - 1]!;
     const ids = makeLargeDataset(n, "ungrouped").map((item) => String(item.id));
     expect(ids[n - 1]).toBe("item-99999");
     expect(new Set(ids).size).toBe(n);

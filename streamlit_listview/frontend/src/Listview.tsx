@@ -23,6 +23,7 @@ import { useScrollToItem } from "./hooks/useScrollToItem";
 import { useColorScheme } from "./hooks/useColorScheme";
 import { useRowHeight } from "./hooks/useRowHeight";
 import { useResetChunkHeights } from "./hooks/useResetChunkHeights";
+import { elementAt } from "./utils/arrays";
 import { FORGET_CLASS } from "./utils/chunks";
 import { disabledIdSet, idKey, itemIdByKey, parseNewIntId } from "./utils/ids";
 import { reuseUnchangedItems, runsByKey } from "./utils/items";
@@ -147,7 +148,7 @@ function blocksFor(
       indexByName.set(key, idx);
       blocks.push({ name: key, items: [] });
     }
-    blocks[idx].items.push(item);
+    elementAt(blocks, idx).items.push(item);
   }
   // A filter that leaves no row without a group adds no empty block.
   if (ungrouped.length > 0) {
@@ -184,10 +185,10 @@ function newOptionRow(id: Id): ListviewItem {
 function sameNewOptionRows(a: ListviewItem[], b: ListviewItem[]): boolean {
   return (
     a.length === b.length &&
-    a.every(
-      (item, i) =>
-        idKey(item.id) === idKey(b[i].id) && item.label === b[i].label,
-    )
+    a.every((item, i) => {
+      const other = elementAt(b, i);
+      return idKey(item.id) === idKey(other.id) && item.label === other.label;
+    })
   );
 }
 
@@ -257,10 +258,9 @@ function findRowNode(body: HTMLElement, domId: string): Element | null {
   if (hit !== null && body.contains(hit)) {
     return hit;
   }
-  const rows = body.querySelectorAll('[role="option"]');
-  for (let i = 0; i < rows.length; i += 1) {
-    if (rows[i].id === domId) {
-      return rows[i];
+  for (const row of body.querySelectorAll('[role="option"]')) {
+    if (row.id === domId) {
+      return row;
     }
   }
   return null;
@@ -319,6 +319,7 @@ function findExistingRow(
   return items.find((item) => foldForMatch(idKey(item.id)) === folded);
 }
 
+// eslint-disable-next-line complexity -- older than the complexity limit; split it when you next change it
 export const Listview: FC<ListviewProps> = ({
   data,
   setStateValue,

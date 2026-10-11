@@ -217,6 +217,8 @@ STEPS = [
     "npm run build",
     "npm test",
     "pytest",
+    "playwright install",
+    "e2e",
     "wheel build",
     "verify_wheel.py",
 ]
@@ -804,7 +806,11 @@ def test_suite_steps_run_cis_commands_and_verify_the_versions_wheel(tmp_path):
     assert [step.name for step in steps] == STEPS
     frontend = [steps[0].cwd, steps[2].cwd, steps[3].cwd]
     assert frontend == ["streamlit_listview/frontend"] * 3
-    assert dict(steps[4].env) == {"LISTVIEW_SKIP_NPM_BUILD": "1"}
+    devel = ("uv", "run", "--locked", "--extra", "devel")
+    assert steps[5].args == (*devel, "playwright", "install", "chromium")
+    assert steps[6].args == (*devel, "pytest", "e2e/")
+    skip_npm = {"LISTVIEW_SKIP_NPM_BUILD": "1"}
+    assert [dict(step.env) for step in steps[4:7]] == [skip_npm] * 3
     assert steps[-1].args == (
         sys.executable,
         "scripts/verify_wheel.py",
@@ -836,7 +842,8 @@ def test_the_suite_runs_without_git_variables(repo, monkeypatch):
     push_gate.run_suite(repo.path, VERSION, repo.head, runner)
     for name, env in runner.envs.items():
         assert not [key for key in env if key.upper().startswith("GIT_")], name
-        assert ("LISTVIEW_SKIP_NPM_BUILD" in env) == (name == "pytest"), name
+        skips_npm = name in {"pytest", "playwright install", "e2e"}
+        assert ("LISTVIEW_SKIP_NPM_BUILD" in env) == skips_npm, name
 
 
 def test_a_passed_commit_skips_the_suite(repo, capsys):
@@ -1124,6 +1131,13 @@ def test_ci_and_the_release_workflow_run_the_gate():
     assert "fetch-depth: 0" in release
 
 
+def test_ci_runs_the_browser_suite_that_the_gate_runs():
+    """Drift guard: the gate's e2e step and CI's e2e job run the same suite."""
+    ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "playwright install --with-deps chromium" in ci
+    assert "-m pytest e2e/" in ci
+
+
 def test_findings_reach_a_pipe_as_utf8(repo):
     # git shows the hook's output as UTF-8; Python on Windows writes a pipe in
     # the ANSI code page unless told otherwise, which mangles the en dash.
@@ -1133,7 +1147,9 @@ def test_findings_reach_a_pipe_as_utf8(repo):
     assert "\u2013" in result.stderr.decode("utf-8", errors="replace")
 
 
-def run_script(repo: Repo, *args: str, refs: str = "") -> subprocess.CompletedProcess:
+def run_script(
+    repo: Repo, *args: str, refs: str = ""
+) -> subprocess.CompletedProcess[bytes]:
     """Run push_gate.py as git runs it: stdio on pipes, no UTF-8 override."""
     env = {
         name: value

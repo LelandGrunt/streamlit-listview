@@ -1,0 +1,36 @@
+// markdownlint-cli2 (a pre-commit hook) checks every Markdown file.
+{
+  "config": {
+    "default": true,
+    // The documents write one paragraph per line, so a line has no limit.
+    "MD013": false,
+    // CHANGELOG.md repeats "### Added" and "### Fixed" under every release.
+    "MD024": { "siblings_only": true },
+    // The README centers its logo and lays out the GIF gallery in HTML, which
+    // Markdown cannot express; these are the elements it uses.
+    "MD033": {
+      "allowed_elements": [
+        "a",
+        "br",
+        "details",
+        "em",
+        "img",
+        "p",
+        "picture",
+        "source",
+        "strong",
+        "sub",
+        "summary",
+        "table",
+        "td",
+        "tr"
+      ]
+    },
+    // The README opens with its centered logo, in HTML, before the heading.
+    "MD041": { "allow_preamble": true },
+    // Every table writes its delimiter row without spaces (|---|) and its
+    // cells with one space; MD060 wants both alike.
+    "MD060": false
+  },
+  "gitignore": true
+}

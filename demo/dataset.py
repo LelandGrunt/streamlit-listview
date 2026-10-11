@@ -7,6 +7,7 @@ switcher.
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 import streamlit as st
 
@@ -51,7 +52,7 @@ class DataSource:
       instead of option literals.
     """
 
-    resolve: Callable[[dict], tuple]
+    resolve: Callable[[dict[str, Any]], tuple[Any, ...]]
     builtin: bool = False
     options_editor: bool = False
     sized: bool = False

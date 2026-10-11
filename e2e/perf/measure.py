@@ -28,6 +28,7 @@ from __future__ import annotations
 import re
 import sys
 from dataclasses import dataclass
+from typing import Any
 
 from playwright.sync_api import Browser, CDPSession, Page
 
@@ -290,7 +291,7 @@ def _open(browser: Browser, throttle: int) -> tuple[Page, CDPSession, list[int]]
 
 def _show(
     page: Page, cdp: CDPSession, ws_bytes: list[int], url: str, last_id: str
-) -> dict:
+) -> dict[str, Any]:
     """Navigate, wait for the harness, mount the list via "show"; returns the mount record.
 
     The CDP window and the websocket count open after the page has loaded and
@@ -314,9 +315,11 @@ def _show(
     return timings
 
 
-def run_cell(browser: Browser, server_url: str, cell: Cell, throttle: int) -> dict:
+def run_cell(
+    browser: Browser, server_url: str, cell: Cell, throttle: int
+) -> dict[str, Any]:
     ids = cell_ids(cell.n)
-    record: dict = {
+    record: dict[str, Any] = {
         "n": cell.n,
         "shape": cell.shape,
         "grouped": cell.grouped,

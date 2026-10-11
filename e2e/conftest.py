@@ -86,7 +86,9 @@ def _servers():
     stops every server at session end even if one teardown raises.
     """
     with contextlib.ExitStack() as stack:
-        runners = {}
+        runners: dict[
+            tuple[str, tuple[str, ...], tuple[tuple[str, str], ...]], StreamlitRunner
+        ] = {}
 
         def lookup(app_file, extra_args, extra_env=None) -> StreamlitRunner:
             key = (

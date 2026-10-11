@@ -32,7 +32,7 @@ class StreamlitRunner:
 
     def __init__(
         self,
-        script_path: os.PathLike,
+        script_path: os.PathLike[str],
         server_port: int | None = None,
         extra_args: list[str] | None = None,
         startup_timeout: int = 60,

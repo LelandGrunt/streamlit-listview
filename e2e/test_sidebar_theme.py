@@ -23,6 +23,7 @@ the comparison, don't "fix" the stylesheet.
 """
 
 from pathlib import Path
+from typing import cast
 
 from playwright.sync_api import Page
 
@@ -40,8 +41,10 @@ def _rgb(page: Page, selector: str, *, sidebar: bool) -> list[float]:
     literal tuple — `page.evaluate` unmarshals the JS array as a list.
     """
     container = "stSidebar" if sidebar else "stMain"
-    return page.evaluate(
-        """([container, selector]) => {
+    return cast(
+        list[float],
+        page.evaluate(
+            """([container, selector]) => {
             const scope = document.querySelector(`[data-testid="${container}"]`);
             // Named explicitly: a collapsed sidebar (Streamlit hides it below a
             // viewport-width threshold) would otherwise surface as a null
@@ -59,7 +62,8 @@ def _rgb(page: Page, selector: str, *, sidebar: bool) -> list[float]:
             return raw.startsWith("color(") ? nums.slice(0, 3).map((n) => n * 255)
                                             : nums.slice(0, 3);
         }""",
-        [container, selector],
+            [container, selector],
+        ),
     )
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from typing import Any, Literal
+from typing import Any, Literal, TypeGuard
 
 import streamlit as st
 
@@ -28,7 +28,7 @@ _LABEL_VISIBILITIES = ("visible", "hidden", "collapsed")
 _SORT_MODES = ("items", "groups", "both")
 
 
-def _is_real_int(value: Any) -> bool:
+def _is_real_int(value: Any) -> TypeGuard[int]:
     """True for genuine ints, rejecting bool (a subclass of int)."""
     return isinstance(value, int) and not isinstance(value, bool)
 
@@ -86,7 +86,7 @@ def _validate_int(name: str, value: Any, *, minimum: int, allow_none: bool) -> N
         raise ValueError(f"{name} must be {expected}, got {value!r}.")
 
 
-def _validate_params(
+def _validate_params(  # noqa: C901 -- older than the complexity limit; split it when you next change it
     *,
     label: Any,
     help: Any,
@@ -214,7 +214,7 @@ def _validate_params(
         raise ValueError("on_change must be callable or None.")
 
 
-def _resolve_default_ids(
+def _resolve_default_ids(  # noqa: C901 -- older than the complexity limit; split it when you next change it
     default: Any,
     selection_mode: str,
     id_to_original: dict[Any, Any],
@@ -338,7 +338,7 @@ def _resolve_default_ids(
     return default_ids
 
 
-def _persisted_selection(key: str | None) -> list | None:
+def _persisted_selection(key: str | None) -> list[Any] | None:
     """The selection persisted in ``st.session_state[key]``, or None.
 
     A keyed V2 component's element id drops the container, so moving the widget
@@ -417,10 +417,10 @@ def listview(
     disabled: bool = False,
     label_visibility: Literal["visible", "hidden", "collapsed"] = "visible",
     on_change: Callable[..., None] | None = None,
-    args: tuple | None = None,
-    kwargs: dict | None = None,
+    args: tuple[Any, ...] | None = None,
+    kwargs: dict[str, Any] | None = None,
     key: str | None = None,
-) -> dict | str | int | list | None:
+) -> dict[str, Any] | str | int | list[Any] | None:
     """Display a scrollable, selectable listview widget.
 
     See the design spec for full behavior. `key` is strongly recommended for

@@ -3,6 +3,7 @@
 These rules extend the root `CLAUDE.md`. The comments next to the code give the measurements behind them.
 
 ## Files (`src/`)
+
 - `index.tsx`: the V2 `FrontendRenderer` entry. It mounts one React root per instance into the `.listview-root` scaffold that the Python `html=` defines, and passes `inSidebar` (see *The sidebar swaps two tokens*).
 - `Listview.tsx`: the container component. It composes the hooks and the presentational components.
 - `types.ts`: the wire format: `ListviewData`, the shape of the Python `data` dict, and `Id`, the one id type. `__tests__/types.test.ts` pins its keys and types.
@@ -14,15 +15,20 @@ These rules extend the root `CLAUDE.md`. The comments next to the code give the 
 - `test/`: the test support: `makeData.ts` (the one `ListviewData` factory, which `bench/fixtures.ts` uses too), `hast.ts` and `setup.ts`.
 
 ## One helper per question
+
 **Look in `utils/` before writing a second fold, a second stripper, a second `String(id)` or a second container probe.** Two copies drift apart.
+
 - `ids.ts`: `idKey`, the single `String(id)` row identity that every comparison goes through; `itemIdByKey`; `disabledIdSet`; `sameIds`, the by-value comparison of two id lists; and `parseNewIntId`, the copy of `_options._parse_new_int_id`. With int options a new entry must pass it and is added as a number.
 - `text.ts`: `foldForMatch`, the one case and ß fold, shared by the search filter and the `accept_new_options` lookup, so that what the user can find agrees with what they can add. `plainTextLabel`, the one Markdown-to-plain-text stripper, shared by the listbox's accessible name and the help trigger's "Help for &lt;label&gt;". It strips only what the renderer claims: the directives in `BRACKETED_DIRECTIVES` and the `MATERIAL_ICON_TOKEN` and `STREAMLIT_LOGO_TOKEN` patterns, all from `markdown/streamlitPlugins.ts`, and the emoji shortcodes that `node-emoji` knows. A name stripped here but rendered literally there would announce text the user cannot see.
 - `container.ts`: `isInSidebar`, the one probe for the Streamlit container this instance mounted into.
 - `chunks.ts`: `isSkipped` (does the browser skip this render chunk), `forgetHeights` (the one forget cycle, see *Render chunks*), and the `CHUNK_SELECTOR` and `FORGET_CLASS` names.
 - `items.ts`: `reuseUnchangedItems` and `runsByKey` (splits a block into its chunks). Every rerun that changes the listview's payload ships the options as freshly parsed JSON: a parameter change, the first rerun after a keyed listview mounts (its persisted selection appears), and each click on a keyed listview. A rerun that changes nothing sends Streamlit's cache reference instead, for a payload of 10 KB or more (`global.minCachedMessageSize`). Without the reuse, each such rerun recomputes every memo keyed on the items and re-renders every row. **Read the options through `Listview`'s `items`, never through `data.items`.**
+- `arrays.ts`: `elementAt`, the one checked index access. `noUncheckedIndexedAccess` types `array[i]` as possibly undefined; where the code keeps the index inside the array, call `elementAt`. oxlint forbids a `!` in production code.
 
 ## Selection state
+
 The root `CLAUDE.md` states the rules; this section gives the details.
+
 - **`useSelection` seeds from `data.state_selection` because a container move remounts the frontend.** A keyed element id ignores the container, so moving a widget between `st.sidebar` and the main body remounts the frontend while the Python-side state survives; a remount seeded from `default` showed rows that disagreed with the value `listview()` returned. The wrapper ships the field for keyed instances only (`_persisted_selection`: best effort, `None` outside a runtime or when malformed). `default_ids` is the `default` that Python resolved; the value `listview()` returns before the first commit is the V2 mount state `default={"selection": [...]}`.
 - **The hook reads both fields at mount only.** Echoing a later `default` into the display would show a selection that `listview()` does not return. A later `default_ids` that differs by value still scrolls to its first id and opens its block (`useScrollToItem`).
 - **`reconcileSelection` runs during render.** It drops ids no longer in `items` (unless `accept_new_options` is on), collapses duplicate row keys, canonicalizes an id that spells a row differently (`"7"` becomes the option's int `7`), and truncates past `max_selections`, or past one in single mode. It commits only a result that differs.
@@ -30,6 +36,7 @@ The root `CLAUDE.md` states the rules; this section gives the details.
 - **`useCollapse` seeds each group from `collapsed_groups` the first time it sees that group.** A group counts as seen only while `collapsible_groups=True` (its header is a toggle), so turning the feature on later still seeds groups first shown while it was off. For groups present at mount, a later change of `collapsed_groups` does nothing on a keyed instance.
 
 ## Groups
+
 - **The block without a group renders last, in every `sort` mode.** `blocksFor` in `Listview.tsx` builds it after the named groups, and both the rendered rows and `aria-posinset` come from that one function. In a grouped list the block carries the `ungrouped_label` header; in a list without groups it has none.
 - **A group named like `ungrouped_label` joins that block** (`blockKeyOf`), so no two headers read the same. `_options.sort_items` sorts the two as one block.
 - **`useCollapse` keys that block as `null`.** No group name can collide with it. `Listview` maps `ungrouped_label` in `collapsed_groups` to `null`, so a list that names the header collapses the block.
@@ -37,11 +44,14 @@ The root `CLAUDE.md` states the rules; this section gives the details.
 - **A block renders collapsed only while it has a header.** `useCollapse` drops a stale key in an effect, after the render, so a list that a rerun left without groups would otherwise show an empty frame for one render.
 
 ## Render chunks
+
 **Rows render in keyed chunks of at most 100 (`ROW_CHUNK_SIZE` in `Listview.tsx`, unrelated to the bundle's single chunk), and the browser skips the chunks it does not show.** Each chunk is a `div.listview-chunk` with `role="none"`, its rows are its children, and the `renderBlocks` memo splits each block into chunks (`runsByKey`). Two costs set this shape:
+
 - **React:** one update that brings thousands of new rows into a single parent (clearing the search, expanding a big group, a rerun that adds options) costs O(k²), because React's `getHostSibling` searches forward through every following new sibling once per row.
 - **The browser:** `listview.css` gives each chunk `content-visibility: auto`, so a chunk outside the scrollport skips style, layout and paint (`BENCHMARKS.md`, *Off-screen render chunks*).
 
 The rules:
+
 - **A row's chunk number is its index in `allItems` (the options and the added entries) divided by 100 (`chunkOf`),** never a value derived from the filtered rows. A filter then cannot move a row into another chunk, so narrowing keeps every survivor's DOM node. Blocks reorder the rows, so one chunk number can appear in several blocks, each time as a chunk of its own.
 - **A skipped chunk's height is an estimate:** `--listview-chunk-rows` (the chunk's own row count, set inline) times `--listview-row-height` (the first rendered row's height). `useRowHeight` publishes the height on the listbox, which React gives no `style`. Never publish it on an element that React styles.
 - **A skipped chunk keeps the height it last rendered at.** `content-visibility: auto` implies `contain-intrinsic-size: auto`, so the browser ignores a new estimate, and a forced layout of the chunk's rows changes nothing. `forgetHeights` therefore gives such a chunk `.listview-chunk--forget` (`content-visibility: hidden`, which implies no `auto`) for two animation frames, and the browser drops the remembered height without rendering the chunk. `useResetChunkHeights` runs it for the chunks whose row count changed. `useRowHeight` runs it one frame after a changed height is laid out, for the skipped chunks whose box disagrees with the estimate and only for those: hiding a chunk of the right height blanks it for a frame. Never write `auto` into the chunk rule's `contain-intrinsic-block-size`, or the forget rule cannot drop it.
@@ -55,22 +65,26 @@ The rules:
 - **Browser tests:** `e2e/test_performance.py` covers the forget cycle after a search, `e2e/test_jump_remount.py` the scroll after a remount, and `e2e/test_row_height.py` a rerun that changes `item_height`, `content_font_size` or `show_grid_lines`.
 
 ## Markdown safety
+
 - **Nothing renders raw HTML.** No production source uses `dangerouslySetInnerHTML` or react-markdown's `allowDangerousHtml`, and `rehype-raw` and `html-react-parser` are no dependencies. `__tests__/markdown-xss-guard.test.ts` enforces all three.
 - **`transformUri` (`markdown/links.tsx`) is the only URL gate.** `Markdown.tsx` passes it as `urlTransform`, which replaces react-markdown's own safelist. It turns `javascript:`, `vbscript:`, `file:`, `blob:` and every `data:` URL except an image's `data:image/` into `#`.
 - **`isSafeCssColor` (`markdown/streamlitPlugins.ts`) admits a `foreground` or `background` value of `:color[…]{…}` only when it is a single well-formed color.** It drops any other value before the inline `style` is built, so a label cannot inject CSS.
 
 ## Theming
+
 - **All CSS (`listview.css`) reads Streamlit's `--st-*` properties, with fallbacks.** It uses no Bootstrap and no fixed palette.
 - **Never use `prefers-color-scheme` or `light-dark()`:** the production bundler (lightningcss) rewrites them so that they miss the shadow tree. For light and dark styling, read the root's `data-color-scheme`, which `useColorScheme` sets from the active Streamlit theme. The attribute reads `light` until an effect after the first paint reads the theme, so never key a surface that is visible at mount on it.
 - **`src/__tests__/listview-css.test.ts` pins what the stylesheet says; `e2e/test_sidebar_theme.py` and `e2e/test_native_parity.py` pin what a browser resolves it to.** They compare the widget with a real `st.selectbox`, `st.pills` or `st.text_input` on the same page, never with a fixed hex value. `test_native_parity_dark.py` repeats the parity tests under `--theme.base dark`, the only run that exercises the dark highlight formula.
 
 ### The sidebar swaps two tokens
+
 - **Streamlit gives the sidebar its own theme, and a V2 instance's `--st-*` block comes from the theme at its own mount point.** In the sidebar only `--st-background-color` and `--st-secondary-background-color` trade values, and the heading sizes shrink; every other color is identical. Only a running app shows this: Streamlit builds the names at runtime (`` `--st-${kebab(key)}` ``), so a search of its source finds none.
 - **Paint every surface through the `--listview-*` tokens on the container root, never through the raw tokens.** Read raw, the swap inverts the widget in the sidebar. `--listview-surface` (frame, rows, pinned header, add-option footer) and its inset `--listview-inset-surface` (search and add-option fields) are the two raw tokens, swapped together in the single `[data-in-sidebar="true"]` block. `--listview-group-surface` is `--listview-bg-mix`, Streamlit's 50/50 mix of the two, which the swap cannot move. A new surface that references a token behaves correctly in the sidebar without an override of its own.
 - **The swap matches Streamlit:** `st.selectbox`, `st.multiselect` and `st.text_input` fill their controls from `--st-secondary-background-color` in both containers, and the open selectbox menu paints the app background in both.
 - **`data-in-sidebar` comes from `isInSidebar`, which `index.tsx` calls before the first render;** `Listview` writes the attribute on its root, `div.listview`. The renderer's `parentElement` is the open `ShadowRoot`, so the answer exists at mount; an effect would set it a frame late and flash the main-body colors on every mount. The probe steps to `ShadowRoot.host` first, because `closest()` does not cross a shadow boundary; without that step the widget silently keeps the main-body colors. It needs no observer, because a container move remounts the frontend. `[data-testid="stSidebar"]` is Streamlit-internal; an upstream rename degrades to the main-body colors.
 
 ### A surface and its insets are declared as a pair
+
 - **A surface and anything painted on it must resolve to different `--st-*` tokens in every scheme,** so the two are declared together in one block, never at their use sites. A use site cannot see which ground its container resolved to.
 - **The help tooltip is the worked example:** `--listview-popover-surface` and `--listview-popover-inset-surface`, both on `.listview-help-popover`, both declared again by the dark override. Each half is literally the other one of the two tokens, never a fixed color and never a `color-mix` off the ground. The sidebar swap then inverts both halves together, so the popover contrasts in all four combinations of container and scheme without a `[data-in-sidebar]` override. Like the label's inline-code chip, it reads the raw tokens, because it follows Streamlit's tooltip, not the list surface; if that has to change, it joins the `--listview-surface` family.
 - **Do not paint the code surfaces with `--st-code-background-color`.** Streamlit derives it as a 50 % mix of the two surfaces, so in a light theme it lands close to `--st-background-color`, and an inline-code chip all but disappears.
@@ -79,6 +93,7 @@ The rules:
 - **`listview-css.test.ts` pins the pairs:** the halves differ in each scheme, the dark block swaps them, every inset reads its token, and the `th` source order holds. The list's own pair (`--listview-surface` / `--listview-inset-surface`) is pinned the same way, with the sidebar block as the swap. The test also refuses a `prefers-color-scheme` media query; `light-dark()` and `--st-code-background-color` have no test.
 
 ## Every painted state copies the native widget that plays its part
+
 The list is an always-open `st.selectbox` menu, so each state copies a measured Streamlit reference (Streamlit 1.60, both themes):
 
 | State | Reference |
@@ -98,4 +113,5 @@ The list is an always-open `st.selectbox` menu, so each state copies a measured 
 - **`onBodyClick` in `Listview.tsx` forwards a click on the frame's empty space to the listbox** (below the last row of a list shorter than `height`), but only when the target is `.listview-body` itself. Rows and the in-flow search field focus their own target, and forwarding every bubbled click would pull the caret out of an input. It is `onClick`, not `onMousedown`: focus set during mousedown loses to the browser's own mousedown handling unless the default is prevented, and preventing it on the scroll container risks the scrollbar.
 
 ## The tests depend on the markup
+
 The GIF scenarios find the widget by these `data-testid`s: `stListview` (the root that the frame, `settle()` and the key badge measure), `stListviewOption-<id>`, `stListviewSearch`, `stListviewSearchClear`, `stListviewSelectAllToggle`, `stListviewGroup` and `stListviewNewOption`; and by the classes `listview-help-trigger` and `listview-body`. The e2e suite uses more test ids, such as `stListviewNewOptionHint` and `listview-widget-label`, and more `listview-*` classes. Before you rename a test id or a class, search `e2e/` and `scripts/gif/` for it, and fix every use in the same change. After a visible change, run the visual comparison and regenerate the hero GIF (root `CLAUDE.md`, *README GIFs*).

@@ -20,6 +20,7 @@
  */
 import { visit } from "unist-util-visit";
 import { findAndReplace } from "mdast-util-find-and-replace";
+import { elementAt } from "../utils/arrays";
 import type { Nodes, PhrasingContent, Root, Text } from "mdast";
 // Importing from mdast-util-directive also loads its module augmentation, so
 // TextDirective (and siblings) are recognised by the production tsc program.
@@ -168,6 +169,7 @@ function isSafeCssColor(value: string): boolean {
  */
 export function createRemarkColoringAndSmall() {
   return () => (tree: Root) => {
+    // eslint-disable-next-line complexity -- older than the complexity limit; split it when you next change it
     visit(tree, "textDirective", (node) => {
       const nodeName = String(node.name);
       const data = node.data || (node.data = {});
@@ -229,7 +231,7 @@ export function createRemarkColoringAndSmall() {
           const props = setSpan(
             safeBackground ? "listview-md-bg" : "listview-md-color",
           );
-          props.style = styles.join("; ");
+          props["style"] = styles.join("; ");
         }
         return;
       }
@@ -237,7 +239,7 @@ export function createRemarkColoringAndSmall() {
       // :color-badge[…]
       const badgeMatch = nodeName.match(/^(.+)-badge$/);
       if (badgeMatch) {
-        const color = canonicalColor(badgeMatch[1]);
+        const color = canonicalColor(elementAt(badgeMatch, 1));
         if (color) {
           setSpan(`listview-md-badge listview-md-badge--${color}`);
         }
@@ -247,7 +249,7 @@ export function createRemarkColoringAndSmall() {
       // :color-background[…]
       const bgMatch = nodeName.match(/^(.+)-background$/);
       if (bgMatch) {
-        const color = canonicalColor(bgMatch[1]);
+        const color = canonicalColor(elementAt(bgMatch, 1));
         if (color) {
           setSpan(`listview-md-bg listview-md-bg--${color}`);
         }
