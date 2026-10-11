@@ -4,7 +4,7 @@ This file guides Claude Code (claude.ai/code) in this repository. It holds what 
 
 ## What this is
 
-`streamlit-listview` is a Streamlit **custom component** built on the **Components V2 API** (`st.components.v2.component`, Streamlit ≥ 1.51). A V2 component renders **inline** in the host page, inside a **Shadow DOM** (`isolate_styles=True`) that inherits Streamlit's `--st-*` theme variables. The legacy v1 API rendered into an iframe; none of it applies here. The widget is a selectable, scrollable list with single and multi selection, grouping, search, sorting, collapsible groups, `accept_new_options`, and Markdown labels and help.
+`streamlit-listview` is a Streamlit **custom component** built on the **Components V2 API** (`st.components.v2.component`, Streamlit ≥ 1.51). A V2 component renders **inline** in the host page, inside a **Shadow DOM** (`isolate_styles=True`, Streamlit's default) that inherits Streamlit's `--st-*` theme variables. The legacy v1 API rendered into an iframe; none of it applies here. The widget is a selectable, scrollable list with single and multi selection, grouping, search, sorting, collapsible groups, `accept_new_options`, and Markdown labels and help.
 
 The package has two languages: a thin Python wrapper (`streamlit_listview/`) and a React/TypeScript frontend (`streamlit_listview/frontend/`). Vite compiles the frontend into a bundle that the wrapper registers.
 
@@ -14,9 +14,9 @@ A `CLAUDE.md` in a subdirectory loads when Claude reads a file in that directory
 
 | File | Covers |
 |---|---|
-| `streamlit_listview/CLAUDE.md` | the Python wrapper: id rules, row identity, new entries, the `format_func` contract |
-| `streamlit_listview/frontend/CLAUDE.md` | the frontend: file map, selection state, render chunks and row height, theming, the sidebar swap, surface pairs, painted states, the `data-testid`s |
-| `demo/CLAUDE.md` | the demo: the widget key, the theme switcher |
+| `streamlit_listview/CLAUDE.md` | the Python wrapper: file map, parameter checks, id rules, row identity, new entries, the `format_func` contract |
+| `streamlit_listview/frontend/CLAUDE.md` | the frontend: file map, shared helpers, selection state, groups, render chunks and row height, Markdown safety, theming, the sidebar swap, surface pairs, painted states, the selectors that tests use |
+| `demo/CLAUDE.md` | the demo: the widget key, presets and generated code, the theme switcher, deployment, the tour's labels |
 | `.claude/skills/release/SKILL.md` | the release checklist (`/release`) |
 | `BENCHMARKS.md` | the performance benchmarks: concept, how to run, compare and read them |
 | `scripts/gif/README.md` | the README GIFs, the tour and the visual comparison |
@@ -32,7 +32,7 @@ pre-commit install --allow-missing-config   # once per clone; worktrees share th
 pre-commit run --all-files                  # every check on every file, as CI runs it
 pre-commit run ty --all-files               # a single hook
 ```
-`.pre-commit-config.yaml` runs ruff (`check --fix` and `format`) on the staged Python files and ty over the whole project on every commit, and `uv audit` when `uv.lock` or `pyproject.toml` is staged. It runs tsc, oxlint, Prettier and `npm audit` only when a file under `streamlit_listview/frontend/` is staged; these four need `npm ci` there first. The configuration lives in `[tool.ruff]` and `[tool.ty]` in the root `pyproject.toml` and in `streamlit_listview/frontend/.oxlintrc.json`.
+`.pre-commit-config.yaml` runs ruff (`check --fix` and `format`) on the staged Python files and ty over the whole project on every commit, and `uv audit` when `uv.lock` or `pyproject.toml` is staged. tsc, oxlint and Prettier run when a staged `.ts`, `.tsx` or `.json` file lies under `streamlit_listview/frontend/`, and `npm audit` when its `package.json` or `package-lock.json` is staged. These four need `npm ci` there first; without it, the `frontend-deps` hook stops the commit and says so. A change to `listview.css` alone runs no check of the stylesheet; `npm test` runs `listview-css.test.ts`. The configuration lives in `[tool.ruff]` and `[tool.ty]` in the root `pyproject.toml` and in `streamlit_listview/frontend/.oxlintrc.json`.
 - **When a hook fails, fix the finding and commit again. Never pass `--no-verify`.** A ruff fix leaves the file modified: stage it and commit again. The Prettier hook only checks: run `npm run format`, stage, and commit again.
 - **Suppress a finding only on purpose, on the narrowest scope, with its reason:** `# noqa: CODE` or `# ty: ignore[rule]` on the line, or a per-file ignore in `pyproject.toml`; in the frontend, `// eslint-disable-next-line rule -- reason` (oxlint reads the ESLint syntax). An unused suppression fails the check; remove it when its finding goes away.
 - **Line endings:** a Windows checkout has CRLF endings, and Prettier (`endOfLine: auto`) fails a file with mixed endings. A shell `>>` append writes LF into a CRLF file; `npm run format` evens it out.
@@ -42,7 +42,7 @@ pre-commit run ty --all-files               # a single hook
 - **A commit that only deletes frontend files runs no frontend hook.** CI's `lint` job catches what the deletion breaks.
 
 ### Tests
-Python, gated at 100 % coverage over `streamlit_listview` and `demo` (except `demo/app.py`, which the e2e suite exercises):
+Python, gated at 100 % coverage over `streamlit_listview`, `demo` and `scripts/push_gate.py` (except `demo/app.py`, which the e2e suite exercises):
 ```sh
 uv run --extra devel pytest tests/                                   # the unit suite
 uv run --extra devel pytest tests/ --cov --cov-report=term-missing   # with the coverage gate
@@ -69,21 +69,21 @@ npm run dev                             # vite build --watch
 uv pip install -e . --force-reinstall   # from the root; the build backend runs npm run build
 uv build                                # wheel + sdist; also builds the frontend
 ```
-`LISTVIEW_SKIP_NPM_BUILD=1` skips the npm step when the bundle is current.
+**The bundle is gitignored.** `streamlit_listview/frontend/build/` is generated, and `git reset` never touches it. After editing anything under `frontend/src/`, run `npm run build` and restart Streamlit; a running app shows the old bundle until then.
 
-**The bundle is gitignored.** `streamlit_listview/frontend/build/` is generated, and `git reset` never touches it. After editing anything under `frontend/src/`, run `npm run build` and restart Streamlit; a running app shows the old bundle until then. The in-tree build backend (`_build_backend.py`) runs `npm run build` for wheel, sdist and editable builds, and fails when the bundle is missing.
+**The in-tree build backend (`_build_backend.py`) runs `npm run build` for wheel, sdist and editable builds,** after `npm ci` when `node_modules` is missing; without npm on `PATH` it fails. With `LISTVIEW_SKIP_NPM_BUILD=1`, or without `frontend/src` (a wheel built from the sdist), it skips npm and packages the bundle in `build/`. It then fails unless `build/` holds exactly one `index-*.js` and one `index-*.css`. It cannot tell a stale bundle, so set the variable only when the bundle is current.
 
 ### e2e (Playwright; not in CI)
 ```sh
 uv run --extra devel playwright install   # once
 uv run --extra devel pytest e2e/
 ```
-Each test starts a Streamlit subprocess (`e2e/e2e_utils.py::StreamlitRunner`) on a harness app (`e2e/app.py`, `app_features.py`, `app_performance.py`) and needs a built bundle. `pytest e2e/` skips the browser-tier benchmark in `e2e/perf/`.
+Each test module serves one Streamlit script through `e2e/e2e_utils.py::StreamlitRunner`: a harness app (`e2e/app*.py`), `demo/app.py` (the modules in `e2e/demo/`), `example.py`, or `e2e/perf/app_bench.py`. `e2e/conftest.py` boots one server per script, flags and environment and shares it across modules (`_servers`). A new harness for a module directly under `e2e/` needs an entry in `LISTVIEW_COUNTS` there. Every run needs a built bundle. `pytest e2e/` skips the browser-tier benchmark in `e2e/perf/` unless `--perf-out` is given.
 
 ### Performance benchmarks (not in CI; no thresholds)
-**Read `BENCHMARKS.md` before running, changing or reading a benchmark.** Both tiers drive the component only through its public surface, so the same files benchmark any checkout. The full matrix takes about 25 minutes in the frontend tier and 24 in the browser tier.
+**Read `BENCHMARKS.md` before running, changing or reading a benchmark.** Both tiers drive the component only through its public surface, so the same files benchmark any checkout. The full matrix takes about 25 minutes per tier.
 - **Frontend tier** (vitest `bench` in jsdom, `frontend/src/bench/`): `npm run bench`, for React-side A/B work. It runs React's development build, so its numbers are relative.
-- **Browser tier** (Playwright against a real Streamlit server, `e2e/perf/`): `uv run --extra devel pytest e2e/perf/ --perf-out bench-results/<label>.jsonl`, summarized by `uv run --extra devel python -m e2e.perf.report`. It gives the numbers of record, and only it can judge DOM-size or CSS work. It measures the checkout it runs from.
+- **Browser tier** (Playwright against a real Streamlit server, `e2e/perf/`): `uv run --extra devel pytest e2e/perf/ --perf-out bench-results/<label>.jsonl`, summarized by `uv run --extra devel python -m e2e.perf.report bench-results/<label>.jsonl`, or compared with a second results file given after it. It gives the numbers of record, and only it can judge DOM-size or CSS work. It measures the checkout it runs from.
 - **A delta inside the spread is not a result.** Results go to the gitignored `bench-results/` and are never committed: the numbers are machine-specific. The only gated performance check is `e2e/test_performance.py`.
 
 ### Visual comparison (not in CI; one machine only)
@@ -94,7 +94,7 @@ LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py --
 LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py --all --record bench-results/visual/after
 uv run --extra devel python scripts/gif/compare.py bench-results/visual/before bench-results/visual/after   # exit 0 same, 1 differs, 2 invalid input
 ```
-A difference is not a failure: an intended change reports too, and a person judges `report.html`. Fonts and the Chromium version change pixels, so compare only recordings from one machine, and never commit them.
+`--record` refuses a directory that holds a recording; `--overwrite` replaces it. A difference is not a failure: an intended change reports too, and a person judges `report.html`. Fonts and the Chromium version change pixels, so compare only recordings from one machine, and never commit them.
 
 ### Run the demo
 ```sh
@@ -103,29 +103,34 @@ uv run --extra devel streamlit run demo/app.py   # needs the package installed a
 
 ## Architecture
 
-**Python wrapper.** `streamlit_listview/__init__.py` declares the component at import time (`js="index-*.js"`, `css="index-*.css"`) and defines `listview(...)`. It validates the parameters, normalizes the options, ships a `data` dict to the frontend, and maps the returned ids back to the original Python objects. `_options.py` holds the option rules. The nested `streamlit_listview/pyproject.toml` ships in the wheel as the component manifest; its `name` must match the distribution name.
+**Python wrapper.** `streamlit_listview/__init__.py` declares the component at import time (`js="index-*.js"`, `css="index-*.css"`) and defines `listview(...)`. It validates the parameters, normalizes the options, ships a `data` dict to the frontend, and maps the returned ids back to the original Python objects. `_options.py` holds the option rules. The nested `streamlit_listview/pyproject.toml` ships in the wheel as the component manifest. Its `name`, `streamlit_listview`, must equal the distribution name `streamlit-listview` after PEP 503 normalization, and it prefixes the component key `streamlit_listview.listview`.
 
-**Frontend.** `index.tsx` is the V2 `FrontendRenderer` entry and mounts one React root per instance. `Listview.tsx` composes the hooks (`hooks/`) and the presentational components (`components/`). `utils/` holds the shared helpers, and `markdown/` renders Markdown as Streamlit does, without raw HTML or LaTeX.
+**Frontend.** `index.tsx` is the V2 `FrontendRenderer` entry and mounts one React root per instance. `Listview.tsx` composes the hooks (`hooks/`) and the presentational components (`components/`). `utils/` holds the shared helpers. `components/Markdown.tsx` renders Markdown as Streamlit does, with the plugins in `markdown/`; it escapes raw HTML and shows LaTeX as literal text.
 
 ### Invariants that span both languages
 
-- **Three rules exist in both languages; change both copies together.** Row identity: the frontend keys rows by `idKey` (`utils/ids.ts`, JavaScript `String(id)`), and Python mirrors it with `_id_key` (`_options.py`). Every question about row identity goes through one of the two; never write a second `String(id)` or `str(id)` for it. The canonical-integer rule for new entries: `_parse_new_int_id` and `parseNewIntId`, which both suites test with the same input table. The block a row renders in: `blockKeyOf` (`Listview.tsx`) puts a group named like `ungrouped_label` into the block without a group, and `sort_items` sorts the two as one block.
+- **Five rules exist in both languages; change both copies together.** Row identity: the frontend keys rows by `idKey` (`utils/ids.ts`, JavaScript `String(id)`), and Python mirrors it with `_id_key` (`_options.py`). Every question about row identity goes through one of the two; never write a second `String(id)` or `str(id)` for it. The canonical-integer rule for new entries: `_parse_new_int_id` and `parseNewIntId`, which both suites test with the same input table. The block a row renders in: `blockKeyOf` (`Listview.tsx`) puts a group named like `ungrouped_label` into the block without a group, and `sort_items` sorts the two as one block. The row of a new entry with dict options: `newOptionRow` (`Listview.tsx`) and `_new_entry` (`_options.py`) both build it from the id, labeled with the id as text. The fifth rule, the reconciliation of the selection, follows below.
 - **Ids are exactly `str` or `int`** (never `bool`), an `int` id satisfies `abs(id) <= 2**53 - 1`, and ids are unique as rendered. The JSON boundary and JavaScript's `String()` set these limits.
-- **Selection state lives on the frontend.** `useSelection` holds the selected ids as React state and seeds them once, at mount: from `data.state_selection` (the persisted `st.session_state[key]` of a keyed instance) when present, else from `default`. A later change to either seeds nothing.
+- **Selection state lives on the frontend.** `useSelection` holds the selected ids as React state and seeds them once, at mount: from `data.state_selection` (the persisted `st.session_state[key]` of a keyed instance) when present, else from `data.default_ids` (the `default` that `listview()` resolved). A later change to either seeds nothing.
 - **A reconciliation fires `on_change` once, on purpose.** When a rerun's payload invalidates the selection (a keyed caller shrinks `options`, lowers `max_selections` or switches `selection_mode`), `useSelection` corrects it and commits the correction through `setStateValue("selection", …)`. The V2 layer cannot tell that commit from a click. Do not suppress the write-back, and do not use `setTriggerValue`: it fires and forgets, it does not persist. `_options.map_selection` applies the same corrections on the way out, with the same survivors, so the returned value never waits for the write-back. Change one, change the other.
-- **Only a new `key` resets the widget.** A keyed instance keeps its selection and its UI state (collapse, search, scroll) across parameter changes; an unkeyed instance remounts on any parameter change. `default` never commits a value.
-- **The bundle is a single chunk.** Vite emits exactly one `index-[hash].js` and one `index-[hash].css`, and each Python glob requires exactly one match. Never add a dynamic `import()`: it splits off a second chunk and breaks registration. For this reason `remark-emoji` is imported statically and KaTeX is gone.
-- **CSS reads Streamlit's `--st-*` variables only**, with fallbacks. Never use `prefers-color-scheme` or `light-dark()`: lightningcss rewrites them so that they miss the shadow tree.
-- **The GIF scenarios, the tour and the e2e suite find the widget by its `data-testid`s and the demo by its labels.** A rename breaks them; fix them in the same change.
+- **Only a new `key` resets a keyed widget's selection.** A keyed instance keeps its selection and its UI state (collapse, search, scroll) across parameter changes; an unkeyed instance remounts on any parameter change. A move between `st.sidebar` and the main body remounts the frontend: the selection survives through `state_selection`, and the UI state resets. `default` fires no `on_change`: it sets the V2 mount state, which `listview()` returns until the first commit.
+- **The bundle is a single chunk.** Vite emits exactly one `index-[hash].js` and one `index-[hash].css`, and each Python glob requires exactly one match. Never add a dynamic `import()`: it splits off a second chunk and breaks registration. For this reason `remark-emoji` is imported statically.
+- **The GIF scenarios, the tour and the e2e suite find the widget by its `data-testid`s and `listview-*` classes, and the demo by its labels.** Before you rename one, search `e2e/` and `scripts/gif/` for it, and fix every use in the same change.
 
 ## CI (`.github/workflows/ci.yml`)
-Three jobs run in parallel. `lint` runs `uvx pre-commit run --all-files --show-diff-on-failure`. `test-build-verify` runs, in order: `npm ci`, `npm run build`, `npm test`, an editable install with `LISTVIEW_SKIP_NPM_BUILD=1`, `pytest tests/` with the coverage gate, a wheel build from a clean bundle, and `scripts/verify_wheel.py`. That script checks that the wheel ships exactly one `index-*.js` and one `index-*.css` under `frontend/build/`, plus the manifest and the license files. `push-gate` runs on a push to `main` only: `python3 scripts/push_gate.py check main` checks the version information and the release state (see *Pushing to GitHub*). **The build must precede `npm test`** (see *Tests*). The e2e suite does not run in CI. Actions are referenced by version tag, not by SHA, on purpose.
+Three jobs run in parallel. `lint` runs `uvx pre-commit run --all-files --show-diff-on-failure`. `test-build-verify` runs, in order: `npm ci`, `npm run build`, `npm test`, an editable install with `LISTVIEW_SKIP_NPM_BUILD=1`, `pytest tests/` with the coverage gate, a wheel build from a clean bundle, and `scripts/verify_wheel.py`. That script checks the wheel's contents: exactly one `index-*.js` and one `index-*.css` under `frontend/build/` and nothing else there, the manifest, the license files, and no `_build_backend.py`. It also checks that the file name carries the version of the root `pyproject.toml`. `push-gate` runs on a push to `main` only: `python3 scripts/push_gate.py check main` checks the version information and the release state (see *Pushing to GitHub*). **The build must precede `npm test`** (see *Tests*). The e2e suite does not run in CI. Actions are referenced by version tag, not by SHA, on purpose.
 
 ## Releasing
-A `v*.*.*` tag pushed to GitHub publishes to PyPI through Trusted Publishing (`.github/workflows/release.yml`). **Cut a release with the `release` skill** (`.claude/skills/release/SKILL.md`): five files assert the version, the release job fails when one disagrees, and the order of the pushes matters.
+A `v*.*.*` tag pushed to GitHub publishes to PyPI through Trusted Publishing (`.github/workflows/release.yml`). **Cut a release with the `release` skill** (`.claude/skills/release/SKILL.md`). Five files assert the version, and `uv.lock` and `CHANGELOG.md` must agree with them; the release job fails when one of the seven disagrees. The order of the pushes matters.
 
 ### Pushing to GitHub
-GitHub `main` shows released code only: Streamlit Community Cloud runs the hosted demo from it and installs the version that `demo/requirements.txt` pins from PyPI. A pre-push hook, `scripts/push_gate.py`, refuses every push to GitHub except `main` and `v*` tags. It lets those pass only with a command-line confirmation that names the version, consistent version information, a changelog without "Unreleased", the release order (the tag, then the PyPI release, then `main`), and a passing CI suite on the pushed commit, which must be `HEAD` of a clean tree. CI's `push-gate` job and `release.yml` repeat the version checks on GitHub.
+GitHub `main` shows released code only: Streamlit Community Cloud runs the hosted demo from it and installs the version that `demo/requirements.txt` pins from PyPI. A pre-push hook, `scripts/push_gate.py`, checks every push to GitHub (a remote URL that contains `github.com`). A push passes four stages; each stage reports all of its findings, and a stage runs only when the earlier ones passed:
+1. **Refs:** only `main` and a new tag `v<version>`; no deletion, no force push, no moved tag.
+2. **Local state:** a command-line confirmation that names the version; the push sends `HEAD` of a clean tree; the seven version files agree (see *Releasing*); the changelog dates the version and contains no "Unreleased".
+3. **Remote state:** the release order: the tag, then the PyPI release, then `main`. **`main` must carry the library code of its release tag,** so between releases GitHub `main` takes no change to the shipped package; docs, tests, the demo and the scripts may change.
+4. **The suite:** CI's checks, run locally on the pushed commit: `npm ci`, `pre-commit run --all-files`, the build, `npm test`, `pytest tests/` with the coverage gate, a wheel build and `verify_wheel.py`. It takes minutes and needs npm, uv and uvx on `PATH`.
+
+CI's `push-gate` job and `release.yml` repeat the version and release checks on GitHub.
 ```sh
 uv run --no-project python scripts/push_gate.py install       # once per clone; the worktrees share the hook
 git branch --set-upstream-to=azure/main main                  # in a clone with an Azure DevOps remote `azure`
@@ -148,6 +153,7 @@ git -c listview.pushGithub=<version> push origin v<version>   # then the same fo
 npm --prefix streamlit_listview/frontend run build
 LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py --gallery             # every gallery GIF
 LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py --scenario keyboard   # one GIF
+LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel --with imageio-ffmpeg python scripts/gif/screencast.py   # the tour
 ```
 - **Build first.** The generator captures the bundle in `frontend/build/`; a stale bundle yields GIFs of the old widget.
 - **Commit a GIF only when its frames show a real change.** On one machine an unchanged widget yields byte-identical files. Another machine's fonts or a newer Chromium change pixels too.
@@ -159,6 +165,6 @@ LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py --
 ## Components V2 references
 This repo hand-rolls the V2 stack. The official docs help to cross-check boilerplate (registration, the `FrontendRenderer` contract, packaging) but say nothing about this repo's invariants; for those, trust the `CLAUDE.md` files. **Most search hits still describe the legacy v1 iframe API.** `declare_component`, `Streamlit.setComponentValue`, `withStreamlitConnection`, `streamlit-component-lib` and a frontend dev server on `:3001` mark v1 material; ignore it.
 - **V2 concepts** (registration, state vs. triggers, theming): <https://docs.streamlit.io/develop/concepts/custom-components/components-v2>. `setStateValue` persists state; `setTriggerValue` fires and forgets.
-- **API reference:** <https://docs.streamlit.io/develop/api-reference/custom-components>. The frontend types `index.tsx` implements (`FrontendRenderer`, `FrontendRendererArgs`, `FrontendState`, `CleanupFunction`) come from the npm package `@streamlit/component-v2-lib`.
+- **API reference:** <https://docs.streamlit.io/develop/api-reference/custom-components>. `index.tsx` implements the `FrontendRenderer` type from the npm package `@streamlit/component-v2-lib` and takes `FrontendRendererArgs` from it; `ListviewState` in `types.ts` satisfies its `FrontendState`.
 - **React + TypeScript tutorial** (V2 as of 2026-06): <https://docs.streamlit.io/develop/tutorials/custom-components/template-react>.
 - **Official template:** <https://github.com/streamlit/component-template>. Only `templates/v2/` applies.
