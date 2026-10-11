@@ -45,7 +45,7 @@ def play(stage: Stage) -> None:
 SCENARIO = Scenario(
     name="add-options",
     title="Add new options; a known label selects its row",
-    gallery=True,
+    gallery=False,
     page=page,
     play=play,
 )

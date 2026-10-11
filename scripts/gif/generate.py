@@ -1,11 +1,9 @@
-"""One-command generator for the README GIFs.
+"""One-command generator for the hero GIF and the recordings of every scenario.
 
 For each chosen scenario it serves the capture page (app.py) once per take,
 plays the take in Chromium, and assembles the frames into a looping GIF:
 
     python scripts/gif/generate.py                       # the hero: assets/listview-demo.gif
-    python scripts/gif/generate.py --scenario keyboard   # one gallery GIF
-    python scripts/gif/generate.py --gallery             # every gallery GIF
     python scripts/gif/generate.py --all --record bench-results/visual/before   # frames, no GIF
 
 Prereqs: the package installed with a built frontend bundle, and Playwright's
@@ -96,7 +94,9 @@ def _serve(
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse the command line; ``scenarios`` holds the chosen Scenario objects."""
-    ap = argparse.ArgumentParser(description="Regenerate the README GIFs.")
+    ap = argparse.ArgumentParser(
+        description="Regenerate the hero GIF, or record the scenarios' frames."
+    )
     ap.add_argument(
         "--scenario",
         action="append",
@@ -104,7 +104,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         metavar="NAME",
         help=f"a scenario to run, repeatable; one of: {', '.join(SCENARIOS)}",
     )
-    ap.add_argument("--gallery", action="store_true", help="every gallery scenario")
     ap.add_argument(
         "--all",
         action="store_true",
@@ -138,14 +137,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def _choose(ap: argparse.ArgumentParser, args: argparse.Namespace) -> list[Scenario]:
     """The scenarios the options name; a usage error for a combination that fails."""
-    if sum(map(bool, (args.all, args.gallery, args.scenario))) > 1:
-        ap.error("choose one of --all, --gallery and --scenario")
+    if args.all and args.scenario:
+        ap.error("choose one of --all and --scenario")
     if args.all:
         if not args.record:
             ap.error("--all needs --record DIR: test scenarios build no GIF")
         chosen = list(SCENARIOS.values())
-    elif args.gallery:
-        chosen = [s for s in SCENARIOS.values() if s.gallery]
     elif args.scenario:
         chosen = [SCENARIOS[name] for name in dict.fromkeys(args.scenario)]
     else:
@@ -179,7 +176,7 @@ def _choose(ap: argparse.ArgumentParser, args: argparse.Namespace) -> list[Scena
             "test scenarios build no GIF; record them with --record DIR: "
             + ", ".join(test_only)
         )
-    if args.out and (args.gallery or len(chosen) != 1):
+    if args.out and len(chosen) != 1:
         ap.error("--out names one GIF: use it with a single --scenario")
     # Validate at argument time so a typo fails immediately, not after the
     # capture has run. Same rules build_gif itself enforces.

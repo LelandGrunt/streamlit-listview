@@ -1,4 +1,7 @@
-"""The README's hero GIF: live search, multi-select, select-all, a group collapsed."""
+"""The hero GIF: live search, multi-select, select-all, a group collapsed.
+
+The README of 1.0.0 and 1.0.1 shows it, and their PyPI pages link it at HEAD.
+"""
 
 from scenarios._cities import CITIES
 from stage import Scenario, Stage

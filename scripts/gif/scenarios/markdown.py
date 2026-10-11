@@ -54,7 +54,7 @@ def play(stage: Stage) -> None:
 SCENARIO = Scenario(
     name="markdown",
     title="Markdown in the label and the help tooltip",
-    gallery=True,
+    gallery=False,
     page=page,
     play=play,
     takes=(Take(clip_top=CLIP_TOP),),

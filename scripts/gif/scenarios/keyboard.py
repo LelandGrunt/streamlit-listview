@@ -59,7 +59,7 @@ def play(stage: Stage) -> None:
 SCENARIO = Scenario(
     name="keyboard",
     title="Keyboard: arrows, Home/End, Enter, / to search, Esc to clear",
-    gallery=True,
+    gallery=False,
     page=page,
     play=play,
 )

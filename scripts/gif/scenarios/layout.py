@@ -64,7 +64,7 @@ def play(stage: Stage) -> None:
 SCENARIO = Scenario(
     name="layout",
     title="One list, four looks: font size, grid lines, row height, sort order",
-    gallery=True,
+    gallery=False,
     page=page,
     play=play,
 )

@@ -41,29 +41,6 @@ A selectable, scrollable **list widget** for Streamlit — with grouping, search
 
 Built on [**Streamlit Components V2**](https://docs.streamlit.io/develop/concepts/custom-components/components-v2): the widget renders inline in the host page (inside a Shadow DOM), not in an iframe.
 
-## Features in action
-
-Each GIF shows one feature. Where a GIF changes a parameter, the label above the list names it.
-
-<table>
-  <tr>
-    <td align="center" valign="top" width="50%"><img src="https://raw.githubusercontent.com/LelandGrunt/streamlit-listview/HEAD/assets/listview-keyboard.gif" alt="Keyboard: arrows, Home/End, Enter, / to search, Esc to clear" width="360"><br><sub>Keyboard: arrows, Home/End, Enter, / to search, Esc to clear</sub></td>
-    <td align="center" valign="top" width="50%"><img src="https://raw.githubusercontent.com/LelandGrunt/streamlit-listview/HEAD/assets/listview-add-options.gif" alt="Add new options; a known label selects its row" width="360"><br><sub>Add new options; a known label selects its row</sub></td>
-  </tr>
-  <tr>
-    <td align="center" valign="top" width="50%"><img src="https://raw.githubusercontent.com/LelandGrunt/streamlit-listview/HEAD/assets/listview-markdown.gif" alt="Markdown in the label and the help tooltip" width="360"><br><sub>Markdown in the label and the help tooltip</sub></td>
-    <td align="center" valign="top" width="50%"><img src="https://raw.githubusercontent.com/LelandGrunt/streamlit-listview/HEAD/assets/listview-layout.gif" alt="One list, four looks: font size, grid lines, row height, sort order" width="360"><br><sub>One list, four looks: font size, grid lines, row height, sort order</sub></td>
-  </tr>
-  <tr>
-    <td align="center" valign="top" width="50%"><img src="https://raw.githubusercontent.com/LelandGrunt/streamlit-listview/HEAD/assets/listview-themes.gif" alt="Follows the app theme: light, dark and two brand themes" width="360"><br><sub>Follows the app theme: light, dark and two brand themes</sub></td>
-    <td align="center" valign="top" width="50%"><img src="https://raw.githubusercontent.com/LelandGrunt/streamlit-listview/HEAD/assets/listview-large-list.gif" alt="100,000 options with a pinned search" width="360"><br><sub>100,000 options with a pinned search</sub></td>
-  </tr>
-  <tr>
-    <td align="center" valign="top" width="50%"><img src="https://raw.githubusercontent.com/LelandGrunt/streamlit-listview/HEAD/assets/listview-jump-to-default.gif" alt="Scrolls the default into view" width="360"><br><sub>Scrolls the default into view</sub></td>
-    <td></td>
-  </tr>
-</table>
-
 ## Installation
 
 ```sh

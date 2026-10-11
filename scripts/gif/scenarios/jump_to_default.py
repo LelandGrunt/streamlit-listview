@@ -62,7 +62,7 @@ def play(stage: Stage) -> None:
 SCENARIO = Scenario(
     name="jump-to-default",
     title="Scrolls the default into view",
-    gallery=True,
+    gallery=False,
     page=page,
     play=play,
 )

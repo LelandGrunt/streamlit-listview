@@ -1,4 +1,4 @@
-"""The GIF scenario catalogue: scenario name -> Scenario, gallery scenarios first.
+"""The GIF scenario catalogue: scenario name -> Scenario, the gallery scenario first.
 
 demo/ goes on sys.path because two scenarios reuse the demo's dataset generator
 (demo/data.py), as the demo's own tests do.
@@ -27,8 +27,9 @@ from stage import Scenario
 SCENARIOS: dict[str, Scenario] = {
     scenario.name: scenario
     for scenario in (
-        # Gallery scenarios, in README order.
+        # The gallery scenario: the only one that builds a GIF.
         hero.SCENARIO,
+        # Test scenarios: recorded, never a GIF.
         keyboard.SCENARIO,
         add_options.SCENARIO,
         markdown.SCENARIO,
@@ -36,7 +37,6 @@ SCENARIOS: dict[str, Scenario] = {
         themes.SCENARIO,
         large_list.SCENARIO,
         jump_to_default.SCENARIO,
-        # Test scenarios: recorded, never a GIF.
         dark.SCENARIO,
         sidebar.SCENARIO,
         limits.SCENARIO,

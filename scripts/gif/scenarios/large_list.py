@@ -55,7 +55,7 @@ def play(stage: Stage) -> None:
 SCENARIO = Scenario(
     name="large-list",
     title="100,000 options with a pinned search",
-    gallery=True,
+    gallery=False,
     page=page,
     play=play,
 )

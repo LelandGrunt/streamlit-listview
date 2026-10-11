@@ -87,7 +87,7 @@ Each test module serves one Streamlit script through `e2e/e2e_utils.py::Streamli
 - **A delta inside the spread is not a result.** Results go to the gitignored `bench-results/` and are never committed: the numbers are machine-specific. The only gated performance check is `e2e/test_performance.py`.
 
 ### Visual comparison (not in CI; one machine only)
-The README GIF scenarios double as a before/after check of the widget's look. Build the bundle before each recording:
+The GIF scenarios in `scripts/gif/` double as a before/after check of the widget's look. Build the bundle before each recording:
 ```sh
 LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py --all --record bench-results/visual/before
 # change the widget, run npm run build, then:
@@ -148,15 +148,14 @@ git -c listview.pushGithub=<version> push origin v<version>   # then the same fo
 **Keep the `CLAUDE.md` files short.** Claude loads them into every session that touches their directory. A rule goes into the `CLAUDE.md` of the directory it concerns; only a rule that spans directories goes into this file. State the rule and the one reason a reader needs to keep it. Measurements, dates and the history of a fix belong in the commit message, in `BENCHMARKS.md` or in a comment next to the code.
 
 ### README GIFs (`assets/*.gif`)
-**Regenerate the gallery GIFs in the same commit as any change to how the widget looks or behaves.** The README links each GIF at `HEAD`, so a style change merged without new GIFs advertises a widget the code no longer renders. The rule covers `listview.css`, the markup in `Listview.tsx` and `components/`, the Markdown renderer, any hook whose effect the user sees, a Python default that changes rendering, and `scripts/gif/` itself. A refactor, a performance change or a test change needs no new GIF.
+**Regenerate the hero GIF (`assets/listview-demo.gif`) in the same commit as any change to how the widget looks or behaves.** The PyPI pages of 1.0.0 and 1.0.1 link it at `HEAD`, so a style change merged without a new GIF advertises a widget the code no longer renders. The rule covers `listview.css`, the markup in `Listview.tsx` and `components/`, the Markdown renderer, any hook whose effect the user sees, a Python default that changes rendering, and `scripts/gif/` itself. A refactor, a performance change or a test change needs no new GIF.
 ```sh
 npm --prefix streamlit_listview/frontend run build
-LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py --gallery             # every gallery GIF
-LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py --scenario keyboard   # one GIF
+LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py                                  # the hero
 LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel --with imageio-ffmpeg python scripts/gif/screencast.py   # the tour
 ```
-- **Build first.** The generator captures the bundle in `frontend/build/`; a stale bundle yields GIFs of the old widget.
-- **Commit a GIF only when its frames show a real change.** On one machine an unchanged widget yields byte-identical files. Another machine's fonts or a newer Chromium change pixels too.
+- **Build first.** The generator captures the bundle in `frontend/build/`; a stale bundle yields a GIF of the old widget.
+- **Commit the hero GIF only when its frames show a real change.** On one machine an unchanged widget yields a byte-identical file. Another machine's fonts or a newer Chromium change pixels too.
 - **The tour** (`assets/listview-tour.gif`) differs on every run. Regenerate it when the demo changes visibly and with every version bump, because it shows the version badge.
 - **Never launch the tour's Chromium with `--use-fake-ui-for-media-stream`:** that flag records the whole monitor, not the demo's tab.
 

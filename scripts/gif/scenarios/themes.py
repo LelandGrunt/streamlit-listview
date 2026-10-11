@@ -77,11 +77,11 @@ def play(stage: Stage) -> None:
 SCENARIO = Scenario(
     name="themes",
     title="Follows the app theme: light, dark and two brand themes",
-    gallery=True,
+    gallery=False,
     page=page,
     play=play,
-    # Light and dark first: the brand themes' smaller base font makes a smaller
-    # widget, and the first take sets the frame size of the GIF.
+    # Streamlit's own themes first, then the demo's brand themes, so a
+    # recording reads from the familiar to the custom.
     takes=(
         Take("light", ("--theme.base", "light")),
         Take("dark", ("--theme.base", "dark")),

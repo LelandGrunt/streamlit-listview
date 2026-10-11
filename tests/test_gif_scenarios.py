@@ -4,6 +4,7 @@ import importlib
 import json
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
 
@@ -19,9 +20,9 @@ from make_gif import build_gif
 from scenarios import SCENARIOS
 from stage import Scenario, Stage, Take, clip_for
 
-# The catalogue in README order; each scenario task adds its name.
-GALLERY = [
-    "hero",
+# The catalogue in order: the one GIF scenario, then the test scenarios.
+GALLERY = ["hero"]
+TEST_ONLY = [
     "keyboard",
     "add-options",
     "markdown",
@@ -29,8 +30,10 @@ GALLERY = [
     "themes",
     "large-list",
     "jump-to-default",
+    "dark",
+    "sidebar",
+    "limits",
 ]
-TEST_ONLY: list[str] = ["dark", "sidebar", "limits"]
 SCENARIO_DIR = ROOT / "scripts" / "gif" / "scenarios"
 
 BOX = {"x": 80.0, "y": 300.0, "width": 560.0, "height": 680.0}
@@ -165,10 +168,6 @@ def test_generate_defaults_to_the_hero():
     assert [s.name for s in generate.parse_args([]).scenarios] == ["hero"]
 
 
-def test_generate_gallery_chooses_every_gallery_scenario():
-    assert [s.name for s in generate.parse_args(["--gallery"]).scenarios] == GALLERY
-
-
 def test_generate_names_the_scenarios_on_a_typo(capsys):
     with pytest.raises(SystemExit) as excinfo:
         generate.parse_args(["--scenario", "nope"])
@@ -176,9 +175,16 @@ def test_generate_names_the_scenarios_on_a_typo(capsys):
     assert "hero" in capsys.readouterr().err
 
 
-def test_generate_out_needs_a_single_scenario():
+def test_generate_out_needs_a_single_scenario(monkeypatch, capsys):
+    """Two GIF scenarios would both write the one --out path."""
+    monkeypatch.setitem(
+        generate.SCENARIOS, "hero-2", replace(SCENARIOS["hero"], name="hero-2")
+    )
     with pytest.raises(SystemExit):
-        generate.parse_args(["--gallery", "--out", "x.gif"])
+        generate.parse_args(
+            ["--scenario", "hero", "--scenario", "hero-2", "--out", "x.gif"]
+        )
+    assert "--out names one GIF" in capsys.readouterr().err
     assert generate.parse_args(["--scenario", "hero", "--out", "x.gif"]).out == "x.gif"
 
 
@@ -287,7 +293,11 @@ class _FakeRunner:
 
 def test_a_recording_lets_takes_differ_in_size(tmp_path, monkeypatch):
     """compare.py reports a frame of another size, so only a GIF demands that
-    every take of a scenario has the first take's frame size."""
+    every take of a scenario has the first take's frame size. themes is the
+    scenario with takes of different sizes; as a GIF scenario it shows that a
+    recording passes no frame size even where a GIF would."""
+    themes = replace(SCENARIOS["themes"], gallery=True)
+    monkeypatch.setitem(generate.SCENARIOS, "themes", themes)
     sizes = []
 
     def fake_capture(url, frames_dir, scenario, take, frames, clip_size=None):
@@ -297,7 +307,7 @@ def test_a_recording_lets_takes_differ_in_size(tmp_path, monkeypatch):
     monkeypatch.setattr(generate, "_serve", lambda *args, **kwargs: _FakeRunner())
     monkeypatch.setattr(generate, "capture", fake_capture)
     generate.main(["--scenario", "themes", "--record", str(tmp_path / "rec")])
-    assert sizes == [None] * len(SCENARIOS["themes"].takes)
+    assert sizes == [None] * len(themes.takes)
 
 
 def test_a_failed_take_names_the_scenario_and_shows_the_server_output(
@@ -359,8 +369,8 @@ def test_dataset_scenario_builds_its_options_once(monkeypatch, module_name, size
 
 @pytest.mark.parametrize("name", GALLERY)
 def test_gallery_gif_stays_at_or_below_150_kb(name):
-    """scripts/gif/README.md caps a gallery GIF at 150 KB, so the README loads
-    quickly on GitHub and PyPI. The tour is no gallery GIF and has no cap."""
+    """scripts/gif/README.md caps a gallery GIF at 150 KB, so the PyPI pages that
+    show it load quickly. The tour is no gallery GIF and has no cap."""
     gif = ROOT / "assets" / SCENARIOS[name].gif_file
     size = gif.stat().st_size
     assert size <= 150_000, f"{gif.name} is {size:,} bytes, above 150 KB"
