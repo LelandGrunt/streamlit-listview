@@ -126,6 +126,9 @@ jobs:
       contents: write # create the release and upload its assets
       id-token: write # Sigstore signing via OIDC
     steps:
+      # CHANGELOG.md, for the release notes.
+      - uses: actions/checkout@v7
+
       - name: Download distributions
         uses: actions/download-artifact@v8
         with:
@@ -136,6 +139,27 @@ jobs:
         uses: sigstore/gh-action-sigstore-python@v3.5.0
         with:
           inputs: ./dist/*.tar.gz ./dist/*.whl
+
+      # The notes are the version's section of CHANGELOG.md, so a release that
+      # breaks compatibility says so on GitHub too; the build job's push gate
+      # check guarantees the heading. It ends at the next version heading or at
+      # the link definitions below the last one. Relative links point at the
+      # tag, because a release page resolves them against its own URL.
+      # --generate-notes appends GitHub's compare link below them. PyPI has
+      # published by now, so empty notes only warn: the release still appears.
+      - name: Extract the release notes from CHANGELOG.md
+        run: |
+          awk -v heading="## [${GITHUB_REF_NAME#v}] - " '
+            index($0, heading) == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found && /^\[.*\]: / { exit }
+            found { print }
+          ' CHANGELOG.md \
+            | sed -E "s#\]\(([^)#:]+)\)#](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_REF_NAME}/\1)#g" \
+            > "$RUNNER_TEMP/release-notes.md"
+          if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/release-notes.md"; then
+            echo "::warning::CHANGELOG.md has no notes for ${GITHUB_REF_NAME#v}; the release shows only GitHub's generated notes."
+          fi
 
       - name: Create the GitHub Release with signed assets
         env:
@@ -150,6 +174,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
             --generate-notes \
             "${prerelease[@]}" \
             ./dist/*
