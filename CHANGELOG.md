@@ -46,6 +46,7 @@ Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](h
 - **The add field of `accept_new_options` sits in a footer below the list** and stays in view while the list scrolls. The widget grows by the height of that footer; `height` still sets the height of the scrolling list. After an add, the list opens the block the entry appears in and scrolls to the entry.
 - **Select all adds the rows in the order shown, so a `max_selections` cap takes them from the top of the list.** Before, it took the options in the order you passed them, which grouping can rearrange.
 - **`listview()` declares the element types in its signature:** `args` is a `tuple[Any, ...]`, `kwargs` a `dict[str, Any]`, and the return type `dict[str, Any] | str | int | list[Any] | None`. A strict type checker, such as pyright in strict mode, then sees no partially unknown types in a call.
+- **The listview is tested with Streamlit 1.65.0, the newest release.** The unit, frontend and browser tests pass on it. The package still runs on Streamlit 1.51 or later. For maintainers: `uv.lock` pins Streamlit 1.65.0, up from 1.64.0.
 
 ### Fixed
 
