@@ -470,9 +470,7 @@ mindmap
 
 The package is a public library on PyPI, so the inventory's risk tier 3 (*customer-facing app, public API*) applies. Every 🟢 layer has a check. Three of them run by hand: the link check, the diagram build and the e2e suite in Firefox and WebKit; the release skill runs them before each tag. The supply chain counts as partial: the workflows pin actions by tag on purpose, CI's pre-commit and the release's twine float, and no SBOM ships.
 
-The new checks found one defect of the widget that waits for its own change. It stays listed in the tests with its reason until then:
-
-- **WebKit does not light the frame on focus.** It does not re-evaluate the frame's `:has(:focus-within)` rule after a focus change inside the shadow root; two e2e tests, one of them also under the dark theme, skip WebKit for it.
+No widget defect is open: the accessibility scan excepts none, and no e2e test skips a browser for one.
 
 Tier 3 still asks for these steps:
 

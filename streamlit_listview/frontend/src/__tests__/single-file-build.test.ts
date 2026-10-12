@@ -8,6 +8,15 @@ import { resolve } from "node:path";
 // introduce a second JS chunk.
 const buildDir = resolve(import.meta.dirname, "../../build");
 
+// The one production stylesheet; the single-file assertions below check that
+// exactly one exists.
+function builtCss(): string {
+  const name = readdirSync(buildDir).find((f) =>
+    /^index-.*\.css$/.test(f),
+  ) as string;
+  return readFileSync(resolve(buildDir, name), "utf8");
+}
+
 describe("single-file build output", () => {
   it("has a build/ directory (run `npm run build` first)", () => {
     expect(existsSync(buildDir)).toBe(true);
@@ -35,13 +44,31 @@ describe("single-file build output", () => {
     // lightningcss rewrites what it understands (it breaks prefers-color-scheme
     // and light-dark() in the shadow tree, see CLAUDE.md), so the declarations
     // the off-screen skipping depends on are checked in the built sheet itself.
-    const name = readdirSync(buildDir).find((f) =>
-      /^index-.*\.css$/.test(f),
-    ) as string;
-    const built = readFileSync(resolve(buildDir, name), "utf8");
+    const built = builtCss();
     expect(built).toMatch(/\.listview-chunk\{[^}]*content-visibility:auto/);
     expect(built).toMatch(
       /\.listview-chunk\{[^}]*contain-intrinsic-block-size:calc\(/,
+    );
+  });
+
+  it("nests no :has() inside :is(), which WebKit does not re-evaluate on focus", () => {
+    // lightningcss wraps a selector list that contains :has() in :is(), and
+    // WebKit never re-checks a :has() inside :is() after a focus change: the
+    // frame stayed grey in Safari. Only the built sheet shows the rewrite.
+    const built = builtCss();
+    const isArguments = [...built.matchAll(/:is\(/g)].map(({ index }) => {
+      let depth = 0;
+      let end = index + ":is".length;
+      do {
+        depth += built[end] === "(" ? 1 : built[end] === ")" ? -1 : 0;
+        end += 1;
+      } while (depth > 0 && end < built.length);
+      return built.slice(index, end);
+    });
+    expect(isArguments.filter((arg) => arg.includes(":has("))).toEqual([]);
+    // ...and the frame rule survives the minifier as one selector.
+    expect(built).toMatch(
+      /\.listview:has\([^{]*\)\s?:is\(\.listview-header,\.listview-body,\.listview-footer\)\{border-color:var\(--st-primary-color/,
     );
   });
 });

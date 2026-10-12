@@ -83,6 +83,7 @@ The rules:
 
 - **All CSS (`listview.css`) reads Streamlit's `--st-*` properties, with fallbacks.** It uses no Bootstrap and no fixed palette.
 - **Never use `prefers-color-scheme` or `light-dark()`:** the production bundler (lightningcss) rewrites them so that they miss the shadow tree. For light and dark styling, read the root's `data-color-scheme`, which `useColorScheme` sets from the active Streamlit theme. The attribute reads `light` until an effect after the first paint reads the theme, so never key a surface that is visible at mount on it.
+- **Never put a `:has()` selector in a selector list.** lightningcss wraps such a list in `:is()`, and WebKit does not re-evaluate a `:has()` inside `:is()` after a focus change. Write one selector and gather the targets in a trailing `:is()`, as the frame rule does; `single-file-build.test.ts` checks the built sheet.
 - **`src/__tests__/listview-css.test.ts` pins what the stylesheet says; `e2e/test_sidebar_theme.py` and `e2e/test_native_parity.py` pin what a browser resolves it to.** They compare the widget with a real `st.selectbox`, `st.pills` or `st.text_input` on the same page, never with a fixed hex value. `test_native_parity_dark.py` repeats the parity tests under `--theme.base dark`, the only run that exercises the dark highlight formula.
 
 ### The sidebar swaps two tokens

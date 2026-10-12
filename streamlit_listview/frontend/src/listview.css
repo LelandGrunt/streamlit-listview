@@ -185,25 +185,16 @@
  * (optionally pinned) header, the body and the (optional) add-option footer, so
  * every edge of the single control outline switches together; the label's help
  * trigger sits outside them, so interacting with it never lights the border.
+ * Keep it ONE selector, never a list: lightningcss wraps a list that contains
+ * :has() in :is(), and WebKit does not re-evaluate a :has() inside :is() after
+ * a focus change, so the frame stayed grey in Safari.
  */
 .listview:has(
     .listview-header:focus-within,
     .listview-body:focus-within,
     .listview-footer:focus-within
   )
-  .listview-header,
-.listview:has(
-    .listview-header:focus-within,
-    .listview-body:focus-within,
-    .listview-footer:focus-within
-  )
-  .listview-body,
-.listview:has(
-    .listview-header:focus-within,
-    .listview-body:focus-within,
-    .listview-footer:focus-within
-  )
-  .listview-footer {
+  :is(.listview-header, .listview-body, .listview-footer) {
   border-color: var(--st-primary-color, #ff4b4b);
 }
 

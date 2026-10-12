@@ -19,7 +19,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-import pytest
 from playwright.sync_api import Locator, Page, expect
 
 APP_FILE = Path(__file__).with_name("app_native_parity.py")
@@ -118,10 +117,6 @@ def test_the_search_field_is_filled_like_st_text_input(page: Page):
     assert _close(search["border"], search["bg"])
 
 
-# WebKit does not re-evaluate the frame's :has(:focus-within) rule after a
-# focus change inside the shadow root, so the frame stays grey there; a
-# follow-up change fixes the widget.
-@pytest.mark.skip_browser("webkit")
 def test_a_click_below_the_last_row_focuses_the_list(page: Page):
     # The reference: the frame colour of a focused st.selectbox.
     page.get_by_test_id("stSelectbox").locator("input").click()

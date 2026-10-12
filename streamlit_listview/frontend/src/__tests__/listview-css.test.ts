@@ -340,7 +340,9 @@ describe("listview.css base theming", () => {
         /\.listview:has\([^{]*\{[^}]*border-color:\s*var\(--st-primary-color[^}]*\}/,
       )?.[0] ?? "";
     expect(rule).toMatch(/\.listview-footer:focus-within/);
-    expect(rule).toMatch(/\)\s*\.listview-footer\s*\{/);
+    expect(rule).toMatch(
+      /\)\s*:is\(\s*\.listview-header,\s*\.listview-body,\s*\.listview-footer\s*\)\s*\{/,
+    );
   });
 
   it("mutes disabled items via opacity", () => {
