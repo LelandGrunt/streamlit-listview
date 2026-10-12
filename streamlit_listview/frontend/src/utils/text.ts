@@ -22,6 +22,7 @@
  * match "a b" and neither does an added option.
  */
 import { get as getEmoji } from "node-emoji";
+import { elementAt } from "./arrays";
 import {
   BRACKETED_DIRECTIVES,
   MATERIAL_ICON_TOKEN,
@@ -94,6 +95,80 @@ function reduceEmojiShortcode(token: string): string {
   return getEmoji(token) ?? token;
 }
 
+// What renders verbatim, and so must reach the name verbatim: a code span's
+// content, a backslash-escaped ASCII punctuation character and a backtick run
+// that closes no code span. Matched left to right, as CommonMark reads them:
+// an escape first, then a code span — an opening run that closes at the next
+// run of EXACTLY its length — then a lone run. The lookarounds keep both runs
+// whole: without the one after the opening run, "``a`" backtracked to an
+// opening "`" and read "`a" as code. A code span shows no emphasis, icon,
+// emoji or directive, so stripping its markers like the rest of the label
+// left "`*`" without a name and announced "`__init__`" as "init".
+const LITERAL_SOURCE =
+  /\\([!-/:-@[-`{-~])|(`+)(?!`)([\s\S]*?)(?<!`)\2(?!`)|`+/g;
+
+// Each literal crosses the strip passes below as a placeholder: a marker and
+// two characters that encode its index (up to 65,536 literals). None of the
+// passes matches a Private-Use character, so a placeholder moves only as
+// text around it does, and one inside a link's URL leaves with the URL. The
+// marker is removed from the source first, so a label cannot forge one.
+const LITERAL_MARK = "\uE010";
+const INDEX_BASE = 0xe100;
+const LITERAL_RE = /\uE010([\uE100-\uE1FF])([\uE100-\uE1FF])/g;
+
+/** A code span's text as CommonMark renders it (line endings become spaces, one space trimmed from each end). */
+function codeSpanText(code: string): string {
+  const text = code.replace(/\r\n|\r|\n/g, " ");
+  const padded = text.startsWith(" ") && text.endsWith(" ");
+  return padded && /[^ ]/.test(text) ? text.slice(1, -1) : text;
+}
+
+function protectLiterals(md: string, literals: string[]): string {
+  return md
+    .replaceAll(LITERAL_MARK, "")
+    .replace(
+      LITERAL_SOURCE,
+      (match, escaped?: string, fence?: string, code?: string) => {
+        // A fence always comes with its (possibly empty) code group.
+        const literal =
+          escaped ??
+          (fence === undefined ? match : codeSpanText(code as string));
+        const index = literals.push(literal) - 1;
+        return (
+          LITERAL_MARK +
+          String.fromCharCode(
+            INDEX_BASE + (index >> 8),
+            INDEX_BASE + (index & 0xff),
+          )
+        );
+      },
+    );
+}
+
+function restoreLiterals(text: string, literals: string[]): string {
+  return text.replace(LITERAL_RE, (_match, high: string, low: string) =>
+    elementAt(
+      literals,
+      ((high.charCodeAt(0) - INDEX_BASE) << 8) + low.charCodeAt(0) - INDEX_BASE,
+    ),
+  );
+}
+
+// A run of `*`, `~` or `_` emphasizes (or strikes through) only where it
+// touches text: with whitespace or the label's edge on BOTH sides it renders
+// literally ("2 * 3", "a ~ b", and the leading "* " escapeLabelSource keeps).
+// CommonMark also never reads an intraword `_` as emphasis, so an identifier
+// like user_id survives; an intraword `*` does emphasize.
+function reduceMarkerRun(run: string, offset: number, str: string): string {
+  const before = str[offset - 1] ?? " ";
+  const after = str[offset + run.length] ?? " ";
+  if (/\s/.test(before) && /\s/.test(after)) {
+    return run;
+  }
+  const intraword = /\w/.test(before) && /\w/.test(after);
+  return run.startsWith("_") && intraword ? run : "";
+}
+
 /**
  * Reduce a label's Markdown to plain text for an accessible name, so a screen
  * reader announces "Pick a fruit" rather than the raw
@@ -102,29 +177,22 @@ function reduceEmojiShortcode(token: string): string {
  * Shared by the help trigger's name ("Help for <label>") and the listbox's own
  * name, so the widget and its help affordance always announce the SAME label
  * text, and there is one stripper to fix when a directive is added.
+ *
+ * Code spans, escaped punctuation and unmatched backticks keep their text
+ * (see LITERAL_SOURCE); everything else goes through the strip passes.
  */
 export function plainTextLabel(md: string): string {
-  return (
-    md
-      // Material icons and the Streamlit logo -> drop (grammars shared with the
-      // renderer — see MATERIAL_ICON_RE above). Both render as iconography (an
-      // icon span / an inline logo image), which this name has always omitted
-      // rather than read out.
-      .replace(MATERIAL_ICON_RE, "")
-      .replace(STREAMLIT_LOGO_RE, "")
-      .replace(CLAIMED_DIRECTIVE, reduceClaimedDirective) // :red[x] -> x, :red[] -> :red
-      .replace(EMOJI_SHORTCODE, reduceEmojiShortcode) // :tada: -> 🎉, unknown -> literal
-      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1") // [text](url)/image -> text
-      .replace(/[*~`]+/g, "") // bold/italic(*)/strike/code markers
-      // Underscores: strip emphasis delimiters (_em_, __strong__) but KEEP
-      // intraword underscores — CommonMark does not treat those as emphasis, so an
-      // identifier like user_id must survive in the accessible name.
-      .replace(/_+/g, (run, offset: number, str: string) => {
-        const wordBefore = /\w/.test(str[offset - 1] ?? "");
-        const wordAfter = /\w/.test(str[offset + run.length] ?? "");
-        return wordBefore && wordAfter ? run : "";
-      })
-      .replace(/\s+/g, " ")
-      .trim()
-  );
+  const literals: string[] = [];
+  const stripped = protectLiterals(md, literals)
+    // Material icons and the Streamlit logo -> drop (grammars shared with the
+    // renderer — see MATERIAL_ICON_RE above). Both render as iconography (an
+    // icon span / an inline logo image), which this name has always omitted
+    // rather than read out.
+    .replace(MATERIAL_ICON_RE, "")
+    .replace(STREAMLIT_LOGO_RE, "")
+    .replace(CLAIMED_DIRECTIVE, reduceClaimedDirective) // :red[x] -> x, :red[] -> :red
+    .replace(EMOJI_SHORTCODE, reduceEmojiShortcode) // :tada: -> 🎉, unknown -> literal
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1") // [text](url)/image -> text
+    .replace(/[*~]+|_+/g, reduceMarkerRun); // emphasis and strikethrough markers
+  return restoreLiterals(stripped, literals).replace(/\s+/g, " ").trim();
 }

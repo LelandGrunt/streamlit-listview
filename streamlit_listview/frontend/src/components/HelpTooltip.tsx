@@ -1,7 +1,8 @@
-import { useCallback, useId, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import type { FC } from "react";
+import type { CSSProperties, FC, FocusEvent, KeyboardEvent } from "react";
 import { Markdown } from "./Markdown";
+import { usePopoverPlacement } from "../hooks/usePopoverPlacement";
 import { plainTextLabel } from "../utils/text";
 
 export interface HelpTooltipProps {
@@ -19,20 +20,32 @@ export interface HelpTooltipProps {
  *
  * Open semantics (match Streamlit's TooltipIcon):
  *   - opens on pointer hover AND on keyboard focus of the trigger;
- *   - closes on blur, mouse-leave, and Escape.
+ *   - closes on mouse-leave, on Escape, and when the focus leaves the trigger
+ *     and the popover. The focus may move INTO the popover: help can hold
+ *     links, and Tab from the trigger reaches them, because the popover
+ *     follows the trigger in the DOM.
+ *
+ * Placement: above the trigger while the help fits there, else on the side
+ * with more room, capped to the viewport and scrolled inside
+ * (usePopoverPlacement). A popover that scrolls takes the keyboard focus, so
+ * the arrow keys can scroll it too.
  *
  * Accessibility: the SVG is aria-hidden/focusable=false; the trigger button
  * carries the accessible name "Help for <label>"; while open, the trigger's
  * aria-describedby points at the popover (role="tooltip").
  */
 export const HelpTooltip: FC<HelpTooltipProps> = ({ help, label }) => {
-  // Hover and keyboard-focus are tracked independently and OR'd: releasing one
-  // (e.g. the mouse leaving) must NOT close the popover while the other is still
-  // active (e.g. the trigger is still keyboard-focused).
+  // Hover and focus are tracked independently and OR'd: releasing one (e.g. the
+  // mouse leaving) must NOT close the popover while the other is still active
+  // (e.g. the trigger or a link in the help is still keyboard-focused).
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const popoverId = useId();
   const open = hovered || focused;
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const placement = usePopoverPlacement(open, anchorRef, bodyRef, help);
 
   const showHover = useCallback(() => setHovered(true), []);
   const showFocus = useCallback(() => setFocused(true), []);
@@ -40,26 +53,53 @@ export const HelpTooltip: FC<HelpTooltipProps> = ({ help, label }) => {
   // who invoke .blur()/unhover directly (e.g. test code, or browser focus moves
   // away) see the popover disappear without needing an await/act wrapper.
   const hideHover = useCallback(() => flushSync(() => setHovered(false)), []);
-  const hideFocus = useCallback(() => flushSync(() => setFocused(false)), []);
+  // The focus counts for the whole help: the trigger and the popover. A move
+  // between the two keeps it open. Closing on the trigger's own blur unmounted
+  // the popover before Tab could land on a link in it, and the focus fell to
+  // <body>.
+  const hideFocus = useCallback((event: FocusEvent<HTMLDivElement>) => {
+    const next = event.relatedTarget;
+    if (next instanceof Node && event.currentTarget.contains(next)) {
+      return;
+    }
+    flushSync(() => setFocused(false));
+  }, []);
 
-  const onKeyDown = useCallback((event: React.KeyboardEvent) => {
+  const onKeyDown = useCallback((event: KeyboardEvent) => {
     if (event.key === "Escape") {
       event.stopPropagation();
+      // From inside the popover, the focus would go down with it: hand it
+      // back to the trigger first (a no-op when the trigger has it).
+      (triggerRef.current as HTMLButtonElement).focus();
       setHovered(false);
       setFocused(false);
     }
   }, []);
 
+  // The width cap goes through a custom property, so the stylesheet keeps its
+  // own 20rem cap beside it (an inline max-width would replace it).
+  const popoverStyle = {
+    transform:
+      placement.shift === 0 ? undefined : `translateX(${placement.shift}px)`,
+    "--listview-popover-max-width":
+      placement.maxWidth === null ? undefined : `${placement.maxWidth}px`,
+  } as CSSProperties;
+
   return (
-    <div onMouseEnter={showHover} onMouseLeave={hideHover}>
+    <div
+      ref={anchorRef}
+      onMouseEnter={showHover}
+      onMouseLeave={hideHover}
+      onFocus={showFocus}
+      onBlur={hideFocus}
+      onKeyDown={onKeyDown}
+    >
       <button
+        ref={triggerRef}
         type="button"
         className="listview-help-trigger"
         aria-label={`Help for ${plainTextLabel(label)}`}
         aria-describedby={open ? popoverId : undefined}
-        onFocus={showFocus}
-        onBlur={hideFocus}
-        onKeyDown={onKeyDown}
       >
         <svg
           className="listview-help-icon"
@@ -80,8 +120,23 @@ export const HelpTooltip: FC<HelpTooltipProps> = ({ help, label }) => {
         </svg>
       </button>
       {open && (
-        <div id={popoverId} role="tooltip" className="listview-help-popover">
-          <Markdown source={help} tier="help" />
+        <div
+          id={popoverId}
+          role="tooltip"
+          className="listview-help-popover"
+          data-placement={placement.below ? "below" : "above"}
+          style={popoverStyle}
+        >
+          {/* The body scrolls, not the popover: a scrolling popover would
+              clip its own hover bridge, which lies outside its box. */}
+          <div
+            ref={bodyRef}
+            className="listview-help-popover__body"
+            tabIndex={placement.scrolls ? 0 : undefined}
+            style={{ maxHeight: placement.maxHeight ?? undefined }}
+          >
+            <Markdown source={help} tier="help" />
+          </div>
         </div>
       )}
     </div>

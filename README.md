@@ -31,7 +31,7 @@ A selectable, scrollable **list widget** for Streamlit — with grouping, search
 - **Live search** — filters by label as you type, optionally **pinned** (stays put while the list scrolls).
 - **Sorting** — order items, group headers, or both alphabetically (ascending or descending).
 - **Select all / Deselect all** toggle for multi-select, scoped to the rows matching the current search — including rows inside collapsed groups (collapse is visual, not a filter) — excluding disabled rows. Select all adds the rows in the order shown, so a `max_selections` cap takes them from the top of the list.
-- **Add new options** — let users enter values that aren't in the list, in a field below it; each comes back in the type of the other options (see [Return value](#return-value)). Typing the visible text of an option that is already there selects that option instead of adding a duplicate row. Either way, the list scrolls to that row.
+- **Add new options** — let users enter values that aren't in the list, in a field below it; each comes back in the type of the other options (see [Return value](#return-value)). Typing the visible text of an option that is already there selects that option instead of adding a duplicate row. Either way, the list scrolls to that row, unless the search hides it. At the `max_selections` cap, or for the text of a disabled option, the field keeps the text and says why it selected nothing.
 - **Jump to default** — scrolls the first `default` id into view on first render, and again whenever `default` changes; a collapsed group that holds it opens. The list scrolls, never the surrounding page.
 - **Native theming** — pure `--st-*` CSS variables, so light, dark, and custom themes apply automatically. No Bootstrap, no hardcoded palette.
 - **Markdown labels & help** — the Markdown of Streamlit's own widgets (GFM + Streamlit directives like `:red[…]`, badges, `:material/icon:`, `:streamlit:`, emoji), with three exceptions (see [Markdown](#markdown-label--help)).
@@ -226,7 +226,7 @@ The sharp edge of "per group": with `collapsed_groups="all"`, a **brand-new grou
 
 In a grouped list, the header of the options without a group is a toggle too. `collapsed_groups="all"` collapses it, and so does a list that names `ungrouped_label`.
 
-The widget itself opens a collapsed block in two cases. When the user adds an entry, the list opens the block the entry appears in and scrolls to it. When the list scrolls its `default` into view, it first opens the block that holds it.
+The widget itself opens a collapsed block in two cases. When the user adds an entry, the list opens the block the entry appears in and scrolls to it; an entry the search does not match stays hidden until the search is cleared. When the list scrolls its `default` into view, it first opens the block that holds it.
 
 ### Return value
 
@@ -295,6 +295,8 @@ Tab into the list, then:
 Esc works the same in the search field. A disabled row stays selected when Esc clears the selection.
 
 With `collapsible_groups=True` the group headers take the focus too: ↑ / ↓, Home and End stop on them, and Enter or Space opens or closes the focused group. The list is a single Tab stop.
+
+The help icon beside the label opens the help when it takes the focus. Tab moves on into the help: to its first link, or, when the help is too long for the room beside the icon and scrolls, to the help itself, which ↑ and ↓ then scroll. Esc closes the help and returns the focus to the icon.
 
 ### Theming
 

@@ -375,6 +375,76 @@ describe("search", () => {
     fireEvent.keyDown(listbox, { key: "/" });
     expect(document.activeElement).toBe(search);
   });
+
+  describe("when a rerun turns enable_search off", () => {
+    // A keyed instance keeps its UI state across a parameter change, the
+    // query included. Applied while the field is gone, that query filtered
+    // the list with nothing on screen to show it or to clear it.
+    function searchThenDisable(overrides: Partial<ListviewData> = {}) {
+      const setStateValue = vi.fn();
+      const { rerender } = render(
+        <Listview
+          data={baseData({ enable_search: true, ...overrides })}
+          setStateValue={setStateValue}
+        />,
+      );
+      fireEvent.change(screen.getByTestId("stListviewSearch"), {
+        target: { value: "Banana" },
+      });
+      expect(screen.getAllByRole("option")).toHaveLength(1);
+      const rerun = (enableSearch: boolean) =>
+        rerender(
+          <Listview
+            data={baseData({ enable_search: enableSearch, ...overrides })}
+            setStateValue={setStateValue}
+          />,
+        );
+      rerun(false);
+      return { setStateValue, rerun };
+    }
+
+    it("shows every row and writes no state", () => {
+      const { setStateValue } = searchThenDisable();
+      expect(screen.queryByTestId("stListviewSearch")).toBeNull();
+      expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+        "Apple",
+        "Banana",
+        "Carrot",
+      ]);
+      expect(setStateValue).not.toHaveBeenCalled();
+    });
+
+    it("selects every row with Select all", () => {
+      const { setStateValue } = searchThenDisable({
+        selection_mode: "multi",
+        select_all: true,
+      });
+      fireEvent.click(screen.getByTestId("stListviewSelectAllToggle"));
+      expect(setStateValue).toHaveBeenLastCalledWith("selection", [
+        "apple",
+        "banana",
+        "carrot",
+      ]);
+    });
+
+    it("lets Escape clear the selection instead of the hidden query", () => {
+      const { setStateValue } = searchThenDisable({
+        selection_mode: "multi",
+        default_ids: ["apple"],
+      });
+      fireEvent.keyDown(screen.getByRole("listbox"), { key: "Escape" });
+      expect(setStateValue).toHaveBeenLastCalledWith("selection", []);
+    });
+
+    it("brings the query back with the field when search returns", () => {
+      const { rerun } = searchThenDisable();
+      rerun(true);
+      expect(screen.getByTestId("stListviewSearch")).toHaveValue("Banana");
+      expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+        "Banana",
+      ]);
+    });
+  });
 });
 
 describe("collapsible groups", () => {
@@ -1041,6 +1111,120 @@ describe("accept_new_options", () => {
     await user.keyboard("{Enter}");
     expect(screen.queryByText("Mango")).toBeNull(); // no phantom row
     expect(setStateValue).not.toHaveBeenCalled(); // no selection change
+  });
+
+  describe("an add that selects nothing keeps the text and says why", () => {
+    // Refused like a value the int options reject: the field keeps the text
+    // and the hint below it explains. Cleared without a word, the text was
+    // simply gone. The cap message is st.multiselect's.
+    const CAP_ONE =
+      "You can only select up to 1 option. Remove an option first.";
+
+    function renderAdd(overrides: Partial<ListviewData>) {
+      const setStateValue = vi.fn();
+      render(
+        <Listview
+          data={baseData({
+            accept_new_options: true,
+            selection_mode: "multi",
+            ...overrides,
+          })}
+          setStateValue={setStateValue}
+        />,
+      );
+      setStateValue.mockClear();
+      const input = screen.getByTestId("stListviewNewOption");
+      const add = (value: string) => {
+        fireEvent.change(input, { target: { value } });
+        fireEvent.keyDown(input, { key: "Enter" });
+      };
+      return { setStateValue, input, add };
+    }
+
+    it("refuses a new entry at the cap", () => {
+      const { setStateValue, input, add } = renderAdd({
+        max_selections: 1,
+        default_ids: ["apple"],
+      });
+      add("Mango");
+      expect(input).toHaveValue("Mango");
+      expect(input).toHaveAttribute("aria-invalid", "true");
+      expect(screen.getByTestId("stListviewNewOptionHint")).toHaveTextContent(
+        CAP_ONE,
+      );
+      expect(screen.queryByText("Mango")).toBeNull();
+      expect(setStateValue).not.toHaveBeenCalled();
+    });
+
+    it("counts the cap in options, plural above one", () => {
+      const { add } = renderAdd({
+        max_selections: 2,
+        default_ids: ["apple", "banana"],
+      });
+      add("Mango");
+      expect(screen.getByTestId("stListviewNewOptionHint")).toHaveTextContent(
+        "You can only select up to 2 options. Remove an option first.",
+      );
+    });
+
+    it("refuses an unselected row's label at the cap", () => {
+      const { setStateValue, input, add } = renderAdd({
+        max_selections: 1,
+        default_ids: ["apple"],
+      });
+      add("banana");
+      expect(input).toHaveValue("banana");
+      expect(screen.getByTestId("stListviewNewOptionHint")).toHaveTextContent(
+        CAP_ONE,
+      );
+      expect(
+        screen.getByText("Banana").closest('[role="option"]'),
+      ).toHaveAttribute("aria-selected", "false");
+      expect(setStateValue).not.toHaveBeenCalled();
+    });
+
+    it("takes a selected row's label at the cap without a word", () => {
+      const { setStateValue, input, add } = renderAdd({
+        max_selections: 1,
+        default_ids: ["apple"],
+      });
+      add("apple");
+      expect(input).toHaveValue("");
+      expect(
+        screen.getByTestId("stListviewNewOptionHint"),
+      ).toBeEmptyDOMElement();
+      expect(setStateValue).not.toHaveBeenCalled();
+    });
+
+    it("refuses a disabled row's label", () => {
+      const { setStateValue, input, add } = renderAdd({
+        items: [
+          { id: "apple", label: "Apple" },
+          { id: "kiwi", label: "Kiwi", disabled: true },
+        ],
+      });
+      add("Kiwi");
+      expect(input).toHaveValue("Kiwi");
+      expect(screen.getByTestId("stListviewNewOptionHint")).toHaveTextContent(
+        "That option is disabled",
+      );
+      expect(setStateValue).not.toHaveBeenCalled();
+    });
+
+    it("takes a disabled row's label when the row is already selected", () => {
+      const { input, add } = renderAdd({
+        items: [
+          { id: "apple", label: "Apple" },
+          { id: "kiwi", label: "Kiwi", disabled: true },
+        ],
+        default_ids: ["kiwi"],
+      });
+      add("Kiwi");
+      expect(input).toHaveValue("");
+      expect(
+        screen.getByTestId("stListviewNewOptionHint"),
+      ).toBeEmptyDOMElement();
+    });
   });
 
   it("keeps an added option as a re-selectable row after another option is picked (single mode)", async () => {
@@ -1812,7 +1996,8 @@ describe("an add reveals its row", () => {
 
   it("opens the block of an existing row whose selection is refused", () => {
     // The disabled row cannot be selected, but the typed label still names it:
-    // the list shows where it is, as it does for any existing row.
+    // the list shows where it is, as it does for any existing row, and the
+    // hint says why it stays unselected.
     const setStateValue = vi.fn();
     const { container } = render(
       <Listview
@@ -1830,6 +2015,9 @@ describe("an add reveals its row", () => {
     expect(groupItem("Veg")).toHaveAttribute("aria-expanded", "true");
     expect(rowFor("Disabled")).toHaveAttribute("aria-selected", "false");
     expect(setStateValue).not.toHaveBeenCalled();
+    expect(screen.getByTestId("stListviewNewOptionHint")).toHaveTextContent(
+      "That option is disabled",
+    );
     const body = container.querySelector(".listview-body") as HTMLElement;
     stubGeometry(body, rowFor("Disabled"), {
       frame: 100,
@@ -2228,6 +2416,59 @@ describe("group blocks", () => {
       expect(new Set(ids).size).toBe(ids.length);
     }
     // no "two children with the same key" warning anywhere along the way
+    expect(errors).not.toHaveBeenCalled();
+    errors.mockRestore();
+  });
+
+  it("keeps a surviving row's DOM node when the blocks before it drop out and return", () => {
+    // Keyed by position, the block that moved up took the key of the block
+    // that dropped out, and React rebuilt every row of every later block on
+    // each such keystroke. Interleaved options, a group spelled like a block
+    // key and the block without a group cover every kind of block.
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const items = [
+      { id: "a", label: "Apple", group: "Fruit" },
+      { id: "u", label: "Loose" }, // the block without a group
+      { id: "b", label: "Beet", group: "Veg" },
+      { id: "s", label: "Sentinel", group: "listview-ungrouped" },
+      { id: "c", label: "Cherry", group: "Fruit" },
+      { id: "g", label: "Grape", group: "listview-grp-Fruit" },
+    ];
+    render(
+      <Listview
+        data={baseData({ items, enable_search: true })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    const search = screen.getByTestId("stListviewSearch");
+    // Each row on screen, by its label: a row the filter hides and brings
+    // back is a new node, so only rows shown before AND after a step count.
+    const shownNodes = () =>
+      new Map(screen.getAllByRole("option").map((o) => [o.textContent, o]));
+    let before = shownNodes();
+    // "ee" leaves Veg alone (Fruit drops out before it), "tine" the group
+    // spelled like the ungrouped block's key (Veg drops out before it),
+    // "loose" only the block without a group.
+    for (const query of ["e", "ee", "", "t", "tine", "", "loose", ""]) {
+      fireEvent.change(search, { target: { value: query } });
+      const after = shownNodes();
+      const survivors = [...after].filter(([label]) => before.has(label));
+      expect(survivors.length).toBeGreaterThan(0);
+      for (const [label, node] of survivors) {
+        expect(node).toBe(before.get(label));
+      }
+      const ids = [...after.values()].map((o) => o.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      before = after;
+    }
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "Apple",
+      "Cherry",
+      "Beet",
+      "Sentinel",
+      "Grape",
+      "Loose",
+    ]);
     expect(errors).not.toHaveBeenCalled();
     errors.mockRestore();
   });
@@ -2986,6 +3227,33 @@ describe("listbox accessible name", () => {
       />,
     );
     expect(screen.getByRole("listbox")).toHaveAccessibleName("Pick a fruit");
+  });
+
+  it("names the listbox by the literal text of a code label", () => {
+    // The label renders "*" in a code chip; stripping the code span's
+    // markers took the "*" with them and left the widget unnamed.
+    for (const visibility of ["visible", "hidden", "collapsed"] as const) {
+      const { unmount } = render(
+        <Listview
+          data={makeData({ label: "`*`", label_visibility: visibility })}
+          setStateValue={vi.fn()}
+        />,
+      );
+      expect(screen.getByRole("listbox")).toHaveAccessibleName("*");
+      unmount();
+    }
+  });
+
+  it("names the help trigger by the literal text of a code label", () => {
+    render(
+      <Listview
+        data={makeData({ label: "`*`", help: "Some help" })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Help for *" }),
+    ).toBeInTheDocument();
   });
 
   it("points at the label's screen-reader copy, which is aria-hidden", () => {

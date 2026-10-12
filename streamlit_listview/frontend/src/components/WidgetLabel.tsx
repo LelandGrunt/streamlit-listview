@@ -59,14 +59,14 @@ const WidgetLabelImpl: FC<WidgetLabelProps> = ({
     <>
       {/*
        * The widget's accessible name. It lives OUTSIDE the label row and is only
-       * clipped out of the layout, because the row itself cannot supply a name in
-       * every mode: at label_visibility "hidden" the row is visibility:hidden and
-       * CSS visibility inherits into the referenced subtree (a hidden subtree
-       * contributes nothing to the name, so the widget goes unnamed), and at
-       * "collapsed" the row is display:none. aria-hidden keeps this copy from
-       * being announced as loose text — a node referenced DIRECTLY by
-       * aria-labelledby still contributes its text — so the name is announced
-       * exactly once, as the listbox's name.
+       * clipped out of the layout, so the name never depends on how a browser
+       * names from a hidden subtree: at label_visibility "hidden" the row is
+       * visibility:hidden, and at "collapsed" it is display:none. (Chromium
+       * follows accname 1.2 and names from a hidden subtree that aria-labelledby
+       * references directly; this copy does not rely on that.) aria-hidden keeps
+       * this copy from being announced as loose text — a node referenced
+       * DIRECTLY by aria-labelledby still contributes its text — so the name is
+       * announced exactly once, as the listbox's name.
        *
        * It holds the label's STRIPPED text (plainTextLabel), not a second
        * <Markdown> render of `label`: rendering the same markdown twice per
@@ -77,6 +77,8 @@ const WidgetLabelImpl: FC<WidgetLabelProps> = ({
        * reductions of one label. The tradeoff is that `:material/icon:` and
        * `:streamlit:` drop out of the name rather than reducing to their icon
        * text — which is exactly how the help trigger has always named them.
+       * What renders verbatim, such as a code span, keeps its text (see
+       * plainTextLabel).
        */}
       <span
         className="listview-widget-label__a11y-name"

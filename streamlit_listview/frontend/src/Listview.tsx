@@ -114,7 +114,16 @@ export const Listview: FC<ListviewProps> = ({
     selection: selection.selection,
   });
 
-  const { visibleItems, isFiltering } = useFilter({ items: allItems, query });
+  // The query the list filters by: the field's text while the field shows,
+  // none while a rerun has turned search off. A keyed instance keeps `query`
+  // across that rerun, and a filter whose field is gone showed a subset with
+  // nothing on screen to say so or to clear it. The text stays, so the field
+  // brings it back when search returns.
+  const activeQuery = data.enable_search ? query : "";
+  const { visibleItems, isFiltering } = useFilter({
+    items: allItems,
+    query: activeQuery,
+  });
 
   const ungroupedLabel = data.ungrouped_label;
   const { isGrouped, asTree, collapse, expandBlock } = useGroupCollapse({
@@ -179,13 +188,14 @@ export const Listview: FC<ListviewProps> = ({
     // The two mistakes are not symmetric: clearing text is free, clearing the
     // selection is a state write the user did not ask for. `useFilter` keeps
     // sole ownership of "a query is active" for filtering; this is "the box is
-    // non-empty", which is the box's own definition.
-    if (query.length > 0) {
+    // non-empty", which is the box's own definition. A box that is not shown
+    // holds nothing: the hidden text filters nothing, so Escape skips it.
+    if (activeQuery.length > 0) {
       setQuery("");
     } else {
       selection.clear();
     }
-  }, [widgetDisabled, query, selection]);
+  }, [widgetDisabled, activeQuery, selection]);
 
   const onSlash = useCallback(() => {
     searchInputRef.current?.focus();
@@ -283,6 +293,7 @@ export const Listview: FC<ListviewProps> = ({
     widgetDisabled,
     allItems,
     selection,
+    maxSelections: data.max_selections,
     newOptionKind: data.new_option_kind,
     expandBlock,
     scrollToId,

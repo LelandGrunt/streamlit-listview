@@ -11,6 +11,37 @@ import type { UseSelectionResult } from "./useSelection";
  */
 const NOT_A_WHOLE_NUMBER = "Enter a whole number";
 
+/** The hint for a typed label that names a disabled row. */
+const DISABLED_OPTION = "That option is disabled";
+
+/** The hint for an add the cap blocks: st.multiselect's own message. */
+function capHint(maxSelections: number): string {
+  const option = maxSelections === 1 ? "option" : "options";
+  return `You can only select up to ${maxSelections} ${option}. Remove an option first.`;
+}
+
+/**
+ * Why taking `row` would select nothing, or null when the add can take it. A
+ * row already selected is taken as it is (the add only reveals it); a disabled
+ * row cannot be added, and at the cap no other row can. A refusal keeps the
+ * typed text in the field and shows the hint: an add that cleared the field
+ * without selecting anything lost the text without a word.
+ */
+function refusalForRow(
+  row: ListviewItem,
+  selection: UseSelectionResult,
+  maxSelections: number | null,
+): string | null {
+  if (selection.isSelected(row.id)) {
+    return null;
+  }
+  if (row.disabled) {
+    return DISABLED_OPTION;
+  }
+  // atCap holds only in multi mode with a cap, so maxSelections is set.
+  return selection.atCap ? capHint(maxSelections as number) : null;
+}
+
 /**
  * The row a typed `accept_new_options` value refers to, or undefined when the
  * value is genuinely new. The row, not just its id: the add reveals it, and
@@ -39,8 +70,8 @@ const NOT_A_WHOLE_NUMBER = "Enter a whole number";
  * row whose invisible id happened to spell the same text.
  *
  * Ties within a step (two rows folding to the same text) resolve to the first in
- * render order. A disabled row resolves like any other: `selection.add` is inert
- * for it, so typing its label is a no-op rather than a duplicate row.
+ * render order. A disabled row resolves like any other, so typing its label is
+ * refused (refusalForRow) rather than spawning a duplicate row.
  */
 function findExistingRow(
   items: ListviewItem[],
@@ -63,6 +94,8 @@ export interface UseAddNewOptionArgs {
   /** Every rendered row: the options and the synthetic rows (`useNewOptionRows`). */
   allItems: ListviewItem[];
   selection: UseSelectionResult;
+  /** The `max_selections` cap, which the refusal at the cap names. */
+  maxSelections: number | null;
   /** The type a new entry comes back as in Python; the add field refuses what "int" cannot hold. */
   newOptionKind: NewOptionKind | null;
   /** Opens the block a row with `group` renders in (`useGroupCollapse`). */
@@ -77,12 +110,14 @@ export interface UseAddNewOptionArgs {
  * The handler for the add field (`NewOptionInput`'s `onAdd`): resolves the
  * typed value to an existing row or adds it as a new entry, selects the row,
  * and scrolls it into view. Returns `null` when the value was taken, else the
- * hint that says why it was refused.
+ * hint that says why it was refused. A row the search hides stays hidden: the
+ * add keeps the query, so there is no row to scroll to until it clears.
  */
 export function useAddNewOption({
   widgetDisabled,
   allItems,
   selection,
+  maxSelections,
   newOptionKind,
   expandBlock,
   scrollToId,
@@ -126,10 +161,14 @@ export function useAddNewOption({
       if (existing !== undefined) {
         // Matches an existing option (a numeric id typed as text, or the label the
         // user can actually see): select that option rather than spawn a
-        // duplicate row, and show the user where that row is.
-        selection.add(existing.id);
+        // duplicate row, and show the user where that row is — also when the
+        // row cannot be selected, next to the hint that says why.
+        const refusal = refusalForRow(existing, selection, maxSelections);
+        if (refusal === null) {
+          selection.add(existing.id);
+        }
         revealRow(existing.id, existing.group ?? null);
-        return null;
+        return refusal;
       }
       // Genuinely new. With int options (Python's new_option_kind) the entry must
       // be a whole number, added as a NUMBER: the selection, its synthetic row and
@@ -142,10 +181,10 @@ export function useAddNewOption({
       }
       // In multi mode at the cap the add would be rejected by useSelection, so do
       // NOT persist a phantom row that was never actually selected (and that the
-      // user then cannot easily remove). Single mode always replaces, so atCap is
-      // never set there.
+      // user then cannot easily remove); refuse it, which keeps the text. Single
+      // mode always replaces, so atCap is never set there.
       if (selection.atCap) {
-        return null;
+        return capHint(maxSelections as number);
       }
       // Remember it so it persists as a row after deselection, then select it.
       rememberAdded(newId);
@@ -158,6 +197,7 @@ export function useAddNewOption({
       widgetDisabled,
       allItems,
       selection,
+      maxSelections,
       newOptionKind,
       rememberAdded,
       revealRow,

@@ -399,10 +399,15 @@ export function createRemarkStreamlitLogo() {
 /**
  * MUST run after the material/logo plugins. findAndReplace replaces sentinels in
  * regular text nodes, but it does NOT descend into `inlineCode` / `code` nodes \u2014
- * so a token written inside backticks or a fenced block keeps its sentinel. This
- * pass restores any leftover sentinel (in ANY node carrying a string `value`) to
- * the readable source the user typed, so a Private-Use control char never leaks
- * to the DOM and the icon syntax shows verbatim inside code.
+ * so a token written inside backticks or a fenced block keeps its sentinel \u2014
+ * and the preprocess rewrote the WHOLE source, so a token in a link's or an
+ * image's URL or title, or in an image's alt text, kept its sentinel too: the
+ * URL pointed at another path (`%EE%80%80check%EE%80%81`) and the alt text
+ * carried a Private-Use character. This pass restores every leftover sentinel
+ * in those fields to the readable source the user typed, so no Private-Use
+ * character reaches the DOM and the token shows verbatim where it does not
+ * render as an icon. It runs on the syntax tree, before the URL gate
+ * (`transformUri`) sees the URL.
  */
 // Built once from the module sentinel constants and reused across invocations.
 // Both are only ever passed to String.prototype.replace, which resets the
@@ -413,17 +418,26 @@ const RESTORE_MATERIAL_RE = new RegExp(
 );
 const RESTORE_STREAMLIT_RE = new RegExp(STREAMLIT_MARK, "g");
 
+// The node fields that hold source text: a text or code node's `value`, the
+// `url` and `title` of a link, an image or a reference definition, and an
+// image's `alt`.
+const SOURCE_TEXT_FIELDS = ["value", "url", "title", "alt"] as const;
+
 export function createRemarkRestoreIconSentinels() {
   return () => (tree: Root) => {
     visit(tree, (node) => {
-      const n = node as { value?: string };
-      if (
-        typeof n.value === "string" &&
-        (n.value.includes(ICON_OPEN) || n.value.includes(STREAMLIT_MARK))
-      ) {
-        n.value = n.value
-          .replace(RESTORE_MATERIAL_RE, ":material/$1:")
-          .replace(RESTORE_STREAMLIT_RE, ":streamlit:");
+      // Read by field name: the mdast node types disagree on which they carry.
+      const n = node as unknown as Partial<Record<string, unknown>>;
+      for (const field of SOURCE_TEXT_FIELDS) {
+        const text = n[field];
+        if (
+          typeof text === "string" &&
+          (text.includes(ICON_OPEN) || text.includes(STREAMLIT_MARK))
+        ) {
+          n[field] = text
+            .replace(RESTORE_MATERIAL_RE, ":material/$1:")
+            .replace(RESTORE_STREAMLIT_RE, ":streamlit:");
+        }
       }
     });
     return tree;

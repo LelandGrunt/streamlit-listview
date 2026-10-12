@@ -1,5 +1,6 @@
 import type { FC } from "react";
 import type { RenderBlock } from "../hooks/useRenderBlocks";
+import { groupDomId } from "../utils/ids";
 import { GroupBlock } from "./GroupBlock";
 import type { GroupBlockProps } from "./GroupBlock";
 
@@ -32,23 +33,22 @@ export const ListBlocks: FC<ListBlocksProps> = ({
   }
   return (
     <>
-      {renderBlocks.map((block, index) => (
+      {renderBlocks.map((block) => (
         <GroupBlock
-          // Keyed by POSITION, never by the group name: the name is
-          // user-supplied (Python accepts any str), so any string
-          // sentinel for the block without a group — "__ungrouped__" —
-          // is forgeable, and a real group with that name handed two
-          // sibling blocks ONE key. Duplicate keys corrupt React's
-          // reconciliation: measured fallout was blocks that never
-          // unmount, phantom rows accumulating across filter changes, a
-          // repeated option DOM id (ambiguous aria-activedescendant) and
-          // rows on screen that did not match the active query. The
-          // block without a group has no name at all, so no
-          // name-derived scheme could key it anyway. Blocks hold no
-          // state of their own (collapse state lives in useCollapse,
-          // keyed by group name or null), so a positional key costs
-          // nothing.
-          key={index}
+          // Keyed by the block's identity, never by its position: a
+          // search that hides an earlier block shifts every later one,
+          // and under a positional key React handed each of them the
+          // previous block's element and rebuilt all of its rows, the
+          // survivors included. Never by the raw group name either: the
+          // name is user-supplied (Python accepts any str), so a plain
+          // string sentinel for the block without a group
+          // ("__ungrouped__") was forgeable, and a real group with that
+          // name gave two sibling blocks ONE key, which corrupted
+          // React's reconciliation (blocks that never unmounted, phantom
+          // rows, a repeated option DOM id). groupDomId tags the two
+          // kinds apart: every named group carries a prefix the block
+          // without a group lacks, and blocksFor yields each key once.
+          key={groupDomId(block.group.name)}
           block={block}
           {...blockProps}
         />

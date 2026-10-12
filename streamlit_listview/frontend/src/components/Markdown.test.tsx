@@ -214,6 +214,53 @@ describe("Markdown icon/logo adjacency (token glued to a following word)", () =>
     expect(container.querySelector("img")).toBeNull();
   });
 
+  it("keeps icon tokens in a link's URL and title as the source spells them", () => {
+    // The preprocess rewrites the whole source, but only text nodes become
+    // icons; a URL or title that kept the sentinel pointed at another path
+    // (%EE%80%80check%EE%80%81) or carried a Private-Use character.
+    const { container } = render(
+      <Markdown
+        tier="help"
+        source={
+          '[Docs](https://example.test/:material/check: "Title :streamlit:") ' +
+          "[Ref][r]\n\n[r]: https://example.test/:streamlit:/r"
+        }
+      />,
+    );
+    const [docs, ref] = [...container.querySelectorAll("a")];
+    expect(docs?.getAttribute("href")).toBe(
+      "https://example.test/:material/check:",
+    );
+    expect(docs?.getAttribute("title")).toBe("Title :streamlit:");
+    expect(ref?.getAttribute("href")).toBe(
+      "https://example.test/:streamlit:/r",
+    );
+  });
+
+  it("keeps icon tokens in an image's alt text as the source spells them", () => {
+    const { container } = render(
+      <Markdown
+        tier="help"
+        source={
+          "![Brand :streamlit: :material/check:](https://example.test/logo.png)"
+        }
+      />,
+    );
+    expect(
+      container.querySelector('img[src="https://example.test/logo.png"]'),
+    ).toHaveAttribute("alt", "Brand :streamlit: :material/check:");
+  });
+
+  it("still renders an icon in a link's text", () => {
+    const { container } = render(
+      <Markdown
+        tier="help"
+        source="[:material/check: Docs](https://x.test/)"
+      />,
+    );
+    expect(container.querySelector('a span[role="img"]')).not.toBeNull();
+  });
+
   it("renders :streamlit: as a logo image, isolated and glued to a word", () => {
     const isolated = render(<Markdown tier="label" source=":streamlit:" />);
     expect(

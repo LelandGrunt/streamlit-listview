@@ -40,6 +40,7 @@ LISTVIEW_COUNTS = {
     "app_row_height.py": 1,  # a keyed list whose rows change height on a rerun
     "app_sidebar_theme.py": 2,  # the same list in the sidebar and the main body
     "app_native_parity.py": 1,  # one list beside the native widgets it mirrors
+    "app_help.py": 4,  # long help, linked help, a code label, long help in the sidebar
     # test_performance.py overrides go_to_app (it times page.goto itself), so no
     # count here is ever asserted. None rather than a number: a number nothing
     # reads is a number nothing keeps true.

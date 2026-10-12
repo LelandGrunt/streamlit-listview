@@ -104,4 +104,56 @@ describe("plainTextLabel", () => {
   it("collapses runs of whitespace and trims", () => {
     expect(plainTextLabel("  a \n  b  ")).toBe("a b");
   });
+
+  it("keeps the content of an inline code span as rendered", () => {
+    // A code span renders its content verbatim: no emphasis, icon, emoji or
+    // directive inside it. Stripping its markers left "`*`" with no name at
+    // all (axe-core: aria-input-field-name) and announced "`__init__`" as
+    // "init".
+    expect(plainTextLabel("`*`")).toBe("*");
+    expect(plainTextLabel("`__init__`")).toBe("__init__");
+    expect(plainTextLabel("Columns (`*` = required)")).toBe(
+      "Columns (* = required)",
+    );
+    expect(plainTextLabel("`:material/check:` and `:streamlit:`")).toBe(
+      ":material/check: and :streamlit:",
+    );
+    expect(plainTextLabel("`:tada:` and `:red[x]`")).toBe(":tada: and :red[x]");
+    expect(plainTextLabel("`[docs](https://example.com)`")).toBe(
+      "[docs](https://example.com)",
+    );
+  });
+
+  it("matches code span delimiters as CommonMark does", () => {
+    // A span closes at the next backtick run of the SAME length, a run
+    // without one renders literally, and one space is stripped from each end
+    // of a span that has non-space content.
+    expect(plainTextLabel("``a`b``")).toBe("a`b");
+    expect(plainTextLabel("`` `x` ``")).toBe("`x`");
+    expect(plainTextLabel("it`s")).toBe("it`s");
+    expect(plainTextLabel("``a`")).toBe("``a`");
+  });
+
+  it("reduces a code span inside a link or directive to its content", () => {
+    expect(plainTextLabel("see [`docs`](https://example.com)")).toBe(
+      "see docs",
+    );
+    expect(plainTextLabel(":red[`hot`] item")).toBe("hot item");
+  });
+
+  it("keeps backslash-escaped punctuation, without the backslash", () => {
+    expect(plainTextLabel(String.raw`5 \* 3`)).toBe("5 * 3");
+    expect(plainTextLabel(String.raw`\_id\_`)).toBe("_id_");
+    expect(plainTextLabel(String.raw`\[a](b)`)).toBe("[a](b)");
+    expect(plainTextLabel(String.raw`\`x\``)).toBe("`x`");
+    // A backslash before anything else stays, as it renders.
+    expect(plainTextLabel(String.raw`C:\temp`)).toBe(String.raw`C:\temp`);
+  });
+
+  it("keeps a marker run with whitespace on both sides, which cannot emphasize", () => {
+    expect(plainTextLabel("a ~ b")).toBe("a ~ b");
+    expect(plainTextLabel("2 * 3")).toBe("2 * 3");
+    expect(plainTextLabel("x _ y")).toBe("x _ y");
+    expect(plainTextLabel("* item")).toBe("* item");
+  });
 });

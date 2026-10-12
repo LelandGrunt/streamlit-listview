@@ -5,8 +5,9 @@ export interface NewOptionInputProps {
   disabled: boolean;
   /**
    * Called with the trimmed, non-empty value the user wants to add. Returns
-   * `null` when the value was taken — added, matched to an existing row, or
-   * ignored at the cap — and otherwise the hint that says why it was refused.
+   * `null` when the value was taken — added, or matched to an existing row it
+   * selects or that is selected already — and otherwise the hint that says why
+   * it was refused (a value the options cannot hold, a disabled row, the cap).
    * The rule lives with the caller, which knows what the options accept.
    */
   onAdd: (value: string) => string | null;

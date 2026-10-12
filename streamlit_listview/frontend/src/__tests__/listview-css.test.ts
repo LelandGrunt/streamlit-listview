@@ -786,6 +786,46 @@ describe("listview.css help tooltip popover", () => {
     expect(bridge).toMatch(new RegExp(`height:\\s*${offset}`));
     expect(bridge).not.toMatch(/background/);
   });
+
+  it("moves the gap and the bridge to the top for a popover below the trigger", () => {
+    // usePopoverPlacement opens long help below a trigger near the top of the
+    // viewport; the gap and the bridge must follow, or the pointer falls
+    // through the gap again.
+    const below =
+      css.match(
+        /\.listview-help-popover\[data-placement="below"\]\s*\{[^}]*\}/,
+      )?.[0] ?? "";
+    expect(below).toMatch(/top:\s*calc\(100%\s*\+\s*0\.25rem\)/);
+    expect(below).toMatch(/bottom:\s*auto/);
+    const bridge =
+      css.match(
+        /\.listview-help-popover\[data-placement="below"\]::before\s*\{[^}]*\}/,
+      )?.[0] ?? "";
+    expect(bridge).toMatch(/top:\s*auto/);
+    expect(bridge).toMatch(/bottom:\s*100%/);
+  });
+
+  it("scrolls the help body, never the popover, whose overflow would clip the bridge", () => {
+    // The bridge lies outside the popover's box, so overflow on the popover
+    // clips it and the pointer loses the popover on its way up.
+    const popover = css.match(/\.listview-help-popover\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(popover).not.toMatch(/overflow(-y)?:/);
+    expect(css).toMatch(
+      /\.listview-help-popover__body\s*\{[^}]*overflow-y:\s*auto/,
+    );
+  });
+
+  it("sizes the popover by its text, capped at 20rem and at its measured bounds", () => {
+    // Shrink-to-fit sized the popover to the help slot, which beside a label
+    // that fills the row is as wide as the icon. The bounds cap comes from
+    // usePopoverPlacement through a custom property, with the viewport as the
+    // fallback, so the stylesheet keeps its own 20rem cap beside it.
+    const block = css.match(/\.listview-help-popover\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(block).toMatch(/width:\s*max-content/);
+    expect(block).toMatch(
+      /max-width:\s*min\(20rem,\s*var\(--listview-popover-max-width,\s*calc\(100vw\s*-\s*16px\)\)\)/,
+    );
+  });
 });
 
 describe("Milestone C feature styling", () => {
