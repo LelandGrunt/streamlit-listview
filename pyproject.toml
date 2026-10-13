@@ -59,8 +59,9 @@ branch = true
 # push_gate is scripts/push_gate.py, imported by name after a sys.path insert.
 source = ["streamlit_listview", "demo", "push_gate"]
 omit = [
-  # Streamlit entry point: rendered in a subprocess and exercised by the
-  # Playwright e2e suite (+ a compile smoke test), not measurable in-process.
+  # Streamlit entry point: exercised by the Playwright e2e suite, the AppTest
+  # runs in tests/test_demo_app.py and a compile smoke test, none of which
+  # reaches every branch.
   "demo/app.py",
 ]
 

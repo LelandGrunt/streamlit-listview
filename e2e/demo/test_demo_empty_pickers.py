@@ -2,7 +2,7 @@
 import re
 
 import pytest
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Locator, Page, expect
 
 # The config pickers whose "nothing chosen" is a listview parameter left at None:
 # (section pill, selectbox label, an option to pick, what the generated code
@@ -12,6 +12,15 @@ PICKERS = [
     ("Sorting", "Sort", "items", 'sort="items"'),
     ("Formatting", "Label formatting", "UPPERCASE", "format_func=fmt_upper"),
 ]
+
+
+def generated_code(page: Page) -> Locator:
+    """The Generated code block of the Demo tab.
+
+    The API reference tab is in the page too, hidden, and its examples call
+    listview() as well; only the generated call passes the demo's key.
+    """
+    return page.get_by_test_id("stCode").filter(has_text='key="demo_listview"')
 
 
 def wait_for_run(page: Page) -> None:
@@ -40,7 +49,7 @@ def test_none_is_the_pickers_empty_state(
     selectbox = page.locator(f'[data-testid="stSelectbox"]:has-text("{label}")')
     field = selectbox.locator("input")
     clear = selectbox.get_by_role("button", name=re.compile("clear", re.IGNORECASE))
-    code = page.get_by_test_id("stCode").filter(has_text="selected = listview(")
+    code = generated_code(page)
     dropdown = page.get_by_test_id("stSelectboxVirtualDropdown")
 
     def open_section(name: str) -> None:
@@ -106,7 +115,7 @@ def test_a_chosen_value_survives_quick_section_switches(
     config kept the value — and the next rerun read the empty field back.
     """
     selectbox = page.locator(f'[data-testid="stSelectbox"]:has-text("{label}")')
-    code = page.get_by_test_id("stCode").filter(has_text="selected = listview(")
+    code = generated_code(page)
 
     page.get_by_role("radio", name=section, exact=True).click()
     wait_for_run(page)

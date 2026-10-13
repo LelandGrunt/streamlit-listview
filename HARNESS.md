@@ -149,7 +149,7 @@ flowchart LR
 
 ### Tests and coverage
 
-- **pytest** runs the unit suite over the Python package, the demo's helpers and the push gate, with branch coverage and a floor of 100 %.
+- **pytest** runs the unit suite over the Python package, the demo's helpers and the push gate, with branch coverage and a floor of 100 %. `tests/test_demo_app.py` runs `demo/app.py` itself through Streamlit's `AppTest`, so it can change the server theme from a second thread at a set point of a run.
 - **vitest** runs the frontend suite in jsdom with a floor of 100 % for statements, branches, functions and lines. `/* v8 ignore */` marks an unreachable defensive guard.
 - **Guard tests read the sources instead of running them.** Each locks one rule that a refactoring could break unnoticed:
 

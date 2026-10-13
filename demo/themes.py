@@ -131,6 +131,16 @@ class ServerTheme:
         """When the applied theme falls back to the default (None: nothing to)."""
         return None if self.applied_at is None else self.applied_at + self.ttl
 
+    def snapshot(self):
+        """``(active, expires_at)``, read together under the writers' lock.
+
+        A reader that reads ``active`` twice can see another session's switch
+        or reset in between, so a render reads this pair once and uses it
+        throughout. The lock is released before the caller renders anything.
+        """
+        with self._lock:
+            return self.active, self.expires_at
+
     def apply(self, name, options, *, now):
         """Overlay *options* (from :func:`flatten_theme`) as theme *name*."""
         with self._lock:

@@ -1,6 +1,7 @@
 """Parse the Data text area into a list of listview options."""
 
 import json
+from collections.abc import Hashable
 
 
 def parse_options_text(text):
@@ -51,10 +52,17 @@ def group_names(options):
     Scalar options and dicts without ``group`` contribute nothing; a group's
     position is fixed by its first occurrence. The one spelling of the rule —
     ``data.GROUPS`` and ``dataset.resolve_dataset``'s groups both come from here.
+
+    A pasted list or dict group cannot be a dict key, so it is left out of the
+    names, the way ``option_ids`` skips a dict without ``id``: the option stays,
+    and the ``listview(...)`` call rejects it with the ``ValueError`` the demo
+    shows via ``st.error``.
     """
     return list(
         dict.fromkeys(
-            o["group"] for o in options if isinstance(o, dict) and "group" in o
+            o["group"]
+            for o in options
+            if isinstance(o, dict) and "group" in o and isinstance(o["group"], Hashable)
         )
     )
 

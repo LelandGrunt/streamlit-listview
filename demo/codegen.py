@@ -185,7 +185,10 @@ def build_snippet(config, options, builtin_dataset):  # noqa: C901 -- older than
             continue
         if isinstance(value, list) and not value:
             continue
-        if isinstance(value, str) and value == "":
+        # An empty text field (placeholder, help, ...) stands for the
+        # parameter's default, as in the live call's `cfg[name] or ...`. The
+        # empty string as `default` is an id, and the live call passes it on.
+        if isinstance(value, str) and value == "" and name != "default":
             continue
         value_kwargs.append((name, _pyval(value)))
 

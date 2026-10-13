@@ -21,6 +21,7 @@ import pytest
 import toml
 from playwright.sync_api import Page, expect
 
+from e2e.demo.test_demo_empty_pickers import generated_code
 from e2e.e2e_utils import StreamlitRunner
 
 ROOT = Path(__file__).parent.parent.parent.absolute()
@@ -147,7 +148,7 @@ def test_switching_the_theme_rethemes_the_listview(page: Page):
         "sanity: the theme must change the primary color, or this proves nothing"
     )
 
-    code = page.get_by_test_id("stCode").filter(has_text="selected = listview(")
+    code = generated_code(page)
     snippet = code.inner_text()
     # The switcher is a showcase, not a listview parameter, and says so in
     # either state.

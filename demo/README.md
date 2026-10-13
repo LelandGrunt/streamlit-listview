@@ -43,8 +43,8 @@ that alters the listview, resends all options: 6.75 MB, which
 on `server.enableWebsocketCompression`.
 
 The **API reference** tab documents the full signature, the parameters, the
-return value, and the examples in `demo/examples/`. Each example also runs on
-its own:
+return value, and the examples in `demo/examples/`. A switch between the tabs
+leaves the live listview as it was. Each example also runs on its own:
 
 ```sh
 uv run streamlit run demo/examples/single.py

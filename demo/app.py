@@ -691,7 +691,10 @@ def render_appearance(cfg, ids, groups):
 
 
 def render_theme(cfg, ids, groups):
-    server = themes.SERVER_THEME
+    # One read for the whole panel: another session can switch or reset the
+    # server theme while this one renders, and a second read of `active` would
+    # then name another theme, or none (a KeyError at the file lookup below).
+    active, expires_at = themes.SERVER_THEME.snapshot()
     st.info(
         "**A showcase, not part of the listview API.** Switching the theme "
         "doesn't change the generated code: it only shows that the listview is "
@@ -702,9 +705,7 @@ def render_theme(cfg, ids, groups):
     # The picker shows the SERVER's theme, never this session's last pick:
     # another session may have switched since, and a stale pick must not read as
     # the theme on screen. Only a change made here (on_change) switches it.
-    st.session_state["cfg_theme"] = (
-        DEFAULT_THEME if server.active is None else server.active
-    )
+    st.session_state["cfg_theme"] = DEFAULT_THEME if active is None else active
     st.selectbox(
         "Theme",
         [DEFAULT_THEME, *THEMES],
@@ -723,7 +724,7 @@ def render_theme(cfg, ids, groups):
         "picks it up on its next rerun, because a Streamlit theme is server "
         "config, not session state."
     )
-    if server.active is None:
+    if active is None:
         st.caption(
             "Streamlit's built-in theme, plus whatever `.streamlit/config.toml` "
             "sets. Pick a theme file to re-theme the app and watch the listview "
@@ -733,10 +734,10 @@ def render_theme(cfg, ids, groups):
 
     st.caption(
         f":material/schedule: Falls back to *Streamlit default* on "
-        f"{server.expires_at:%Y-%m-%d %H:%M} UTC, "
+        f"{expires_at:%Y-%m-%d %H:%M} UTC, "
         f"{themes.THEME_TTL.total_seconds() / 3600:g}\u00a0h after the last switch."
     )
-    text = THEMES[server.active].read_text(encoding="utf-8")
+    text = THEMES[active].read_text(encoding="utf-8")
     if themes.theme_variants(themes.flatten_theme(text)) == ["light", "dark"]:
         st.caption(
             ":material/contrast: This theme defines a light and a dark variant: "
@@ -1288,13 +1289,17 @@ if active_theme is not None:
     tagline += f"  \n:material/format_paint: Theme: **{theme_label(active_theme)}**"
 st.caption(tagline)
 
+# Both tabs render on every run, so a tab switch happens in the browser alone,
+# with no rerun: the live widget stays mounted under the hidden Demo tab and
+# keeps its selection, search text and scroll position. Lazy tabs
+# (on_change="rerun") left the widget out of the API tab's run, Streamlit
+# dropped its state, and the return to Demo mounted an empty widget. The API
+# tab renders first because render_demo ends the run (st.stop) when listview
+# raises, and the reference must still render then.
 demo_tab, api_tab = st.tabs(
-    [":material/play_circle: Demo", ":material/menu_book: API reference"],
-    on_change="rerun",
+    [":material/play_circle: Demo", ":material/menu_book: API reference"]
 )
-if demo_tab.open:
-    with demo_tab:
-        render_demo()
-if api_tab.open:
-    with api_tab:
-        render_api()
+with api_tab:
+    render_api()
+with demo_tab:
+    render_demo()

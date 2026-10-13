@@ -58,7 +58,7 @@ These hooks need the network or their own browser, so no commit, CI run or push 
 
 ### Tests
 
-Python, gated at 100 % coverage over `streamlit_listview`, `demo` and `scripts/push_gate.py` (except `demo/app.py`, which the e2e suite exercises):
+Python, gated at 100 % coverage over `streamlit_listview`, `demo` and `scripts/push_gate.py` (except `demo/app.py`, which the e2e suite and the `AppTest` runs in `tests/test_demo_app.py` exercise):
 
 ```sh
 uv run --extra devel pytest tests/                                   # the unit suite

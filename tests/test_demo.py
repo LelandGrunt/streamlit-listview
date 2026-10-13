@@ -48,6 +48,35 @@ def test_group_names_orders_dedupes_and_skips_groupless():
     assert parsing.group_names([]) == []
 
 
+def test_group_names_skips_unhashable_groups():
+    """A pasted list or dict group must not crash the demo before listview runs.
+
+    The Group pickers simply do not offer it; the option itself stays, so
+    listview() rejects it with the ValueError the demo shows as an error.
+    Hashable invalid groups (int, None) keep their place: listview names them.
+    """
+    options = [
+        {"id": "a", "group": []},
+        {"id": "b", "group": "G1"},
+        {"id": "c", "group": {}},
+        {"id": "d", "group": 1},
+        {"id": "e", "group": None},
+        {"id": "f", "group": "G1"},
+    ]
+    assert parsing.group_names(options) == ["G1", 1, None]
+
+
+def test_resolve_custom_source_keeps_an_option_with_an_unhashable_group():
+    cfg = _data_cfg(
+        data_source="Custom",
+        options_text='[{"id": "x", "label": "X", "group": []}]',
+    )
+    options, ids, groups, _builtin = dataset.resolve_dataset(cfg)
+    assert options == [{"id": "x", "label": "X", "group": []}]
+    assert ids == ["x"]
+    assert groups == []
+
+
 def test_dataset_accepted_by_listview_normalizer():
     from streamlit_listview._options import normalize_options
 
@@ -558,6 +587,43 @@ def test_snippet_omits_empty_strings_and_empty_lists():
     assert "default=" not in code
     assert "placeholder=" not in code
     assert "help=" not in code
+
+
+_FALSY_ID_OPTS = [
+    {"id": "", "label": "Empty id"},
+    {"id": 0, "label": "Zero"},
+    {"id": "a", "label": "Alternate"},
+]
+
+
+@pytest.mark.parametrize(
+    ("mode", "default", "expected"),
+    [
+        ("single", None, None),
+        ("single", "", {"id": "", "label": "Empty id"}),
+        ("single", 0, {"id": 0, "label": "Zero"}),
+        ("multi", [], []),
+        ("multi", [""], [{"id": "", "label": "Empty id"}]),
+    ],
+)
+def test_snippet_call_returns_the_configured_default(
+    listview_mod, mode, default, expected
+):
+    """Run the generated code: it must start with the default the demo shows.
+
+    An empty string is a valid id, so ``default=""`` selects that row. Omitting
+    it like an empty placeholder made the copied code start with nothing
+    selected. The fake component echoes the seeded default, as the V2 runtime
+    does on the first render.
+    """
+    code = codegen.build_snippet(
+        _cfg(selection_mode=mode, default=default),
+        _FALSY_ID_OPTS,
+        builtin_dataset=False,
+    )
+    namespace = {}
+    exec(compile(code, "<snippet>", "exec"), namespace)
+    assert namespace["selected"] == expected
 
 
 def test_snippet_renders_unicode_and_literal_tokens():
@@ -1352,6 +1418,17 @@ def test_server_theme_apply_overlays_the_live_config(theme_config):
     assert server.expires_at == _T0 + themes.THEME_TTL
     opt = config.get_config_options()["theme.light.primaryColor"]
     assert opt.where_defined == themes.WHERE_DEFINED
+
+
+def test_server_theme_snapshot_pairs_the_theme_with_its_expiry(theme_config):
+    server = themes.ServerTheme()
+    assert server.snapshot() == (None, None)
+
+    server.apply("brand", {"theme.primaryColor": "#123456"}, now=_T0)
+    assert server.snapshot() == ("brand", _T0 + themes.THEME_TTL)
+
+    server.reset()
+    assert server.snapshot() == (None, None)
 
 
 def test_server_theme_switch_drops_what_the_previous_theme_set(theme_config):
