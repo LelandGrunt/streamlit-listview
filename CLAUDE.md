@@ -10,7 +10,7 @@ The package has two languages: a thin Python wrapper (`streamlit_listview/`) and
 
 ## Where the detailed rules live
 
-A `CLAUDE.md` in a subdirectory loads when Claude reads a file in that directory. The last four entries load only on request: read them before working in their area.
+A `CLAUDE.md` in a subdirectory loads the first time Claude reads, writes or edits a file in that directory. Claude never loads the last four entries on its own: read each one when the task touches its area, whether or not the user names it. Another coding assistant loads none of these files: it reads this file first, then the guide of each directory the task touches.
 
 | File | Covers |
 |---|---|
@@ -26,6 +26,8 @@ A `CLAUDE.md` in a subdirectory loads when Claude reads a file in that directory
 
 Always go through `uv`: the system `python` on `PATH` may lack this project's dependencies. The test and dev dependencies live in the `devel` extra, so `uv run pytest` fails; run `uv run --extra devel pytest`.
 
+The commands run from the repository root unless their block names another directory. They use POSIX shell syntax, as Claude Code's Bash tool and CI do. PowerShell rejects the prefix `NAME=1 command`; set the variable for one command as `$env:NAME = "1"; command; Remove-Item Env:NAME`.
+
 ### Checks before each commit
 
 ```sh
@@ -35,13 +37,13 @@ pre-commit run --all-files                  # every check on every file, as CI r
 pre-commit run ty --all-files               # a single hook
 ```
 
-`.pre-commit-config.yaml` runs ruff (`check --fix` and `format`) on the staged Python files; ty over the whole project and gitleaks over the staged changes and the history of `HEAD` on every commit; and `uv audit` when `uv.lock` or `pyproject.toml` is staged. tsc and oxlint run when a staged `.ts`, `.tsx` or `.json` file lies under `streamlit_listview/frontend/`, Prettier when a staged `.ts`, `.tsx`, `.json` or `.css` file does, and `npm audit` when its `package.json` or `package-lock.json` is staged. These four need `npm ci` there first; without it, the `frontend-deps` hook stops the commit and says so. For `listview.css`, Prettier checks the syntax and the format; `npm test` checks the rules, through `listview-css.test.ts`. typos checks the spelling of every staged text file and fixes what it can; its exceptions live under `[tool.typos]` in `pyproject.toml`. markdownlint-cli2 checks every staged Markdown file against the rules in `.markdownlint-cli2.jsonc`. The configuration lives in `[tool.ruff]` and `[tool.ty]` in the root `pyproject.toml` and in `streamlit_listview/frontend/.oxlintrc.json`.
+`.pre-commit-config.yaml` runs on every commit: ruff (`check --fix`, `format`) on the staged Python files, ty over the project, gitleaks over the staged changes and the history of `HEAD`, typos on every staged text file, markdownlint-cli2 on every staged Markdown file, and `uv audit` when `uv.lock` or `pyproject.toml` is staged. For staged files under `streamlit_listview/frontend/` it adds tsc and oxlint (`.ts`, `.tsx`, `.json`), Prettier (also `.css`) and `npm audit` (`package.json`, `package-lock.json`). These four need `npm ci` there first; without it, the `frontend-deps` hook stops the commit. `npm test` checks the rules of `listview.css` through `listview-css.test.ts`. The configuration lives in `[tool.ruff]`, `[tool.ty]` and `[tool.typos]` in the root `pyproject.toml`, in `.markdownlint-cli2.jsonc` and in `streamlit_listview/frontend/.oxlintrc.json`.
 
 - **When a hook fails, fix the finding and commit again. Never pass `--no-verify`.** A ruff or typos fix leaves the file modified: stage it and commit again. The Prettier hook only checks: run `npm run format`, stage, and commit again. The markdownlint-cli2 hook only checks as well: fix the Markdown by hand.
 - **Suppress a finding only on purpose, on the narrowest scope, with its reason:** `# noqa: CODE` or `# ty: ignore[rule]` on the line, or a per-file ignore in `pyproject.toml`; in the frontend, `// eslint-disable-next-line rule -- reason` (oxlint reads the ESLint syntax). An unused suppression fails the check; remove it when its finding goes away.
 - **A secret that gitleaks reports stops the work.** Remove it, and rotate it if it left the machine. A false positive goes into `.gitleaksignore`: its fingerprint, below a comment that gives the reason. pre-commit builds gitleaks with Go on its first run; behind a proxy that breaks downloads from `proxy.golang.org`, run that first install as `GOPROXY=direct pre-commit run gitleaks --all-files`.
 - **A function stays at a cyclomatic complexity of 10 or below** (ruff C901, oxlint `complexity`). A function above it when the limit came in carries a suppression with the reason; split it on the next change and remove the suppression.
-- **Line endings:** a Windows checkout has CRLF endings, and Prettier (`endOfLine: auto`) fails a file with mixed endings. A shell `>>` append writes LF into a CRLF file; `npm run format` evens it out.
+- **Line endings:** a Windows checkout has CRLF endings, and Prettier (`endOfLine: auto`) fails a file with mixed endings. An append with Bash's `>>` writes LF lines, one with PowerShell 7's `>>` CRLF lines. `npx prettier --write <file>` in `streamlit_listview/frontend/` evens out one file; `npm run format` rewrites every frontend file.
 - **`ruff format` also formats the `python` blocks in Markdown files.** `<!-- fmt:off -->` / `<!-- fmt:on -->` keeps the README's signature block aligned.
 - **oxlint, not ESLint:** TypeScript 7 ships no JavaScript compiler API, which typescript-eslint needs.
 - **A new directory of modules imported by name** (as `demo/` and `scripts/` are, through `sys.path` inserts) goes into both ty's `extra-paths` and ruff's `src`.
@@ -83,11 +85,18 @@ npm run format:check                   # prettier --check (the pre-commit hook)
 
 ### Build and install
 
+From `streamlit_listview/frontend/`:
+
 ```sh
-npm ci                                  # once, in streamlit_listview/frontend/
-npm run build                           # clean + typecheck + production vite build -> frontend/build/
-npm run dev                             # vite build --watch
-uv pip install -e . --force-reinstall   # from the root; the build backend runs npm run build
+npm ci          # once per clone
+npm run build   # clean + typecheck + production vite build -> frontend/build/
+npm run dev     # vite build --watch
+```
+
+From the root:
+
+```sh
+uv pip install -e . --force-reinstall   # the build backend runs npm run build
 uv build                                # wheel + sdist; also builds the frontend
 ```
 
@@ -108,24 +117,15 @@ CI's `e2e` job and the push gate run the suite in Chromium. `e2e/test_accessibil
 
 ### Performance benchmarks (not in CI; no thresholds)
 
-**Read `BENCHMARKS.md` before running, changing or reading a benchmark.** Both tiers drive the component only through its public surface, so the same files benchmark any checkout. The full matrix takes about 25 minutes per tier.
+**Read `BENCHMARKS.md` before running, changing or reading a benchmark.** Both tiers drive the component only through its public surface, so the same files benchmark any checkout.
 
-- **Frontend tier** (vitest `bench` in jsdom, `frontend/src/bench/`): `npm run bench`, for React-side A/B work. It runs React's development build, so its numbers are relative.
+- **Frontend tier** (vitest `bench` in jsdom, `frontend/src/bench/`): `npm run bench` in `streamlit_listview/frontend/`, for React-side A/B work. It runs React's development build, so its numbers are relative.
 - **Browser tier** (Playwright against a real Streamlit server, `e2e/perf/`): `uv run --extra devel pytest e2e/perf/ --perf-out bench-results/<label>.jsonl`, summarized by `uv run --extra devel python -m e2e.perf.report bench-results/<label>.jsonl`, or compared with a second results file given after it. It gives the numbers of record, and only it can judge DOM-size or CSS work. It measures the checkout it runs from.
 - **A delta inside the spread is not a result.** Results go to the gitignored `bench-results/` and are never committed: the numbers are machine-specific. The only gated performance check is `e2e/test_performance.py`.
 
 ### Visual comparison (not in CI; one machine only)
 
-The GIF scenarios in `scripts/gif/` double as a before/after check of the widget's look. Build the bundle before each recording:
-
-```sh
-LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py --all --record bench-results/visual/before
-# change the widget, run npm run build, then:
-LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py --all --record bench-results/visual/after
-uv run --extra devel python scripts/gif/compare.py bench-results/visual/before bench-results/visual/after   # exit 0 same, 1 differs, 2 invalid input
-```
-
-`--record` refuses a directory that holds a recording; `--overwrite` replaces it. A difference is not a failure: an intended change reports too, and a person judges `report.html`. Fonts and the Chromium version change pixels, so compare only recordings from one machine, and never commit them.
+The GIF scenarios in `scripts/gif/` double as a before/after check of the widget's look: record every scenario before and after the change, building the bundle before each recording, and compare the two with `scripts/gif/compare.py`. `scripts/gif/README.md` (*Compare before and after a change*) gives the commands. A difference is not a failure: an intended change reports too, and a person judges `report.html`. Fonts and the Chromium version change pixels, so compare only recordings from one machine, and never commit them.
 
 ### Run the demo
 
@@ -145,7 +145,7 @@ uv run --extra devel streamlit run demo/app.py   # needs the package installed a
 - **Ids are `str` or `int`** (never `bool`), an `int` id satisfies `abs(id) <= 2**53 - 1`, and ids are unique as rendered. The JSON boundary and JavaScript's `String()` set these limits. A subclass, such as an enum member, is keyed by the plain value JSON carries, not by its own `str()`.
 - **Selection state lives on the frontend.** `useSelection` holds the selected ids as React state and seeds them once, at mount: from `data.state_selection` (the persisted `st.session_state[key]` of a keyed instance) when present, else from `data.default_ids` (the `default` that `listview()` resolved). A later change to either seeds nothing. A value under the key that is not a listview's state raises `ValueError` in `listview()`: the component would return it while the rows showed `default`.
 - **A reconciliation fires `on_change` once, on purpose.** When a rerun's payload invalidates the selection (a keyed caller shrinks `options`, lowers `max_selections` or switches `selection_mode`), `useSelection` corrects it and commits the correction through `setStateValue("selection", …)`. The V2 layer cannot tell that commit from a click. Do not suppress the write-back, and do not use `setTriggerValue`: it fires and forgets, it does not persist. `_options.map_selection` applies the same corrections on the way out, with the same survivors, so the returned value never waits for the write-back. Change one, change the other.
-- **Only a new `key` resets a keyed widget's selection.** A keyed instance keeps its selection and its UI state (collapse, search, scroll) across parameter changes; an unkeyed instance remounts on any parameter change. A move between `st.sidebar` and the main body remounts the frontend: the selection survives through `state_selection`, and the UI state resets. `default` fires no `on_change`: it sets the V2 mount state, which `listview()` returns until the first commit.
+- **A keyed widget keeps its selection while Streamlit keeps its state; a new `key` resets it on purpose.** A keyed instance keeps its selection and its UI state (collapse, search, scroll) across parameter changes; an unkeyed instance remounts on any parameter change. A run that does not call `listview()` for the key ends with Streamlit deleting the widget's state, as for its own widgets, and the next call mounts it from `default`; the demo's former lazy tabs lost the selection this way (`demo/CLAUDE.md`). A move between `st.sidebar` and the main body remounts the frontend: the selection survives through `state_selection`, and the UI state resets. `default` fires no `on_change`: it sets the V2 mount state, which `listview()` returns until the first commit.
 - **The bundle is a single chunk.** Vite emits exactly one `index-[hash].js` and one `index-[hash].css`, and each Python glob requires exactly one match. Never add a dynamic `import()`: it splits off a second chunk and breaks registration. For this reason `remark-emoji` is imported statically.
 - **The GIF scenarios, the tour and the e2e suite find the widget by its `data-testid`s and `listview-*` classes, and the demo by its labels.** Before you rename one, search `e2e/` and `scripts/gif/` for it, and fix every use in the same change.
 
@@ -159,14 +159,7 @@ A `v*.*.*` tag pushed to GitHub publishes to PyPI through Trusted Publishing (`.
 
 ### Pushing to GitHub
 
-GitHub `main` shows released code only: Streamlit Community Cloud runs the hosted demo from it and installs the version that `demo/requirements.txt` pins from PyPI. A pre-push hook, `scripts/push_gate.py`, checks every push to GitHub (a remote URL that contains `github.com`). A push passes four stages; each stage reports all of its findings, and a stage runs only when the earlier ones passed:
-
-1. **Refs:** only `main` and a new tag `v<version>`; no deletion, no force push, no moved tag.
-2. **Local state:** a command-line confirmation that names the version; the push sends `HEAD` of a clean tree; the seven version files agree (see *Releasing*); the changelog dates the version and contains no "Unreleased".
-3. **Remote state:** the release order: the tag, then the PyPI release, then `main`. **`main` must carry the library code of its release tag,** so between releases GitHub `main` takes no change to the shipped package; docs, tests, the demo and the scripts may change.
-4. **The suite:** CI's checks, run locally on the pushed commit: `npm ci`, `pre-commit run --all-files`, the build, `npm test`, `pytest tests/` with the coverage gate, the e2e suite in Chromium, a wheel build and `verify_wheel.py`. It takes minutes and needs npm, uv and uvx on `PATH`.
-
-CI's `push-gate` job and `release.yml` repeat the version and release checks on GitHub.
+GitHub `main` shows released code only: Streamlit Community Cloud runs the hosted demo from it and installs the version that `demo/requirements.txt` pins from PyPI. A pre-push hook, `scripts/push_gate.py`, checks every push to a remote URL that contains `github.com`, in four stages: the refs (only `main` and a new tag `v<version>`), the local state (a command-line confirmation that names the version, a clean tree, the seven version files in agreement), the release order (the tag, then the PyPI release, then `main`), and CI's suite on the pushed commit, which needs npm, uv and uvx on `PATH`. `HARNESS.md` (*The push gate*) describes each stage. **`main` must carry the library code of its release tag,** so between releases GitHub `main` takes no change to the shipped package; docs, tests, the demo and the scripts may change. CI's `push-gate` job and `release.yml` repeat the version and release checks on GitHub.
 
 ```sh
 uv run --no-project python scripts/push_gate.py install       # once per clone; the worktrees share the hook
@@ -190,22 +183,14 @@ git -c listview.pushGithub=<version> push origin v<version>   # then the same fo
 
 **Regenerate the hero GIF (`assets/listview-demo.gif`) in the same commit as any change to how the widget looks or behaves.** The PyPI pages of 1.0.0 and 1.0.1 link it at `HEAD`, so a style change merged without a new GIF advertises a widget the code no longer renders. The rule covers `listview.css`, the markup in `Listview.tsx` and `components/`, the Markdown renderer, any hook whose effect the user sees, a Python default that changes rendering, and `scripts/gif/` itself. A refactor, a performance change or a test change needs no new GIF.
 
-```sh
-npm --prefix streamlit_listview/frontend run build
-LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel python scripts/gif/generate.py                                  # the hero
-LISTVIEW_SKIP_NPM_BUILD=1 uv run --extra devel --with imageio-ffmpeg python scripts/gif/screencast.py   # the tour
-```
-
-- **Build first.** The generator captures the bundle in `frontend/build/`; a stale bundle yields a GIF of the old widget.
+- **Build first.** `scripts/gif/generate.py` (the hero) and `scripts/gif/screencast.py` (the tour) capture the bundle in `frontend/build/`; a stale bundle yields a GIF of the old widget. `scripts/gif/README.md` gives the commands and covers the scenarios.
 - **Commit the hero GIF only when its frames show a real change.** On one machine an unchanged widget yields a byte-identical file. Another machine's fonts or a newer Chromium change pixels too.
 - **The tour** (`assets/listview-tour.gif`) differs on every run. Regenerate it when the demo changes visibly and with every version bump, because it shows the version badge.
 - **Never launch the tour's Chromium with `--use-fake-ui-for-media-stream`:** that flag records the whole monitor, not the demo's tab.
 
-`scripts/gif/README.md` covers the scenarios, the tour and how to add a scenario.
-
 ## Components V2 references
 
-This repo hand-rolls the V2 stack. The official docs help to cross-check boilerplate (registration, the `FrontendRenderer` contract, packaging) but say nothing about this repo's invariants; for those, trust the `CLAUDE.md` files. **Most search hits still describe the legacy v1 iframe API.** `declare_component`, `Streamlit.setComponentValue`, `withStreamlitConnection`, `streamlit-component-lib` and a frontend dev server on `:3001` mark v1 material; ignore it.
+This repo hand-rolls the V2 stack. The official docs help to cross-check boilerplate (registration, the `FrontendRenderer` contract, packaging) but say nothing about this repo's invariants; for those, read the `CLAUDE.md` files, and check SDK behavior against the docs of the installed Streamlit version. When a guide, the code and the tests disagree, report the conflict and settle the intended behavior with the user before you edit. **Most search hits still describe the legacy v1 iframe API.** `declare_component`, `Streamlit.setComponentValue`, `withStreamlitConnection`, `streamlit-component-lib` and a frontend dev server on `:3001` mark v1 material; ignore it.
 
 - **V2 concepts** (registration, state vs. triggers, theming): <https://docs.streamlit.io/develop/concepts/custom-components/components-v2>. `setStateValue` persists state; `setTriggerValue` fires and forgets.
 - **API reference:** <https://docs.streamlit.io/develop/api-reference/custom-components>. `index.tsx` implements the `FrontendRenderer` type from the npm package `@streamlit/component-v2-lib` and takes `FrontendRendererArgs` from it; `ListviewState` in `types.ts` satisfies its `FrontendState`.

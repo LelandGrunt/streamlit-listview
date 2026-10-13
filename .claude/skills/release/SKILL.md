@@ -20,7 +20,7 @@ A `v*.*.*` tag pushed to GitHub runs `.github/workflows/release.yml`, which publ
 
 ## Steps
 
-1. **Choose the version by Semantic Versioning,** from the entries under *Unreleased*: a patch (`1.0.2`) when they are only *Fixed* or *Security*, a minor (`1.1.0`) otherwise. An entry marked **Breaking** also takes a minor, because the project stays on 1.x. The section then opens with the notice that the release breaks compatibility, as the header of `CHANGELOG.md` promises.
+1. **Choose the version from the entries under *Unreleased*:** a patch (`1.0.2`) when they are only *Fixed* or *Security*, a minor (`1.1.0`) otherwise. **An entry marked Breaking also takes a minor, because the project stays on 1.x.** That deviates from Semantic Versioning, which takes a major version for a breaking change; propose a major only when the user asks for one. The section then opens with the notice that the release breaks compatibility, as the header of `CHANGELOG.md` promises.
 2. **Bump the version in the five files that assert it.** The push gate refuses the tag, and the release job fails, when one disagrees.
    1. `[project].version` in the root `pyproject.toml`, the source of truth. The tag guard and `verify_wheel.py`'s wheel-filename check compare against it.
    2. `[project].version` in `streamlit_listview/pyproject.toml`. `tests/test_packaging.py::test_versions_agree` pins it to the root.

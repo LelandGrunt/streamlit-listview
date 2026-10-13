@@ -1,7 +1,7 @@
 # e2e/test_sidebar_theme.py
 """The widget paints the right surfaces in st.sidebar.
 
-Streamlit's sidebar ThemeProvider swaps --st-background-color with
+Streamlit's default sidebar theme swaps --st-background-color with
 --st-secondary-background-color and changes no other color. Consumed raw that
 inverts the widget there: rows land on the group-header surface and the headers
 on the row surface, so the list stops matching the st.selectbox beside it.
@@ -11,7 +11,8 @@ assert what the sheet SAYS (src/__tests__/listview-css.test.ts) but not what a
 browser resolves it to, and the swap happens entirely outside this repo. Every
 expectation below is therefore a comparison between two elements measured on
 the same page, never a hardcoded hex: the point is that the widget tracks
-whatever Streamlit's theme resolves to, including a custom [theme.sidebar].
+whatever Streamlit's theme resolves to. Only the default sidebar theme runs
+here; no test boots a custom [theme.sidebar].
 
 LIGHT THEME ONLY (this module deliberately sets no EXTRA_ARGS). The brightness
 assertion below encodes "the group band is DARKER than the rows", which is a

@@ -322,6 +322,8 @@ The hover highlight uses CSS relative color syntax (Chrome/Edge 119+, Firefox 12
 
 A keyed widget's selection also survives moving it between containers (say `st.sidebar` ↔ the main body): the move rebuilds the frontend, but the widget re-seeds its rows from the selection persisted in `st.session_state`, so the rows and the returned value both carry over — only frontend-local UI state (search text, scroll, collapse) resets. Keep data of your own under another key: a value in `st.session_state[key]` that is not the listview's state raises `ValueError`, because the rows could not show it while `listview()` returned it.
 
+The selection lasts as long as Streamlit keeps the widget's state. When a script run ends without calling `listview()` for a key, Streamlit deletes that widget's state, as it does for its own widgets, and the next call starts again from `default`. This happens when the call sits in a branch that a run skips, such as an `if` or a tab created with `on_change="rerun"`. To keep the selection, call `listview()` on every run; `st.tabs` without `on_change` runs the code of every tab.
+
 Because the selection survives, two parameters only take effect at mount: changing `default` on a keyed widget moves neither the displayed selection nor the returned value — it only scrolls the newly named row into view — and changing `collapsed_groups` never re-collapses a group that has already been shown ([Collapsible groups](#collapsible-groups)). Change the `key` to re-apply either. A keyed selection that no longer fits the current parameters is corrected instead — see [Changing `options`, `max_selections` or `selection_mode` later](#changing-options-max_selections-or-selection_mode-later).
 
 ### Large lists

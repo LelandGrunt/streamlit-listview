@@ -52,7 +52,7 @@
 
   /* The surfaces the widget paints, named once so the sidebar can redefine them
      in a single place (see the [data-in-sidebar] block below). Streamlit's
-     sidebar theme swaps --st-background-color with
+     default sidebar theme swaps --st-background-color with
      --st-secondary-background-color and changes no other color, so a rule that
      reaches for either token raw renders inverted there. Spelled out per rule,
      un-swapping would take an override per rule, and copies of a rule drift

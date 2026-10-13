@@ -1293,8 +1293,11 @@ st.caption(tagline)
 # with no rerun: the live widget stays mounted under the hidden Demo tab and
 # keeps its selection, search text and scroll position. Lazy tabs
 # (on_change="rerun") left the widget out of the API tab's run, Streamlit
-# dropped its state, and the return to Demo mounted an empty widget. The API
-# tab renders first because render_demo ends the run (st.stop) when listview
+# dropped its state, and the return to Demo mounted an empty widget; at 100,000
+# options that return took 9.5 to 12 s in Chromium, against 1.9 s with both
+# tabs rendered. The price: a click on a built-in city sends 66.6 KB instead of
+# 53.9 KB, before websocket compression (measured 2026-10-13). The API tab
+# renders first because render_demo ends the run (st.stop) when listview
 # raises, and the reference must still render then.
 demo_tab, api_tab = st.tabs(
     [":material/play_circle: Demo", ":material/menu_book: API reference"]
