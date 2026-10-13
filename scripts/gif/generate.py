@@ -135,8 +135,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
-def _choose(ap: argparse.ArgumentParser, args: argparse.Namespace) -> list[Scenario]:  # noqa: C901 -- older than the complexity limit; split it when you next change it
+def _choose(ap: argparse.ArgumentParser, args: argparse.Namespace) -> list[Scenario]:
     """The scenarios the options name; a usage error for a combination that fails."""
+    # A blank path, such as an unset shell variable, would otherwise read as
+    # an absent option: --record "" would build the hero GIF in assets/.
+    for option, value in (("--record", args.record), ("--out", args.out)):
+        if value is not None and not value.strip():
+            ap.error(f"{option} needs a path, got {value!r}")
     if args.all and args.scenario:
         ap.error("choose one of --all and --scenario")
     if args.all:
@@ -147,25 +152,38 @@ def _choose(ap: argparse.ArgumentParser, args: argparse.Namespace) -> list[Scena
         chosen = [SCENARIOS[name] for name in dict.fromkeys(args.scenario)]
     else:
         chosen = [SCENARIOS["hero"]]
+    if args.record:
+        _check_record(ap, args)
+    else:
+        _check_gif(ap, args, chosen)
+    return chosen
+
+
+def _check_record(ap: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    """A usage error for a GIF option, or for a recording --record would replace."""
     gif_options = {
         "--out": args.out,
         "--scale": args.scale,
         "--colors": args.colors,
         "--keep-frames": args.keep_frames,
     }
-    if args.record:
-        # Identity, not truthiness or equality: `--scale 0` is given, and wrong,
-        # as much as `--scale 2`, and 0 == False.
-        given = [
-            name
-            for name, value in gif_options.items()
-            if value is not None and value is not False
-        ]
-        if given:
-            ap.error(f"--record builds no GIF, so it takes no {', '.join(given)}")
-        if (Path(args.record) / "meta.json").exists() and not args.overwrite:
-            ap.error(f"{args.record} holds a recording; pass --overwrite to replace it")
-        return chosen
+    # Identity, not truthiness or equality: `--scale 0` is given, and wrong,
+    # as much as `--scale 2`, and 0 == False.
+    given = [
+        name
+        for name, value in gif_options.items()
+        if value is not None and value is not False
+    ]
+    if given:
+        ap.error(f"--record builds no GIF, so it takes no {', '.join(given)}")
+    if (Path(args.record) / "meta.json").exists() and not args.overwrite:
+        ap.error(f"{args.record} holds a recording; pass --overwrite to replace it")
+
+
+def _check_gif(
+    ap: argparse.ArgumentParser, args: argparse.Namespace, chosen: list[Scenario]
+) -> None:
+    """Fill in the GIF defaults; a usage error for an option a GIF cannot take."""
     if args.overwrite:
         ap.error("--overwrite needs --record DIR: it replaces a recording, not a GIF")
     args.scale = 0.5 if args.scale is None else args.scale
@@ -184,7 +202,6 @@ def _choose(ap: argparse.ArgumentParser, args: argparse.Namespace) -> list[Scena
         validate_gif_params(args.out or "out.gif", args.scale, args.colors)
     except ValueError as exc:
         ap.error(str(exc))
-    return chosen
 
 
 def run_scenario(

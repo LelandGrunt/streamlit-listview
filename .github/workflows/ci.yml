@@ -117,6 +117,11 @@ jobs:
       - name: Verify the wheel ships the frontend bundle
         run: .venv/bin/python scripts/verify_wheel.py
 
+      # verify_wheel.py checks the files; this installs the wheel into a new
+      # environment and renders the listview from it.
+      - name: Smoke-test the installed wheel
+        run: .venv/bin/python scripts/smoke_wheel.py
+
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v7
         with:

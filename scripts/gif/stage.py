@@ -34,53 +34,80 @@ RERUN_TIMEOUT_MS = 60_000
 # DOM mutation, no scroll event and no loading stylesheet for `quietFrames`
 # animation frames. A remounted listview gets a new shadow root whose stylesheet
 # applies a frame or more after its first render; until then its rows are
-# unstyled. A key-change remount also leaves the shadow root without the
-# listview for about a frame after its script run ends, so the lookup repeats
-# once per frame until the listview appears.
+# unstyled. A remount can also replace the host, or leave its shadow root
+# without the listview for about a frame after its script run ends. So the
+# lookup repeats on every frame, and a different root (or none) restarts the
+# count on the root the listview now lives in. One timeout covers the fonts,
+# the lookup and the quiet frames.
 _SETTLE_JS = """
 async ([quietFrames, timeoutMs]) => {
-  await document.fonts.ready;
   const started = performance.now();
-  const findHost = () =>
-    [...document.querySelectorAll("*")].find(
-      (el) => el.shadowRoot?.querySelector('[data-testid="stListview"]'),
-    );
-  let host = findHost();
-  while (!host) {
-    if (performance.now() - started > timeoutMs) {
-      throw new Error(`settle: no listview on the page after ${timeoutMs} ms`);
-    }
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-    host = findHost();
+  const timedOut = () => performance.now() - started > timeoutMs;
+  const fontsLoaded = await Promise.race([
+    document.fonts.ready.then(() => true),
+    new Promise((resolve) => setTimeout(() => resolve(false), timeoutMs)),
+  ]);
+  if (!fontsLoaded) {
+    throw new Error(`settle: the fonts did not load in ${timeoutMs} ms`);
   }
-  const root = host.shadowRoot;
+  const holdsListview = (candidate) =>
+    candidate?.host.isConnected &&
+    candidate.querySelector('[data-testid="stListview"]') !== null;
+  // The scan of the whole document runs only while the watched root no
+  // longer holds the listview, not on every frame.
+  const findRoot = () =>
+    holdsListview(root)
+      ? root
+      : ([...document.querySelectorAll("*")].find((el) =>
+          holdsListview(el.shadowRoot),
+        )?.shadowRoot ?? null);
   let dirty = false;
   const mark = () => {
     dirty = true;
   };
   const observer = new MutationObserver(mark);
-  observer.observe(root, {
-    subtree: true,
-    childList: true,
-    attributes: true,
-    characterData: true,
-  });
-  root.addEventListener("scroll", mark, true);
+  let root = null;
+  const watch = (next) => {
+    observer.disconnect();
+    root?.removeEventListener("scroll", mark, true);
+    root = next;
+    if (root) {
+      observer.observe(root, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        characterData: true,
+      });
+      root.addEventListener("scroll", mark, true);
+    }
+  };
   const loading = () =>
     [...root.querySelectorAll('link[rel="stylesheet"]')].some((link) => !link.sheet);
   try {
     let quiet = 0;
-    while (quiet < quietFrames) {
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-      quiet = dirty || loading() ? 0 : quiet + 1;
-      dirty = false;
-      if (performance.now() - started > timeoutMs) {
-        throw new Error(`settle: the listview did not go quiet in ${timeoutMs} ms`);
+    for (;;) {
+      const current = findRoot();
+      if (current !== root) {
+        watch(current);
+        quiet = 0;
+      } else if (root) {
+        quiet = dirty || loading() ? 0 : quiet + 1;
       }
+      dirty = false;
+      if (root && quiet >= quietFrames) {
+        return;
+      }
+      if (timedOut()) {
+        throw new Error(
+          root
+            ? `settle: the listview did not go quiet in ${timeoutMs} ms`
+            : `settle: no listview on the page after ${timeoutMs} ms`,
+        );
+      }
+      await new Promise((resolve) => requestAnimationFrame(resolve));
     }
   } finally {
-    observer.disconnect();
-    root.removeEventListener("scroll", mark, true);
+    watch(null);
   }
 }
 """
@@ -232,8 +259,12 @@ class Stage:
     # CSS engine pierces the shadow root.
 
     def opt(self, item_id: str | int) -> Locator:
-        """The row of the option with this id."""
-        return self.page.locator(f'[data-testid="stListviewOption-{item_id}"]')
+        """The row of the option with this id.
+
+        A test-id lookup, not a CSS selector: an id may hold a quote, a
+        backslash or a newline, which a quoted attribute selector cannot.
+        """
+        return self.page.get_by_test_id(f"stListviewOption-{item_id}")
 
     def group(self, name: str) -> Locator:
         """The header of the group with this name."""

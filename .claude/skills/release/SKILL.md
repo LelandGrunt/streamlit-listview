@@ -14,7 +14,7 @@ A `v*.*.*` tag pushed to GitHub runs `.github/workflows/release.yml`, which publ
   2. It builds the frontend, then runs its tests, in that order, as CI does.
   3. It installs the package editable and runs the unit tests with the coverage gate.
   4. It runs `uv build` with `LISTVIEW_SKIP_NPM_BUILD=1`, so the tested bundle is the packaged one.
-  5. It runs `scripts/verify_wheel.py` and `uvx twine check --strict`, and uploads the distributions.
+  5. It runs `scripts/verify_wheel.py`, `scripts/smoke_wheel.py` and `uvx twine check --strict`, and uploads the distributions.
 - **ci:** runs `ci.yml`'s jobs on the tagged commit, beside `build`: every pre-commit hook, the unit suites with the wheel check, and the e2e suite in Chromium. `ci.yml` runs on no tag by itself, and `main` reaches GitHub only after PyPI, so this job is the GitHub check of a tag that skipped the push gate.
 - **publish-to-pypi:** waits for `build` and `ci`, then runs `pypa/gh-action-pypi-publish` in the `pypi` environment with `id-token: write`; it also uploads PEP 740 attestations.
 - **github-release:** signs the distributions with Sigstore and creates the GitHub Release. Its notes are the version's section of `CHANGELOG.md`, with relative links pointed at the tag, followed by GitHub's generated compare link. An `a`, `b` or `rc` tag adds `--prerelease`.

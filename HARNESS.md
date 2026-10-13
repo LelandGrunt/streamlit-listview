@@ -34,7 +34,7 @@ Six rules shape every check:
 - **A warning fails like an error.** oxlint runs with `denyWarnings`; ruff, ty and oxlint each fail on a suppression comment that suppresses nothing.
 - **A suppression is narrow and states its reason:** `# noqa: CODE` or `# ty: ignore[rule]` on one line, a per-file ignore in `pyproject.toml`, or `// eslint-disable-next-line rule -- reason`.
 - **The hooks and the frontend tools are pinned; CI also tests the newest Python dependencies.** `.pre-commit-config.yaml` pins each hook: ruff, ty, uv, gitleaks, typos, markdownlint-cli2, markdown-link-check and mermaid-cli. `package-lock.json` pins the frontend tools and axe-core, and `npm ci` installs exactly that file everywhere. The ty hook, the push gate and the manual browser hook run in the environment that `uv.lock` pins, Playwright and its browser builds included. CI and the release job install the Python test environment with `uv pip install`, which takes the newest versions that `pyproject.toml` admits. They test the Streamlit, pytest and Playwright that a new user installs, so a new release of one of them can fail CI while the local checks pass. These float as well: the pre-commit that CI and the push gate fetch through `uvx`, the release's twine, the setuptools that builds the distributions, Node and Python (CI takes the newest 24 and 3.12; a developer machine runs what it has installed), the runner image, and the actions, which the workflows pin by tag. No check runs against Streamlit 1.51, the oldest version that `pyproject.toml` admits.
-- **Coverage must stay at 100 %.** pytest measures the package, the demo's helpers without `demo/app.py`, the push gate, `verify_wheel.py` and the build backend. vitest measures every frontend source except the tests, the benchmarks, the test helpers and the type-only modules. A suite fails when a line or a branch there runs in no test. Coverage shows that a line ran; the assertions show that it did the right thing.
+- **Coverage must stay at 100 %.** pytest measures the package, the demo's helpers without `demo/app.py`, the push gate, `verify_wheel.py`, `smoke_wheel.py` and the build backend. vitest measures every frontend source except the tests, the benchmarks, the test helpers and the type-only modules. A suite fails when a line or a branch there runs in no test. Coverage shows that a line ran; the assertions show that it did the right thing.
 
 ## The path of a change
 
@@ -77,6 +77,7 @@ The table shows which check runs at which stage. *Push gate* means the CI suite 
 | Frontend unit tests, 100 % coverage | vitest | | ✓ | ✓ | ✓ | |
 | Python unit tests, 100 % coverage | pytest | | ✓ | ✓ | ✓ | |
 | Wheel contents | `verify_wheel.py` | | ✓ | ✓ | ✓ | |
+| Installed wheel renders | `smoke_wheel.py` | | ✓ | ✓ | ✓ | |
 | Licenses of the bundled packages | Vite, `verify_wheel.py` | | ✓ | ✓ | ✓ | |
 | License allowlist | vitest | | ✓ | ✓ | ✓ | |
 | Distribution metadata | `twine check --strict` | | | | ✓ | |
@@ -150,7 +151,7 @@ flowchart LR
 
 ### Tests and coverage
 
-- **pytest** runs the unit suite over the Python package, the demo's helpers, the push gate, `verify_wheel.py` and the build backend, with branch coverage and a floor of 100 %. The measurement leaves out `demo/app.py`, which the e2e suite runs. `tests/test_demo_app.py` runs `demo/app.py` itself through Streamlit's `AppTest`, so it can change the server theme from a second thread at a set point of a run.
+- **pytest** runs the unit suite over the Python package, the demo's helpers, the push gate, `verify_wheel.py`, `smoke_wheel.py` and the build backend, with branch coverage and a floor of 100 %. The measurement leaves out `demo/app.py`, which the e2e suite runs. `tests/test_demo_app.py` runs `demo/app.py` itself through Streamlit's `AppTest`, so it can change the server theme from a second thread at a set point of a run.
 - **vitest** runs the frontend suite in jsdom with a floor of 100 % for statements, branches, functions and lines. The measurement leaves out the tests, the benchmarks, the test helpers and the type-only modules. `/* v8 ignore */` marks an unreachable defensive guard. jsdom runs no layout and no CSS, so the e2e suite checks what a browser renders.
 - **Guard tests read the sources instead of running them.** Each locks one rule that a refactoring could break unnoticed:
 
@@ -163,6 +164,7 @@ flowchart LR
   | `src/__tests__/licenses.test.ts` | Every npm package that can reach the bundle carries a license that permits shipping it. |
   | `tests/test_readme.py` | The README documents every public parameter, its Python blocks compile, its badges match the declared floors and gates, and it links the tour, while `assets/` holds only the tour and the hero GIF. |
   | `tests/test_packaging.py` | The version agrees across its places, and `verify_wheel.py` rejects a malformed wheel. |
+  | `tests/test_smoke_wheel.py` | `smoke_wheel.py` installs the wheel outside the source tree and fails when Streamlit renders no listview from it, or resolves another bundle than the wheel ships. |
   | `tests/test_push_gate.py` | The workflows call the push gate with the full git history, and CI's `e2e` job runs the browser suite that the push gate runs. |
   | `tests/test_harness.py` | CI's `lint` job checks out the whole history for gitleaks, the hooks that need the network or a browser stay manual, and a release tag reaches PyPI only after CI's jobs pass. It also recounts this file's inventory: the summary under *Coverage*, the pie chart and the map must show the same count, and no applicable 🟢 layer may be a gap. It checks no other claim of this file. |
 
@@ -177,7 +179,8 @@ flowchart LR
 
 - **The build backend** (`_build_backend.py`) runs `npm run build` for every wheel, sdist and editable build. With `LISTVIEW_SKIP_NPM_BUILD=1`, or without `frontend/src`, it skips npm and fails unless `build/` holds exactly one `index-*.js` and one `index-*.css`. Before a wheel it drops setuptools' staged copy of the package in `build/lib`, whose old bundle or deleted modules would otherwise ship beside the current files, and it stops the build when it cannot.
 - **Registration** requires exactly one `index-*.js` and one `index-*.css`; a second chunk fails at import.
-- **`scripts/verify_wheel.py`** checks the built wheel: under `frontend/build/` exactly one JS file, one CSS file and `THIRD_PARTY_LICENSES.md`, and nothing else; no other package file that the source tree lacks; the component manifest, parsed with `toml` as Streamlit parses it (with the standard library's `tomllib` where `toml` is absent, as in the push gate), for the distribution's name, the release's version and the `listview` component with its `asset_dir`; the license files; and no `_build_backend.py`. It also checks that the file name carries the version of the root `pyproject.toml`.
+- **`scripts/verify_wheel.py`** checks the built wheel: under `frontend/build/` exactly one JS file, one CSS file and `THIRD_PARTY_LICENSES.md`, and nothing else; no other package file that the source tree lacks, and every module and `py.typed` that it holds; the component manifest, parsed with `toml` as Streamlit parses it (with the standard library's `tomllib` where `toml` is absent, as in the push gate), for the distribution's name, the release's version and the `listview` component with its `asset_dir`; the license files; and no `_build_backend.py`. It also checks that the file name carries the version of the root `pyproject.toml`.
+- **`scripts/smoke_wheel.py`** checks that the wheel works once installed. It creates a virtual environment with uv outside the source tree, installs the wheel and the newest Streamlit it admits, and renders a listview there through Streamlit's `AppTest`. `AppTest` finds the component through the installed manifest and resolves the `index-*.js` and `index-*.css` globs as a server does; the script fails unless it renders one listview from the new environment, with the bundle the wheel ships. The test suites cannot see this, because the editable install finds the manifest and the bundle in the source tree. It needs access to PyPI and takes about 11 s.
 - **The licenses of the bundled packages:** Vite writes every npm package the bundle carries, with its license text, into `THIRD_PARTY_LICENSES.md` next to the bundle (`build.license`), and `NOTICE` points to it.
 - **`licenses.test.ts`** allows MIT, ISC, Apache-2.0, BSD-2-Clause, BSD-3-Clause and 0BSD for every npm package that can reach the bundle; a dev-only package is exempt.
 - **`twine check --strict`** checks that PyPI can render the package metadata.
@@ -213,7 +216,7 @@ Stage 4 runs once per commit. The push gate records each commit whose suite pass
 
 ### On GitHub
 
-- **`ci.yml`** runs three jobs on every pull request and every push to `main`: `lint` (all pre-commit hooks on all files), `test-build-verify` (build, both test suites, wheel, `verify_wheel.py`) and `e2e` (the browser suite in Chromium). A push to `main` adds a fourth, `push-gate` (`push_gate.py check main`).
+- **`ci.yml`** runs three jobs on every pull request and every push to `main`: `lint` (all pre-commit hooks on all files), `test-build-verify` (build, both test suites, wheel, `verify_wheel.py`, `smoke_wheel.py`) and `e2e` (the browser suite in Chromium). A push to `main` adds a fourth, `push-gate` (`push_gate.py check main`).
 - **`release.yml`** runs on a `v*.*.*` tag. Its `build` job checks the tag with `push_gate.py check tag`, which fails a tag that disagrees with the version information, then builds, tests and checks the distributions. Its `ci` job runs `ci.yml`'s three jobs on the tagged commit, because `ci.yml` runs on no tag by itself and `main` reaches GitHub only after PyPI. Only when both jobs pass does the workflow publish the distributions to PyPI through Trusted Publishing, without a stored token, together with PEP 740 attestations. It then signs them with Sigstore for the GitHub Release.
 - **Each workflow token gets least privilege:** `contents: read` by default; `id-token: write` only for publishing and signing; `contents: write` only for the job that creates the GitHub Release.
 - **Rulesets** in the repository settings protect what the push gate lets through: `main` cannot be deleted or force-pushed, a `v*` tag cannot be moved or deleted, and no other branch can be created or updated. They live outside git; check them under *Settings → Rules*.
@@ -232,7 +235,7 @@ sequenceDiagram
     G->>G: stages 1 to 4<br/>on the tagged commit
     G->>GH: send the tag
     GH->>R: run the release workflow
-    R->>R: check tag, build, tests,<br/>verify_wheel, twine check,<br/>CI's jobs
+    R->>R: check tag, build, tests,<br/>verify_wheel, smoke_wheel,<br/>twine check, CI's jobs
     R->>P: publish with Trusted<br/>Publishing and attestations
     R->>GH: GitHub Release with<br/>Sigstore signatures
     M->>G: push main<br/>with the confirmation
@@ -298,13 +301,13 @@ The tables follow the nine categories of the Harness Inventory and list each of 
 | Unit tests | 🔴 | ✅ | pytest and vitest, each with a 100 % coverage floor | push gate, CI, release | yes: the report lists the missed lines |
 | Property-based, fuzz | 🔴 | ✗ | none; table-driven tests list the inputs by hand | — | — |
 | Mutation testing | 🔴 | ✗ | none | — | — |
-| Integration tests | 🔴 | ✅ | the push gate's tests push through the installed hook with real git; CI builds a real wheel and inspects it; the e2e suite runs Python and the browser frontend together | push gate, CI, release | yes |
+| Integration tests | 🔴 | ✅ | the push gate's tests push through the installed hook with real git; CI builds a real wheel, inspects it and installs it into a new environment; the e2e suite runs Python and the browser frontend together | push gate, CI, release | yes |
 | Contract tests | 🔴 | ◐ | both suites test the canonical-integer rule with one input table, kept in step by hand; `types.test.ts` pins the wire types | push gate, CI, release | yes |
 | BDD, acceptance | 🔴 | ✗ | no executable specification; the e2e suite drives the user flows | — | — |
 | End-to-end, UI | 🔴 | ✅ | Playwright against a real Streamlit server, in Chromium | push gate, CI, release | yes |
 | Snapshot, visual regression | 🔴 | ◐ | `compare.py` diffs GIF recordings by hand, and a person judges the report; the native-parity tests measure colors against the native widget in the push gate, CI and the release | manual, push gate, CI, release | partial |
 | Performance, benchmark | 🔴 | ✅ | a render budget in `e2e/test_performance.py`; the two benchmark tiers run by hand, without thresholds | push gate, CI, release | yes, for the budget |
-| Smoke tests | 🔴 | ✅ | the README example and the demo boot without an exception; no check after Community Cloud redeploys | push gate, CI, release | yes |
+| Smoke tests | 🔴 | ✅ | the README example and the demo boot without an exception; the built wheel, installed into a new environment, renders a listview; no check after Community Cloud redeploys | push gate, CI, release | yes |
 
 ### 3. Security
 

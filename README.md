@@ -421,4 +421,4 @@ Apache-2.0 (see [`LICENSE`](https://github.com/LelandGrunt/streamlit-listview/bl
 
 ## AI
 
-Built with Claude Code (models Opus 4.8, 5 and 5.5, and Fable 5 and 5.1) and the superpowers plugin.
+Built with Claude Code (models Opus 4.8, 5 and 5.5, and Fable 5 and 5.1) and the superpowers plugin, reviewed by OpenAI GPT-6.1 Sol.

@@ -97,7 +97,7 @@ def test_version_matches_pyproject_and_no_stale_scaffold():
     version badge is live — shields.io reads it from PyPI — so it cannot fall
     behind a release; only the project it queries can be wrong, and a wrong
     one would show some other package's version."""
-    # The shared column-0-anchored parse (see verify_wheel.project_version) —
+    # The shared [project]-table parse (see verify_wheel.project_version) —
     # a third private regex for this field is how the copies drifted.
     version = verify_wheel.project_version(PYPROJECT)
     name = _first(r'(?m)^name\s*=\s*"([^"]+)"', PYPROJECT)

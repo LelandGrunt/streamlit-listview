@@ -17,9 +17,10 @@ import html
 import io
 import json
 import sys
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from PIL import Image, ImageChops, ImageDraw
 
@@ -57,7 +58,12 @@ class FrameDiff:
 
 
 def load_recording(root: Path) -> Recording:
-    """Read a recording's meta.json and every scenario's frames.json."""
+    """Read a recording's meta.json and every scenario's frames.json.
+
+    A recording that names no scenario, a scenario that lists no frame, and a
+    name or a frame key given twice are invalid: each would let a comparison
+    report "the same" for frames it never compared.
+    """
     if not root.is_dir():
         raise RecordingError(f"{root} is not a directory")
     meta_path = root / "meta.json"
@@ -71,27 +77,75 @@ def load_recording(root: Path) -> Recording:
     try:
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
         frames: dict[Key, Path] = {}
+        _check_scenarios(meta_path, meta["scenarios"])
         for scenario in meta["scenarios"]:
             reading = root / scenario / "frames.json"
-            if not reading.is_file():
-                raise RecordingError(f"{reading} is missing")
-            for entry in json.loads(reading.read_text(encoding="utf-8")):
-                key = (scenario, entry["take"], entry["step"])
-                if not all(isinstance(part, str) for part in key):
-                    raise TypeError(f"scenario, take and step must be text: {key!r}")
-                path = root / scenario / entry["file"]
-                if not path.is_file():
-                    raise RecordingError(f"{path} is missing")
-                frames[key] = path
-    except (ValueError, KeyError, TypeError) as exc:
+            _add_frames(reading, scenario, frames)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
         raise RecordingError(f"{reading} is not readable: {exc!r}") from exc
     return Recording(root, meta, frames)
 
 
+def _check_scenarios(meta_path: Path, scenarios: Any) -> None:
+    """A RecordingError unless meta.json names at least one scenario, each once."""
+    if not isinstance(scenarios, list) or not all(
+        isinstance(name, str) for name in scenarios
+    ):
+        raise TypeError(f"scenarios must be a list of names: {scenarios!r}")
+    if not scenarios:
+        raise RecordingError(f"{meta_path} names no scenario")
+    counts = Counter(scenarios)
+    repeated = sorted(name for name, count in counts.items() if count > 1)
+    if repeated:
+        names = ", ".join(repr(name) for name in repeated)
+        raise RecordingError(f"{meta_path} names {names} more than once")
+
+
+def _add_frames(manifest: Path, scenario: str, frames: dict[Key, Path]) -> None:
+    """Add the frames that ``scenario``'s frames.json lists to ``frames``."""
+    if not manifest.is_file():
+        raise RecordingError(f"{manifest} is missing")
+    entries = json.loads(manifest.read_text(encoding="utf-8"))
+    if not entries:
+        raise RecordingError(f"{manifest} lists no frame")
+    for entry in entries:
+        key = (scenario, entry["take"], entry["step"])
+        if not all(isinstance(part, str) for part in key):
+            raise TypeError(f"scenario, take and step must be text: {key!r}")
+        if key in frames:
+            raise RecordingError(
+                f"{manifest} lists take {key[1]!r}, step {key[2]!r} more than once"
+            )
+        path = manifest.parent / entry["file"]
+        if not path.is_file():
+            raise RecordingError(f"{path} is missing")
+        frames[key] = path
+
+
+def _has_transparent_pixel(image: Image.Image) -> bool:
+    """Whether any pixel of ``image`` is less than fully opaque."""
+    # The extrema of one 8-bit channel: (lowest, highest).
+    alpha = image.convert("RGBA").getchannel("A")
+    lowest, _ = cast(tuple[int, int], alpha.getextrema())
+    return lowest < 255
+
+
 def read_frame(path: Path) -> Image.Image:
-    """The frame at ``path`` in RGB; a RecordingError names a file Pillow cannot read."""
+    """The frame at ``path`` in RGB.
+
+    A RecordingError names a file Pillow cannot read, and a frame with a pixel
+    that is not opaque: RGB drops the alpha channel, so transparent red would
+    compare the same as opaque red. Chromium's screenshots are opaque.
+    """
     try:
         with Image.open(path) as image:
+            # Only a frame whose mode or palette can hold transparency is
+            # scanned; Chromium's RGB frames skip the conversion.
+            if image.has_transparency_data and _has_transparent_pixel(image):
+                raise RecordingError(
+                    f"{path} has transparent pixels; compare.py compares opaque "
+                    "frames only, as generate.py records them"
+                )
             return image.convert("RGB")
     except OSError as exc:
         raise RecordingError(f"{path} is not a readable image: {exc}") from exc
@@ -111,14 +165,17 @@ def compare(a: Recording, b: Recording, threshold: int = 0) -> list[FrameDiff]:
     """Pair the frames of two recordings and classify each pair."""
     diffs: list[FrameDiff] = []
     for key in _ordered_keys(a, b):
-        before, after = a.frames.get(key), b.frames.get(key)
-        if before is None:
+        # A frame without a partner is read too, so the report never shows a
+        # file that is no image.
+        if key not in a.frames:
+            read_frame(b.frames[key])
             diffs.append(FrameDiff(key, ADDED))
             continue
-        if after is None:
+        if key not in b.frames:
+            read_frame(a.frames[key])
             diffs.append(FrameDiff(key, REMOVED))
             continue
-        image_a, image_b = read_frame(before), read_frame(after)
+        image_a, image_b = read_frame(a.frames[key]), read_frame(b.frames[key])
         if image_a.size != image_b.size:
             (wa, ha), (wb, hb) = image_a.size, image_b.size
             note = f"size {wa}x{ha} -> {wb}x{hb}"

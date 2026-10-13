@@ -32,8 +32,8 @@ def _read(p: Path) -> str:
 
 
 def _project_version(text: str) -> str:
-    # THE version parse lives in verify_wheel.project_version (column-0
-    # anchored); parsing the field a second way here is how the copies drifted.
+    # THE version parse lives in verify_wheel.project_version (the [project]
+    # table only); parsing the field a second way here is how the copies drifted.
     return verify_wheel.project_version(text)
 
 
@@ -49,6 +49,50 @@ def test_versions_agree():
     assert _project_version(_read(ROOT_PYPROJECT)) == _project_version(
         _read(NESTED_PYPROJECT)
     )
+
+
+@pytest.mark.parametrize("path", [ROOT_PYPROJECT, NESTED_PYPROJECT])
+def test_project_version_agrees_with_a_toml_parser(path):
+    # The helper reads a subset of TOML; both shipped pyprojects stay inside it.
+    data = verify_wheel._parse_toml(_read(path))
+    assert _project_version(_read(path)) == data["project"]["version"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # A version key of another table, before [project] and after it.
+        '[tool.example]\nversion = "9.9.9"\n\n[project]\nname = "x"\nversion = "1.2.3"\n',
+        '[project]\nname = "x"\nversion = "1.2.3"\n\n[tool.example]\nversion = "9.9.9"\n',
+        # A subtable of [project] is another table.
+        '[project.urls]\nversion = "9.9.9"\n\n[project]\nversion = "1.2.3"\n',
+        # Spacing, comments and a literal string, as TOML allows them.
+        "[ project ]  # metadata\n  version='1.2.3'  # bumped on release\n",
+        '[project]\r\nversion = "1.2.3"\r\n',
+    ],
+)
+def test_project_version_reads_the_project_table_only(text):
+    assert verify_wheel.project_version(text) == "1.2.3"
+
+
+@pytest.mark.parametrize(
+    ("text", "reason"),
+    [
+        ('version = "1.2.3"\n', "no [project].version field"),
+        ('[project]\nversion = ""\n', "no [project].version field"),
+        (
+            '[project]\nname = "x"\n\n[tool.example]\nversion = "9.9.9"\n',
+            "no [project].version field",
+        ),
+        (
+            '[project]\nversion = "1.2.3"\n\n[project]\nversion = "1.2.4"\n',
+            "more than one [project].version field",
+        ),
+    ],
+)
+def test_project_version_refuses_a_missing_or_ambiguous_field(text, reason):
+    with pytest.raises(ValueError, match=re.escape(reason)):
+        verify_wheel.project_version(text)
 
 
 def test_demo_requirements_pin_the_released_version():
@@ -116,9 +160,10 @@ def _fake_wheel(
 
 
 def _good_entries() -> list[str]:
+    # The package's modules from the source tree, as verify_wheel requires them.
+    modules = sorted((ROOT / "streamlit_listview").glob("*.py"))
     return [
-        "streamlit_listview/__init__.py",
-        "streamlit_listview/_options.py",
+        *(f"streamlit_listview/{module.name}" for module in modules),
         "streamlit_listview/py.typed",
         "streamlit_listview/frontend/build/index-abc123.js",
         "streamlit_listview/frontend/build/index-abc123.css",
@@ -196,6 +241,20 @@ def test_verify_wheel_rejects_a_module_missing_from_the_source(monkeypatch, tmp_
         "files absent from the source tree: streamlit_listview/_removed_module.py"
         in str(exc.value)
     )
+
+
+@pytest.mark.parametrize(
+    "entry", ["streamlit_listview/_options.py", "streamlit_listview/py.typed"]
+)
+def test_verify_wheel_rejects_a_wheel_without_a_package_file(
+    monkeypatch, tmp_path, entry
+):
+    # The reverse of the check above: the names alone would pass a wheel
+    # that lacks a module or the type marker.
+    wheel = _fake_wheel(tmp_path, [e for e in _good_entries() if e != entry])
+    with pytest.raises(SystemExit) as exc:
+        _verify(monkeypatch, wheel)
+    assert f"lacks files of the source tree: {entry}" in str(exc.value)
 
 
 _SOURCE_MANIFEST = _read(NESTED_PYPROJECT)

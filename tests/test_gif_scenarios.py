@@ -193,6 +193,47 @@ def test_generate_rejects_a_bad_scale():
         generate.parse_args(["--scale", "0"])
 
 
+@pytest.mark.parametrize("scale", ["nan", "inf", "-inf"])
+def test_generate_rejects_a_scale_that_is_no_finite_number(capsys, scale):
+    # argparse's float() accepts these, and nan <= 0 is False. The = form,
+    # because argparse reads a separate "-inf" as an option.
+    with pytest.raises(SystemExit):
+        generate.parse_args([f"--scale={scale}"])
+    assert "scale must be a finite number > 0" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("option", ["--record", "--out"])
+@pytest.mark.parametrize("value", ["", "   "])
+def test_generate_rejects_a_blank_path(capsys, option, value):
+    """An unset shell variable (`--record "$DIR"`) must not pick another mode
+    or the committed hero GIF as the output."""
+    with pytest.raises(SystemExit):
+        generate.parse_args([option, value])
+    assert f"{option} needs a path, got {value!r}" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("argv", [["--record", ""], ["--out", ""], ["--scale", "nan"]])
+def test_generate_starts_no_capture_on_a_rejected_argument(monkeypatch, argv):
+    def capture(*args, **kwargs):
+        raise AssertionError("a rejected argument started a capture")
+
+    monkeypatch.setattr(generate, "run_scenario", capture)
+    monkeypatch.setattr(generate, "build_gif", capture)
+    with pytest.raises(SystemExit) as excinfo:
+        generate.main(argv)
+    assert excinfo.value.code == 2
+
+
+def test_build_gif_refuses_a_scale_that_leaves_no_pixel(tmp_path):
+    frames = _write_frames(tmp_path / "frames", [(40, 20)])
+    out = tmp_path / "out.gif"
+    with pytest.raises(
+        ValueError, match="scale 0.01 shrinks the 40x20 px frames to 0x0 px"
+    ):
+        build_gif(frames, out, scale=0.01)
+    assert not out.exists()
+
+
 def test_generate_imports_outside_a_streamlit_server():
     """generate.py imports the catalogue in a plain process, where declaring the
     component fails, so no scenario may import streamlit_listview at import time.

@@ -34,22 +34,41 @@ def _newest_wheel() -> Path:
     return wheels[-1]
 
 
-def project_version(pyproject_text: str) -> str:
-    """The `version = "..."` field in a pyproject.toml's text.
+# A table header (`[name]` or `[[name]]`) and a `version` key, each on a line
+# of its own and with an optional trailing comment.
+_TABLE_HEADER = re.compile(r"\s*(\[\[?)\s*([^\[\]]*?)\s*\]\]?\s*(?:#.*)?")
+_VERSION_KEY = re.compile(r"""\s*version\s*=\s*(?:"([^"]+)"|'([^']+)')\s*(?:#.*)?""")
 
-    THE parser for that field: tests/test_packaging.py and tests/test_readme.py
-    import this helper instead of keeping their own regexes — three copies of
-    this parse had already drifted apart in how they anchored. Anchored at
-    column 0 (the strictest of the drifted variants) on purpose: both
-    pyprojects write the [project] table's keys unindented, and a looser
-    ``^\\s*`` could silently match an indented `version` key belonging to some
-    other table. Raises ValueError when the field is missing so each caller
-    can fail its own way (sys.exit here, assert in the tests).
+
+def project_version(pyproject_text: str) -> str:
+    """The `version` key of a pyproject.toml's [project] table.
+
+    THE parser for that field: scripts/push_gate.py, tests/test_packaging.py
+    and tests/test_readme.py call this helper instead of keeping their own
+    regexes, because three copies of this parse had drifted apart. It reads
+    lines, not TOML: the push gate runs on the standard library of Python
+    3.10, which has no TOML parser. The subset it reads is a `[project]`
+    header and a `version = "..."` (or `'...'`) line below it, each on a line
+    of its own; a key of any other table, a subtable included, never counts.
+    tests/test_packaging.py checks that both shipped pyprojects stay inside
+    the subset. Raises ValueError when the table has no such line or more
+    than one, so each caller can fail its own way.
     """
-    match = re.search(r'(?m)^version\s*=\s*"([^"]+)"', pyproject_text)
-    if not match:
-        raise ValueError("no [project].version field found")
-    return cast(str, match.group(1))
+    versions: list[str] = []
+    in_project = False
+    for line in pyproject_text.splitlines():
+        header = _TABLE_HEADER.fullmatch(line)
+        if header:
+            in_project = header.group(1) == "[" and header.group(2) == "project"
+            continue
+        key = _VERSION_KEY.fullmatch(line) if in_project else None
+        if key:
+            versions.append(key.group(1) if key.group(1) is not None else key.group(2))
+    if not versions:
+        raise ValueError("no [project].version field")
+    if len(versions) > 1:
+        raise ValueError("more than one [project].version field")
+    return versions[0]
 
 
 def _parse_toml(text: str) -> dict[str, Any]:
@@ -127,8 +146,49 @@ def _expected_version() -> str:
     text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     try:
         return project_version(text)
-    except ValueError:
-        sys.exit("FAIL: could not read [project].version from pyproject.toml")
+    except ValueError as error:
+        sys.exit(f"FAIL: could not read [project].version from pyproject.toml: {error}")
+
+
+def _check_package_files(wheel: Path, names: list[str]) -> None:
+    """Exit unless the wheel's package files outside the bundle are the
+    source tree's: nothing more, and no module or type marker less.
+
+    The source tree is the list, so a new module needs no entry here.
+    """
+    # setuptools ships whatever its staging directory build/lib holds, so a
+    # module deleted from the source can ship from an earlier build's copy.
+    # _build_backend deletes that copy and stops when it cannot; this check
+    # catches a wheel built some other way.
+    absent = sorted(
+        n
+        for n in names
+        if n.startswith("streamlit_listview/")
+        and not n.startswith("streamlit_listview/frontend/build/")
+        and not n.endswith("/")
+        and not (ROOT / n).is_file()
+    )
+    if absent:
+        sys.exit(
+            f"FAIL: wheel {wheel.name} ships files absent from the source tree: "
+            f"{', '.join(absent)}"
+        )
+    print("  ok: every package file outside frontend/build/ exists in the source")
+
+    # The reverse: the file names alone would pass a wheel that lacks a
+    # module or the type marker.
+    package = ROOT / "streamlit_listview"
+    required = sorted(
+        f"streamlit_listview/{path.name}"
+        for path in [*package.glob("*.py"), package / "py.typed"]
+    )
+    lacking = [name for name in required if name not in names]
+    if lacking:
+        sys.exit(
+            f"FAIL: wheel {wheel.name} lacks files of the source tree: "
+            f"{', '.join(lacking)}"
+        )
+    print("  ok: every module of the package and py.typed ship")
 
 
 def main() -> None:
@@ -233,25 +293,7 @@ def main() -> None:
         sys.exit(f"FAIL: wheel {wheel.name} must not ship _build_backend.py")
     print("  ok: build backend excluded from the wheel")
 
-    # setuptools ships whatever its staging directory build/lib holds, so a
-    # module deleted from the source can ship from an earlier build's copy.
-    # _build_backend deletes that copy and stops when it cannot; this check
-    # catches a wheel built some other way. The source tree is the list, so a
-    # new module needs no entry here.
-    absent = sorted(
-        n
-        for n in names
-        if n.startswith("streamlit_listview/")
-        and not n.startswith("streamlit_listview/frontend/build/")
-        and not n.endswith("/")
-        and not (ROOT / n).is_file()
-    )
-    if absent:
-        sys.exit(
-            f"FAIL: wheel {wheel.name} ships files absent from the source tree: "
-            f"{', '.join(absent)}"
-        )
-    print("  ok: every package file outside frontend/build/ exists in the source")
+    _check_package_files(wheel, names)
 
     # version sanity: the wheel filename carries the version declared in
     # pyproject.toml (precise prefix match so e.g. 11.0.0 can't satisfy 1.0.0).

@@ -10,6 +10,7 @@ durations. Every frame must have the first frame's size.
 """
 
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -25,8 +26,9 @@ def validate_gif_params(out, scale, colors) -> None:
     out = Path(out)
     if out.suffix.lower() != ".gif":
         raise ValueError(f"output path must end in .gif, got {out.name!r}")
-    if scale <= 0:
-        raise ValueError(f"scale must be > 0, got {scale!r}")
+    # isfinite first: nan <= 0 is False, so nan and inf would pass alone.
+    if not math.isfinite(scale) or scale <= 0:
+        raise ValueError(f"scale must be a finite number > 0, got {scale!r}")
     if not (2 <= colors <= 256):
         raise ValueError(f"colors must be between 2 and 256, got {colors!r}")
 
@@ -45,6 +47,11 @@ def build_gif(frames_dir, out, scale: float = 0.5, colors: int = 256) -> Path:
     with Image.open(frames_dir / manifest[0]["file"]) as first:
         size = first.size
     target = (round(size[0] * scale), round(size[1] * scale))
+    if min(target) < 1:
+        raise ValueError(
+            f"scale {scale:g} shrinks the {size[0]}x{size[1]} px frames to "
+            f"{target[0]}x{target[1]} px"
+        )
     imgs: list[Image.Image] = []
     durations: list[int] = []
     for entry in manifest:

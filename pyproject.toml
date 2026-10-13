@@ -56,10 +56,18 @@ devel = [
 
 [tool.coverage.run]
 branch = true
-# push_gate and verify_wheel are scripts/push_gate.py and scripts/verify_wheel.py,
-# _build_backend the root module; the tests import each by name after a sys.path
-# insert. The last two decide what a wheel ships, so they share the gate.
-source = ["streamlit_listview", "demo", "push_gate", "verify_wheel", "_build_backend"]
+# push_gate, verify_wheel and smoke_wheel are scripts in scripts/, _build_backend
+# the root module; the tests import each by name after a sys.path insert. The
+# last three decide what a wheel ships and whether it works, so they share the
+# gate.
+source = [
+  "streamlit_listview",
+  "demo",
+  "push_gate",
+  "verify_wheel",
+  "smoke_wheel",
+  "_build_backend",
+]
 omit = [
   # Streamlit entry point: exercised by the Playwright e2e suite, the AppTest
   # runs in tests/test_demo_app.py and a compile smoke test, none of which

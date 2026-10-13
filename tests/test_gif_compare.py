@@ -172,6 +172,105 @@ def test_a_damaged_recording_exits_with_2(tmp_path, capsys, damage, named):
     assert "Traceback" not in err
 
 
+@pytest.mark.parametrize(
+    ("damage", "message"),
+    [
+        ("no-scenario", "meta.json names no scenario"),
+        ("string-scenarios", "meta.json is not readable"),
+        ("repeated-scenario", "meta.json names 's' more than once"),
+        ("no-frame-listed", "frames.json lists no frame"),
+        ("repeated-step", "frames.json lists take 'main', step 'idle' more than once"),
+    ],
+)
+def test_a_recording_without_evidence_or_with_a_repeat_exits_with_2(
+    tmp_path, capsys, damage, message
+):
+    """A comparison of nothing, or of a frame that a repeat would hide, must
+    not report "the same"."""
+    good = _record(tmp_path / "a", {"s": [("main", "idle", _image())]})
+    bad = _record(tmp_path / "b", {"s": [("main", "idle", _image())]})
+    meta = json.loads((bad / "meta.json").read_text(encoding="utf-8"))
+    entry = {"file": "frame_000.png", "ms": 100, "take": "main", "step": "idle"}
+    if damage == "no-scenario":
+        meta["scenarios"] = []
+    elif damage == "string-scenarios":
+        meta["scenarios"] = "s"
+    elif damage == "repeated-scenario":
+        meta["scenarios"] = ["s", "s"]
+    elif damage == "no-frame-listed":
+        (bad / "s" / "frames.json").write_text("[]", encoding="utf-8")
+    else:
+        manifest = json.dumps([entry, entry])
+        (bad / "s" / "frames.json").write_text(manifest, encoding="utf-8")
+    (bad / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    assert compare.main([str(good), str(bad)]) == 2
+    assert message in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("side", ["added", "removed"])
+def test_an_unpaired_frame_must_be_an_image(tmp_path, capsys, side):
+    """A frame on one side only is never compared, so it is read on its own."""
+    one = _record(tmp_path / "one", {"s": [("main", "idle", _image())]})
+    two = _record(
+        tmp_path / "two",
+        {"s": [("main", "idle", _image()), ("main", "extra", _image())]},
+    )
+    (two / "s" / "frame_001.png").write_bytes(b"not a png")
+    argv = [str(one), str(two)] if side == "added" else [str(two), str(one)]
+    assert compare.main(argv) == 2
+    err = capsys.readouterr().err
+    assert "frame_001.png is not a readable image" in err
+    assert "Traceback" not in err
+
+
+def _transparent(mode):
+    """An 8x6 image in ``mode`` whose first pixel is not opaque."""
+    if mode == "P":
+        image = Image.new("P", (8, 6), 1)
+        image.putpalette([255, 0, 0, 255, 255, 255])
+        image.info["transparency"] = 0
+        image.putpixel((0, 0), 0)
+        return image
+    image = Image.new(mode, (8, 6), (255, 0, 0, 255) if mode == "RGBA" else (255, 255))
+    image.putpixel((0, 0), (255, 0, 0, 0) if mode == "RGBA" else (255, 128))
+    return image
+
+
+@pytest.mark.parametrize("mode", ["RGBA", "LA", "P"])
+def test_a_frame_with_transparency_exits_with_2(tmp_path, capsys, mode):
+    """Comparing RGB would drop the alpha channel and call transparent red the
+    same as opaque red. Chromium's screenshots are opaque, so a transparent
+    frame comes from elsewhere and is refused."""
+    a = _record(tmp_path / "a", {"s": [("main", "idle", _transparent(mode))]})
+    b = _record(tmp_path / "b", {"s": [("main", "idle", _image())]})
+    assert compare.main([str(a), str(b)]) == 2
+    err = capsys.readouterr().err
+    assert "frame_000.png has transparent pixels" in err
+    assert str(a) in err
+
+
+def test_an_opaque_frame_with_an_alpha_channel_compares(tmp_path):
+    opaque = Image.new("RGBA", (8, 6), (255, 255, 255, 255))
+    a = _record(tmp_path / "a", {"s": [("main", "idle", opaque)]})
+    b = _record(tmp_path / "b", {"s": [("main", "idle", _image())]})
+    assert compare.main([str(a), str(b)]) == 0
+
+
+def test_a_manifest_that_cannot_be_read_exits_with_2(tmp_path, capsys, monkeypatch):
+    good = _record(tmp_path / "a", {"s": [("main", "idle", _image())]})
+    bad = _record(tmp_path / "b", {"s": [("main", "idle", _image())]})
+    read_text = Path.read_text
+
+    def refuse(path, *args, **kwargs):
+        if path == bad / "s" / "frames.json":
+            raise PermissionError(13, "Permission denied", str(path))
+        return read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", refuse)
+    assert compare.main([str(good), str(bad)]) == 2
+    assert "frames.json is not readable" in capsys.readouterr().err
+
+
 def test_a_missing_directory_exits_with_2(tmp_path):
     good = _record(tmp_path / "a", {"s": [("main", "idle", _image())]})
     assert compare.main([str(good), str(tmp_path / "nowhere")]) == 2

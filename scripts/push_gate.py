@@ -50,8 +50,9 @@ FRONTEND = "streamlit_listview/frontend"
 # X.Y.Z, or X.Y.Z with a pre-release suffix: the spellings the release skill
 # allows, without leading zeros. The wheel filename normalizes "1.0.0-rc.1" to
 # "1.0.0rc1" and "1.0.02" to "1.0.2", while the release checks compare the raw
-# string, so such a release would fail.
-_NUMBER = r"(?:0|[1-9]\d*)"
+# string, so such a release would fail. [0-9], not \d: \d matches every
+# Unicode decimal digit, and PEP 440 admits only ASCII ones.
+_NUMBER = r"(?:0|[1-9][0-9]*)"
 CANONICAL_VERSION = re.compile(
     rf"{_NUMBER}\.{_NUMBER}\.{_NUMBER}(?:(?:a|b|rc){_NUMBER})?"
 )
@@ -143,18 +144,19 @@ def lock_version(lock: str) -> str | None:
     return cast(str, match.group(1)) if match else None
 
 
-def _project_version(pyproject: str | None) -> str | None:
+def _project_version(pyproject: str | None) -> tuple[str | None, str]:
+    """The [project].version of a pyproject.toml, or None and the reason."""
     try:
-        return verify_wheel.project_version(pyproject or "")
-    except ValueError:
-        return None
+        return verify_wheel.project_version(pyproject or ""), ""
+    except ValueError as error:
+        return None, str(error)
 
 
 def _found(value: str | None) -> str:
     return "none" if value is None else value
 
 
-def version_findings(read: Read, today: date) -> tuple[str | None, list[str]]:  # noqa: C901 -- older than the complexity limit; split it when you next change it
+def version_findings(read: Read, today: date) -> tuple[str | None, list[str]]:
     """The version of a commit and every flaw in its version information.
 
     The root pyproject.toml is the source of truth. Without its version the
@@ -168,22 +170,30 @@ def version_findings(read: Read, today: date) -> tuple[str | None, list[str]]:  
             texts[path] = read(path) or ""
         except UnicodeDecodeError:
             undecodable.append(f"{path}: not valid UTF-8. Save it as UTF-8.")
-    version = _project_version(texts.get("pyproject.toml"))
+    version, problem = _project_version(texts.get("pyproject.toml"))
     if undecodable:
         return version, undecodable
     if version is None:
-        return None, ["pyproject.toml: no [project].version field."]
+        return None, [f"pyproject.toml: {problem}."]
     findings: list[str] = []
     if not CANONICAL_VERSION.fullmatch(version):
         findings.append(
             f'pyproject.toml: "{version}" is no canonical PEP 440 version. Write '
             "X.Y.Z, or X.Y.Z followed by a, b or rc and a number."
         )
-    nested = _project_version(texts["streamlit_listview/pyproject.toml"])
+    findings.extend(_agreement_findings(texts, version))
+    findings.extend(changelog_findings(texts["CHANGELOG.md"], version, today))
+    return version, findings
+
+
+def _agreement_findings(texts: dict[str, str], version: str) -> list[str]:
+    """The places other than the changelog that do not name `version`."""
+    findings: list[str] = []
+    nested, problem = _project_version(texts["streamlit_listview/pyproject.toml"])
     if nested != version:
+        found = problem if nested is None else f"version {nested}"
         findings.append(
-            f"streamlit_listview/pyproject.toml: version {_found(nested)}, "
-            f"expected {version}."
+            f"streamlit_listview/pyproject.toml: {found}, expected {version}."
         )
     expected = expected_version(texts["tests/test_packaging.py"])
     if expected != version:
@@ -205,8 +215,7 @@ def version_findings(read: Read, today: date) -> tuple[str | None, list[str]]:  
         findings.append(
             f"uv.lock: records {_found(locked)}, expected {version}. Run `uv lock`."
         )
-    findings.extend(changelog_findings(texts["CHANGELOG.md"], version, today))
-    return version, findings
+    return findings
 
 
 def changelog_findings(changelog: str, version: str, today: date) -> list[str]:
@@ -669,6 +678,10 @@ def suite_steps(version: str, wheel_dir: Path) -> list[Step]:
         Step(
             "verify_wheel.py",
             (sys.executable, "scripts/verify_wheel.py", str(wheel)),
+        ),
+        Step(
+            "smoke_wheel.py",
+            (sys.executable, "scripts/smoke_wheel.py", str(wheel)),
         ),
     ]
 

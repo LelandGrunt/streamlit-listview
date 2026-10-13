@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import Page, sync_playwright
 
 from stage import Scenario, Stage, Take, clip_for, settle
 
@@ -28,6 +28,20 @@ class CaptureResult:
 
     clip_size: tuple[float, float]
     chromium: str
+
+
+def first_render(page: Page) -> None:
+    """Wait until the capture page has rendered its first run and gone quiet.
+
+    It waits for the run counter, then for the listview's frame, never for a
+    row: an empty list, or one whose groups all start collapsed, shows none.
+    A step that needs a row waits for it itself.
+    """
+    page.locator(".gif-run").wait_for(state="attached", timeout=FIRST_RENDER_TIMEOUT_MS)
+    page.get_by_test_id("stListview").first.wait_for(
+        state="visible", timeout=FIRST_RENDER_TIMEOUT_MS
+    )
+    settle(page)
 
 
 def capture(
@@ -53,13 +67,7 @@ def capture(
                 device_scale_factor=DEVICE_SCALE_FACTOR,
             )
             page.goto(url, wait_until="domcontentloaded")
-            page.locator('[data-testid^="stListviewOption-"]').first.wait_for(
-                state="visible", timeout=FIRST_RENDER_TIMEOUT_MS
-            )
-            page.locator(".gif-run").wait_for(
-                state="attached", timeout=FIRST_RENDER_TIMEOUT_MS
-            )
-            settle(page)
+            first_render(page)
             box = page.locator('[data-testid="stListview"]').first.bounding_box()
             if box is None:
                 raise CaptureError(

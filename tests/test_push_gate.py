@@ -221,6 +221,7 @@ STEPS = [
     "e2e",
     "wheel build",
     "verify_wheel.py",
+    "smoke_wheel.py",
 ]
 
 
@@ -338,6 +339,24 @@ def test_a_missing_root_version_stops_the_check():
     )
 
 
+def test_an_ambiguous_root_version_stops_the_check():
+    text = '[project]\nversion = "1.2.3"\n\n[project]\nversion = "1.2.4"\n'
+    files = {**release_files(), "pyproject.toml": text}
+    assert push_gate.version_findings(reader_of(files), TODAY) == (
+        None,
+        ["pyproject.toml: more than one [project].version field."],
+    )
+
+
+@pytest.mark.parametrize(
+    "path", ["pyproject.toml", "streamlit_listview/pyproject.toml"]
+)
+def test_a_version_key_of_another_table_is_not_the_version(path):
+    files = release_files()
+    files[path] = '[tool.example]\nversion = "9.9.9"\n\n' + files[path]
+    assert push_gate.version_findings(reader_of(files), TODAY) == (VERSION, [])
+
+
 @pytest.mark.parametrize(
     "version", ["1.2.3", "1.0.0", "10.20.30", "1.2.3a1", "1.2.3b2", "1.2.3rc10"]
 )
@@ -358,6 +377,10 @@ def test_canonical_versions_pass(version):
         "1.0.02",
         "01.0.0",
         "1.2.3rc01",
+        # Decimal digits outside ASCII: `\d` matches them, PEP 440 does not.
+        "1.1\N{ARABIC-INDIC DIGIT TWO}.0",
+        "1.2.0rc1\N{ARABIC-INDIC DIGIT TWO}",
+        "1.2.\N{FULLWIDTH DIGIT THREE}",
     ],
 )
 def test_a_non_canonical_version_is_refused(version):
@@ -377,8 +400,13 @@ def test_a_non_canonical_version_is_refused(version):
     [
         (
             "streamlit_listview/pyproject.toml",
-            'version = "9.9.9"\n',
+            '[project]\nversion = "9.9.9"\n',
             "streamlit_listview/pyproject.toml: version 9.9.9, expected 1.2.3.",
+        ),
+        (
+            "streamlit_listview/pyproject.toml",
+            '[project]\nname = "x"\n',
+            "streamlit_listview/pyproject.toml: no [project].version field, expected 1.2.3.",
         ),
         (
             "tests/test_packaging.py",
@@ -811,11 +839,9 @@ def test_suite_steps_run_cis_commands_and_verify_the_versions_wheel(tmp_path):
     assert steps[6].args == (*devel, "pytest", "e2e/")
     skip_npm = {"LISTVIEW_SKIP_NPM_BUILD": "1"}
     assert [dict(step.env) for step in steps[4:7]] == [skip_npm] * 3
-    assert steps[-1].args == (
-        sys.executable,
-        "scripts/verify_wheel.py",
-        str(tmp_path / "streamlit_listview-1.2.3-py3-none-any.whl"),
-    )
+    wheel = str(tmp_path / "streamlit_listview-1.2.3-py3-none-any.whl")
+    assert steps[-2].args == (sys.executable, "scripts/verify_wheel.py", wheel)
+    assert steps[-1].args == (sys.executable, "scripts/smoke_wheel.py", wheel)
 
 
 def test_the_suite_runs_in_order_and_remembers_the_pass(repo):
@@ -1129,6 +1155,15 @@ def test_ci_and_the_release_workflow_run_the_gate():
     assert 'python3 scripts/push_gate.py check tag "$GITHUB_REF_NAME"' in release
     # check tag compares the tag with GitHub's main, which a shallow clone lacks.
     assert "fetch-depth: 0" in release
+
+
+@pytest.mark.parametrize("workflow", ["ci.yml", "release.yml"])
+def test_every_workflow_that_verifies_the_wheel_also_installs_it(workflow):
+    """Drift guard: verify_wheel.py checks the files, smoke_wheel.py that they
+    work once installed; the gate runs both (suite_steps above)."""
+    text = (ROOT / ".github" / "workflows" / workflow).read_text(encoding="utf-8")
+    verify = text.index("scripts/verify_wheel.py")
+    assert verify < text.index("scripts/smoke_wheel.py")
 
 
 def test_ci_runs_the_browser_suite_that_the_gate_runs():
