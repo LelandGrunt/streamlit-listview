@@ -56,8 +56,10 @@ devel = [
 
 [tool.coverage.run]
 branch = true
-# push_gate is scripts/push_gate.py, imported by name after a sys.path insert.
-source = ["streamlit_listview", "demo", "push_gate"]
+# push_gate and verify_wheel are scripts/push_gate.py and scripts/verify_wheel.py,
+# _build_backend the root module; the tests import each by name after a sys.path
+# insert. The last two decide what a wheel ships, so they share the gate.
+source = ["streamlit_listview", "demo", "push_gate", "verify_wheel", "_build_backend"]
 omit = [
   # Streamlit entry point: exercised by the Playwright e2e suite, the AppTest
   # runs in tests/test_demo_app.py and a compile smoke test, none of which
@@ -67,8 +69,10 @@ omit = [
 
 [tool.coverage.report]
 show_missing = true
-# The unit-testable surface (the listview package, the demo's pure helpers and
-# the push gate) is exhaustively covered; keep it that way.
+# The unit-testable surface (the listview package, the demo's pure helpers, the
+# push gate, the wheel check and the build backend) is exhaustively covered;
+# keep it that way. Coverage shows that a line ran, not that a test checked its
+# result.
 fail_under = 100
 
 # Ruff lints with its default rule set and formats with its default style

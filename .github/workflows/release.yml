@@ -67,6 +67,7 @@ jobs:
         with:
           python-version: "3.12"
 
+      # The newest versions pyproject.toml admits, as in ci.yml.
       - name: Create venv and install (editable, dev extras)
         env:
           LISTVIEW_SKIP_NPM_BUILD: "1" # bundle already built above; don't rebuild on install
@@ -97,9 +98,18 @@ jobs:
           path: dist/
           if-no-files-found: error
 
+  # CI's jobs on the tagged commit: every pre-commit hook (the audits and
+  # gitleaks included), the unit suites with the wheel check, and the browser
+  # suite in Chromium. The push gate runs them before the tag leaves the clone,
+  # but a tag pushed with --no-verify skips it, ci.yml does not run on a tag,
+  # and main reaches GitHub only after PyPI. PyPI never takes a version twice,
+  # so publishing waits for them.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   publish-to-pypi:
     name: Publish to PyPI
-    needs: build
+    needs: [build, ci]
     runs-on: ubuntu-latest
     environment:
       name: pypi

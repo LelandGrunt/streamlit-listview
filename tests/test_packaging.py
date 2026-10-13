@@ -5,7 +5,9 @@ built wheel. It is driven against synthetic zips rather than a real `uv build`
 so the assertions (including the failure paths) run without a Node toolchain.
 """
 
+import os
 import re
+import runpy
 import sys
 import zipfile
 from pathlib import Path
@@ -271,3 +273,48 @@ def test_verify_wheel_rejects_a_leaked_build_backend(monkeypatch, tmp_path):
     with pytest.raises(SystemExit) as exc:
         _verify(monkeypatch, wheel)
     assert "must not ship _build_backend.py" in str(exc.value)
+
+
+def test_verify_wheel_rejects_a_wheel_of_another_version(monkeypatch, tmp_path):
+    # The version must end at a hyphen: 1.0.10 is not 1.0.1.
+    wheel = _fake_wheel(tmp_path, _good_entries())
+    other = wheel.with_name(f"streamlit_listview-{EXPECTED_VERSION}0-py3-none-any.whl")
+    wheel.rename(other)
+    with pytest.raises(SystemExit) as exc:
+        _verify(monkeypatch, other)
+    assert f"is not version {EXPECTED_VERSION}" in str(exc.value)
+
+
+def test_verify_wheel_picks_the_newest_wheel_by_time(monkeypatch, tmp_path):
+    # Lexically 0.10.0 sorts before 0.9.0; the newer file must win.
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    older = dist / "streamlit_listview-0.9.0-py3-none-any.whl"
+    newer = dist / "streamlit_listview-0.10.0-py3-none-any.whl"
+    for age, wheel in ((100, older), (0, newer)):
+        wheel.write_bytes(b"")
+        os.utime(wheel, (1_000_000 - age, 1_000_000 - age))
+    monkeypatch.setattr(verify_wheel, "ROOT", tmp_path)
+    assert verify_wheel._newest_wheel() == newer
+
+
+def test_verify_wheel_without_a_wheel_says_how_to_build_one(monkeypatch, tmp_path):
+    monkeypatch.setattr(verify_wheel, "ROOT", tmp_path)
+    with pytest.raises(SystemExit) as exc:
+        verify_wheel._newest_wheel()
+    assert "run `uv build` first" in str(exc.value)
+
+
+def test_verify_wheel_without_a_project_version_stops(monkeypatch, tmp_path):
+    (tmp_path / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+    monkeypatch.setattr(verify_wheel, "ROOT", tmp_path)
+    with pytest.raises(SystemExit) as exc:
+        verify_wheel._expected_version()
+    assert "could not read [project].version" in str(exc.value)
+
+
+def test_verify_wheel_runs_main_as_a_script(monkeypatch, tmp_path, capsys):
+    wheel = _fake_wheel(tmp_path, _good_entries())
+    monkeypatch.setattr(sys, "argv", ["verify_wheel.py", str(wheel)])
+    runpy.run_path(str(ROOT / "scripts" / "verify_wheel.py"), run_name="__main__")
+    assert "PASS: wheel contents verified" in capsys.readouterr().out

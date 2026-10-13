@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # release.yml runs these jobs on the tagged commit before it publishes.
+  workflow_call:
 
 permissions:
   contents: read
@@ -90,6 +92,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      # `uv pip install` resolves the newest versions that pyproject.toml admits,
+      # not uv.lock, on purpose: CI tests the Streamlit, pytest and Playwright
+      # that a new user or contributor installs today. The push gate and the
+      # hooks run against uv.lock, so a new release of a dependency can fail
+      # CI while the local checks pass.
       - name: Create venv and install (editable, dev extras)
         env:
           LISTVIEW_SKIP_NPM_BUILD: "1" # bundle already built above; don't rebuild on install
@@ -97,9 +104,8 @@ jobs:
           uv venv
           uv pip install -e ".[devel]"
 
-      # Unit suite only (enforces the 100% coverage gate). The Playwright e2e/
-      # suite is intentionally not run here (browser-install cost / flakiness);
-      # run it locally with `playwright install` + `pytest e2e/`.
+      # The unit suites only, with the 100% coverage gate; the e2e job runs the
+      # browser suite.
       - name: Python unit tests (100% coverage gate)
         run: .venv/bin/python -m pytest tests/ --cov --cov-report=term-missing
 
@@ -148,6 +154,7 @@ jobs:
         with:
           python-version: "3.12"
 
+      # The newest versions pyproject.toml admits, as in test-build-verify.
       - name: Create venv and install (editable, dev extras)
         env:
           LISTVIEW_SKIP_NPM_BUILD: "1" # bundle already built above
@@ -165,9 +172,10 @@ jobs:
   # version information, a changelog without "Unreleased", the release tag and
   # the PyPI release in place, and the library code of that release. The local
   # pre-push hook (scripts/push_gate.py) checks the same before a push; this
-  # job reports a push that skipped the hook with --no-verify.
+  # job reports a push that skipped the hook with --no-verify. When release.yml
+  # calls this workflow, the event is the tag's push, which `check tag` covers.
   push-gate:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

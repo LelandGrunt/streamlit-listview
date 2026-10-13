@@ -2,10 +2,12 @@
 
 The backend lives at the repo root (referenced by `backend-path` in pyproject),
 so add the root to sys.path to import it. Only the Python control flow is tested
-here — the skip switch, source/deps detection, npm commands, and the npm-missing
-error. The real frontend build is verified by actually building a wheel (CI +
-verify_wheel), not here. setuptools is imported lazily by the backend, so this
-module imports even in a venv without setuptools.
+here — the skip switch, source/deps detection, npm commands, the npm-missing
+error, the staged-copy cleanup, and which hook hands what to setuptools. The
+module counts toward the 100 % coverage gate. The real frontend build is
+verified by actually building a wheel (CI + verify_wheel), not here. setuptools
+is imported lazily by the backend, so this module imports even in a venv
+without setuptools.
 
 Each test points `_FRONTEND` at a temp directory whose `src` / `node_modules`
 presence drives the branch under test, and stubs `subprocess.run` so npm never
@@ -14,6 +16,7 @@ actually runs.
 
 import re
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -255,3 +258,52 @@ def test_build_wheel_needs_no_earlier_build(monkeypatch, tmp_path):
 
     monkeypatch.setattr(bb, "_backend", Backend)
     assert bb.build_wheel("dist") == "streamlit_listview-1.0.1-py3-none-any.whl"
+
+
+class _Recorder:
+    """A stand-in for setuptools' build_meta that records each hook it gets."""
+
+    def __init__(self, calls: list[tuple[str, tuple[object, ...]]]):
+        self.calls = calls
+
+    def __getattr__(self, hook: str):
+        def call(*args: object) -> str:
+            self.calls.append((hook, args))
+            return hook
+
+        return call
+
+
+@pytest.mark.parametrize(
+    ("hook", "args", "builds_the_bundle"),
+    [
+        ("get_requires_for_build_wheel", ({"k": "v"},), False),
+        ("get_requires_for_build_sdist", ({"k": "v"},), False),
+        ("get_requires_for_build_editable", ({"k": "v"},), False),
+        ("prepare_metadata_for_build_wheel", ("meta", {"k": "v"}), False),
+        ("prepare_metadata_for_build_editable", ("meta", {"k": "v"}), False),
+        ("build_sdist", ("dist", {"k": "v"}), True),
+        ("build_editable", ("dist", {"k": "v"}, "meta"), True),
+    ],
+)
+def test_each_hook_hands_its_arguments_to_setuptools(
+    monkeypatch, hook, args, builds_the_bundle
+):
+    # A hook that produces a distribution builds the bundle first; a hook that
+    # only asks setuptools a question leaves npm alone.
+    calls: list[tuple[str, tuple[object, ...]]] = []
+    monkeypatch.setattr(bb, "_backend", lambda: _Recorder(calls))
+    monkeypatch.setattr(bb, "_run_npm_build", lambda: calls.append(("npm", ())))
+    assert getattr(bb, hook)(*args) == hook
+    npm = [("npm", ())] if builds_the_bundle else []
+    assert calls == [*npm, (hook, args)]
+
+
+def test_the_backend_is_setuptools_build_meta(monkeypatch):
+    # setuptools is imported only when a hook runs, so a stand-in module shows
+    # which backend the hooks delegate to.
+    build_meta = object()
+    setuptools = types.ModuleType("setuptools")
+    setuptools.build_meta = build_meta  # ty: ignore[unresolved-attribute]
+    monkeypatch.setitem(sys.modules, "setuptools", setuptools)
+    assert bb._backend() is build_meta

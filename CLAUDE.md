@@ -61,7 +61,7 @@ These hooks need the network or their own browser, so no commit, CI run or push 
 
 ### Tests
 
-Python, gated at 100 % coverage over `streamlit_listview`, `demo` and `scripts/push_gate.py` (except `demo/app.py`, which the e2e suite and the `AppTest` runs in `tests/test_demo_app.py` exercise):
+Python, gated at 100 % coverage over `streamlit_listview`, `demo`, `scripts/push_gate.py`, `scripts/verify_wheel.py` and `_build_backend.py` (except `demo/app.py`, which the e2e suite and the `AppTest` runs in `tests/test_demo_app.py` exercise):
 
 ```sh
 uv run --extra devel pytest tests/                                   # the unit suite
@@ -152,7 +152,7 @@ uv run --extra devel streamlit run demo/app.py   # needs the package installed a
 
 ## CI (`.github/workflows/ci.yml`)
 
-Four jobs run in parallel. `lint` runs `uvx pre-commit run --all-files --show-diff-on-failure`. `test-build-verify` runs, in order: `npm ci`, `npm run build`, `npm test`, an editable install with `LISTVIEW_SKIP_NPM_BUILD=1`, `pytest tests/` with the coverage gate, a wheel build from a clean bundle, and `scripts/verify_wheel.py`. That script checks the wheel's contents: under `frontend/build/` exactly one `index-*.js`, one `index-*.css` and `THIRD_PARTY_LICENSES.md` (the licenses of the bundled npm packages), and nothing else there; no other package file that the source tree lacks; the manifest, parsed as Streamlit parses it; the license files; and no `_build_backend.py`. It also checks that the file name carries the version of the root `pyproject.toml`. `push-gate` runs on a push to `main` only: `python3 scripts/push_gate.py check main` checks the version information and the release state (see *Pushing to GitHub*). `e2e` builds the bundle, installs the package and Chromium, and runs `pytest e2e/`; the push gate runs the same suite. **The build must precede `npm test`** (see *Tests*). Actions are referenced by version tag, not by SHA, on purpose.
+Three jobs run in parallel on every pull request and push to `main`; a push to `main` adds a fourth. `lint` runs `uvx pre-commit run --all-files --show-diff-on-failure`. `test-build-verify` runs, in order: `npm ci`, `npm run build`, `npm test`, an editable install with `LISTVIEW_SKIP_NPM_BUILD=1` (`uv pip install`, which takes the newest Python dependencies that `pyproject.toml` admits, not `uv.lock`), `pytest tests/` with the coverage gate, a wheel build from a clean bundle, and `scripts/verify_wheel.py`. That script checks the wheel's contents: under `frontend/build/` exactly one `index-*.js`, one `index-*.css` and `THIRD_PARTY_LICENSES.md` (the licenses of the bundled npm packages), and nothing else there; no other package file that the source tree lacks; the manifest, parsed as Streamlit parses it; the license files; and no `_build_backend.py`. It also checks that the file name carries the version of the root `pyproject.toml`. `push-gate` runs on a push to `main` only: `python3 scripts/push_gate.py check main` checks the version information and the release state (see *Pushing to GitHub*). `e2e` builds the bundle, installs the package and Chromium, and runs `pytest e2e/`; the push gate runs the same suite. `release.yml` calls this workflow (`workflow_call`) on a release tag and publishes only when its jobs pass; `push-gate` skips that run, because `check tag` covers the tag. **The build must precede `npm test`** (see *Tests*). Actions are referenced by version tag, not by SHA, on purpose.
 
 ## Releasing
 
@@ -168,7 +168,7 @@ git branch --set-upstream-to=azure/main main                  # in a clone with 
 git -c listview.pushGithub=<version> push origin v<version>   # then the same for main, once PyPI serves the version
 ```
 
-- **Never pass `--no-verify`.** CI reports such a push on `main`, but by then the commit is public.
+- **Never pass `--no-verify`.** CI reports such a push on `main`, but by then the commit is public. On a tag, `release.yml` runs CI's jobs and publishes only when they pass.
 - **`git push --dry-run` runs the hook and sends nothing.** Use it to see what the gate says.
 - **The suite runs once per commit.** `.git/push-gate/passed` lists the commits that passed; delete the file to force a new run.
 
