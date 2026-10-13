@@ -6,12 +6,12 @@ The inventory below sorts the checks by the categories of the [Harness Inventory
 
 ## How the harness works
 
-The harness has two halves. **Guides** tell an agent the rules before it writes: the `CLAUDE.md` files, the release skill and the comments in the configuration. **Sensors** check what it wrote: hooks, tests, CI and the release workflow. A sensor's finding goes back to the agent, which fixes the code and runs the check again.
+The harness has two halves. **Guides** tell an agent the rules before it writes: the `CLAUDE.md` files, the rules under `.claude/rules/`, the release skill and the comments in the configuration. **Sensors** check what it wrote: hooks, tests, CI and the release workflow. A sensor's finding goes back to the agent, which fixes the code and runs the check again.
 
 ```mermaid
 flowchart TB
     subgraph guides["Guides: read before writing"]
-        g1["CLAUDE.md, root and per directory"]
+        g1["CLAUDE.md, root and per directory, and path-scoped rules"]
         g2["release skill"]
         g3["comments that give each setting's reason"]
     end
@@ -246,7 +246,8 @@ sequenceDiagram
 |---|---|---|
 | `CLAUDE.md` | every session | the commands, the invariants that span both languages, CI, the push gate, the writing rule |
 | `streamlit_listview/CLAUDE.md` | when Claude reads a file there | id rules, row identity, new entries, the `format_func` contract |
-| `streamlit_listview/frontend/CLAUDE.md` | when Claude reads a file there | selection state, render chunks, theming, painted states, the `data-testid`s |
+| `streamlit_listview/frontend/CLAUDE.md` | when Claude reads a file there | selection state, render chunks, the `data-testid`s |
+| `.claude/rules/frontend-theming.md` | when Claude reads a file its `paths` name: the stylesheet, its tests and the theme probes | theming, the sidebar swap, surface pairs, painted states |
 | `demo/CLAUDE.md` | when Claude reads a file there | the widget key, the presets, the theme switcher, the deployment |
 | `.claude/skills/release/SKILL.md` | on `/release` or a request to release | the release checklist and the order of the pushes |
 | `BENCHMARKS.md`, `scripts/gif/README.md`, this file | on request | the benchmarks, the GIFs, the harness |

@@ -4,7 +4,7 @@ These rules extend the root `CLAUDE.md`. The comments next to the code give the 
 
 ## Files (`src/`)
 
-- `index.tsx`: the V2 `FrontendRenderer` entry. It mounts one React root per instance into the `.listview-root` scaffold that the Python `html=` defines, and passes `inSidebar` (see *The sidebar swaps two tokens*).
+- `index.tsx`: the V2 `FrontendRenderer` entry. It mounts one React root per instance into the `.listview-root` scaffold that the Python `html=` defines, and passes `inSidebar` (see *The sidebar swaps two tokens* in `.claude/rules/frontend-theming.md`).
 - `Listview.tsx`: the container component. It composes the hooks and the presentational components, and it keeps the handlers that tie them together: `onBodyClick`, `onItemClick` (a stable identity through a ref, so the memoized rows bail out), `onHeaderClick`, and `onSelect`, `onEscape` and `onSlash` for the keyboard.
 - `types.ts`: the wire format: `ListviewData`, the shape of the Python `data` dict, and `Id`, the one id type. `__tests__/types.test.ts` pins its keys and types.
 - `components/`: the frame, `ListviewHeader` (the pinned search field and the select-all toggle), `ListviewBody` (the scroll frame, the in-flow search field and the listbox or tree) and `ListBlocks` (the placeholder or one `GroupBlock` per block; `GroupBlock` renders a block's ARIA role, its header, its `div.listview-group-rows`, its chunks and its rows); and the parts, `WidgetLabel`, `GroupHeader`, `ListItem`, `SearchField`, `SelectAllToggle`, `NewOptionInput`, `HelpTooltip`, `Markdown`.
@@ -96,47 +96,12 @@ The rules:
 - **The icon preprocess rewrites the whole source, so the restore pass covers every field that holds source text.** `materialIconPreprocess` turns `:material/…:` and `:streamlit:` into Private-Use sentinels before parsing; only text nodes become icons. `createRemarkRestoreIconSentinels` restores the rest in `value` (code), `url`, `title` and `alt`, on the syntax tree, before `transformUri` sees the URL; otherwise a link to `…/:material/check:` points at a percent-encoded sentinel.
 - **`isSafeCssColor` (`markdown/streamlitPlugins.ts`) admits a `foreground` or `background` value of `:color[…]{…}` only when it is a single well-formed color.** It drops any other value before the inline `style` is built, so a label cannot inject CSS.
 
-## Theming
+## Theming and painted states
 
-- **All CSS (`listview.css`) reads Streamlit's `--st-*` properties, with fallbacks.** It uses no Bootstrap and no fixed palette.
-- **Never use `prefers-color-scheme` or `light-dark()`:** the production bundler (lightningcss) rewrites them so that they miss the shadow tree. For light and dark styling, read the root's `data-color-scheme`, which `useColorScheme` sets from the active Streamlit theme. The attribute reads `light` until an effect after the first paint reads the theme, so never key a surface that is visible at mount on it.
-- **Never put a `:has()` selector in a selector list.** lightningcss wraps such a list in `:is()`, and WebKit does not re-evaluate a `:has()` inside `:is()` after a focus change. Write one selector and gather the targets in a trailing `:is()`, as the frame rule does; `single-file-build.test.ts` checks the built sheet.
-- **`src/__tests__/listview-css.test.ts` pins what the stylesheet says; `e2e/test_sidebar_theme.py` and `e2e/test_native_parity.py` pin what a browser resolves it to.** They compare the widget with a real `st.selectbox`, `st.pills` or `st.text_input` on the same page, never with a fixed hex value. `test_native_parity_dark.py` repeats the parity tests under `--theme.base dark`, the only run that exercises the dark highlight formula.
+**The rules for the stylesheet live in `.claude/rules/frontend-theming.md`:** the `--st-*` tokens, the sidebar swap, the surface pairs and the painted states that copy native widgets. Claude Code loads that file with `listview.css`, `index.tsx`, `useColorScheme`, `utils/container.ts` and the tests that pin the stylesheet. Read it before any change to how the widget looks, also one that starts in a component.
 
-### The sidebar swaps two tokens
+## Clicks on the frame
 
-- **Streamlit gives the sidebar its own theme, and a V2 instance's `--st-*` block comes from the theme at its own mount point.** With Streamlit's default sidebar theme, only `--st-background-color` and `--st-secondary-background-color` trade values, and the heading sizes shrink; every other color is identical. A `[theme.sidebar]` section in the app's config can also set the sidebar's own primary, text and background colors; no test boots one. Only a running app shows the swap: Streamlit builds the names at runtime (`` `--st-${kebab(key)}` ``), so a search of its source finds none.
-- **Paint every surface through the `--listview-*` tokens on the container root, never through the raw tokens.** Read raw, the swap inverts the widget in the sidebar. `--listview-surface` (frame, rows, pinned header, add-option footer) and its inset `--listview-inset-surface` (search and add-option fields) are the two raw tokens, swapped together in the single `[data-in-sidebar="true"]` block. `--listview-group-surface` is `--listview-bg-mix`, Streamlit's 50/50 mix of the two, which the swap cannot move. A new surface that references a token behaves correctly in the sidebar without an override of its own.
-- **The swap matches Streamlit:** `st.selectbox`, `st.multiselect` and `st.text_input` fill their controls from `--st-secondary-background-color` in both containers, and the open selectbox menu paints the app background in both.
-- **`data-in-sidebar` comes from `isInSidebar`, which `index.tsx` calls before the first render;** `Listview` writes the attribute on its root, `div.listview`. The renderer's `parentElement` is the open `ShadowRoot`, so the answer exists at mount; an effect would set it a frame late and flash the main-body colors on every mount. The probe steps to `ShadowRoot.host` first, because `closest()` does not cross a shadow boundary; without that step the widget silently keeps the main-body colors. It needs no observer, because a container move remounts the frontend. `[data-testid="stSidebar"]` is Streamlit-internal; an upstream rename degrades to the main-body colors.
-
-### A surface and its insets are declared as a pair
-
-- **A surface and anything painted on it must resolve to different `--st-*` tokens in every scheme,** so the two are declared together in one block, never at their use sites. A use site cannot see which ground its container resolved to.
-- **The help tooltip is the worked example:** `--listview-popover-surface` and `--listview-popover-inset-surface`, both on `.listview-help-popover`, both declared again by the dark override. Each half is literally the other one of the two tokens, never a fixed color and never a `color-mix` off the ground. The sidebar swap then inverts both halves together, so the halves differ in all four combinations of container and scheme without a `[data-in-sidebar]` override, as long as the theme's two background colors differ. Like the label's inline-code chip, it reads the raw tokens, because it follows Streamlit's tooltip, not the list surface; if that has to change, it joins the `--listview-surface` family.
-- **Do not paint the code surfaces with `--st-code-background-color`.** Streamlit derives it as a 50 % mix of the two surfaces, so in a light theme it lands close to `--st-background-color`, and an inline-code chip all but disappears.
-- **The popover's inline-code rule is scoped to the popover,** because the base chip rule also serves the inline label tier. That tier renders only in `WidgetLabel`, which paints no background, so `--st-secondary-background-color` contrasts there in both containers.
-- **A `th` is an inset and also a container:** a chip inside a table header reads the ground half, or it takes the color of its cell. That rule depends on its source order.
-- **`listview-css.test.ts` pins the pairs:** the halves differ in each scheme, the dark block swaps them, every inset reads its token, and the `th` source order holds. The list's own pair (`--listview-surface` / `--listview-inset-surface`) is pinned the same way, with the sidebar block as the swap. The test also refuses a `prefers-color-scheme` media query; `light-dark()` and `--st-code-background-color` have no test.
-
-## Every painted state copies the native widget that plays its part
-
-The list is an always-open `st.selectbox` menu, so each state copies a measured Streamlit reference (Streamlit 1.60, both themes):
-
-| State | Reference |
-|---|---|
-| list surface | the open selectbox menu |
-| row hover | the menu's option highlight `darkenedBgMix15`: the bg mix with its HSL lightness −30 in a light theme and +60 in a dark one, at 15 % alpha |
-| selected row | an active `st.pills`: primary at 10 %, primary text |
-| group band | the `st.dataframe` header (the bg mix) |
-| search field | `st.text_input`: filled, a 1px border in its own fill, 1px primary on focus, no ring |
-| frame | primary on focus only |
-
-- **The frame changes on focus only.** No native input changes its frame on hover or wheel scroll, so add no hover border.
-- **`.listview-item::before` paints the highlight as a pill** with the menu's geometry: a 5px side inset (`sizes.tagMarginInsideBorder`) and a `0.375rem` radius (`radii.md2`, fixed in Streamlit, not derived from `--st-base-radius`). It sits at `z-index: -1` and stays inside the row only because the row is `position: relative; isolation: isolate`; without the isolation every highlight disappears behind the list surface. The row box itself is never tinted.
-- **The highlight formula needs relative color syntax** (`hsl(from var(--listview-bg-mix) h s calc(l - 30))`), the only way to take an HSL step off a `var()`. lightningcss passes it, the `@supports not (…)` fallback and `:not(a, b)` through unchanged; check `build/index-*.css` again when the toolchain moves. An engine without the syntax, or with the pre-2024 percentage form (Safari < 18), invalidates the whole custom property, which no `var()` fallback catches; the `@supports not` block substitutes a faint text-color mix.
-- **The row focus ring** (Streamlit's `focusRing`, primary at 50 %) appears only under `.listview-listbox:focus-visible`. A mouse click moves the active descendant too (`onItemClick` → `setFocusToId`), and no native menu rings a clicked row. The listbox's own outline is suppressed: the frame turns primary on focus-within and the focused row carries the ring, so the outline would add a second indicator in an unthemed color. A keyboard-focused group header draws the 2px inset primary ring under the same `:focus-visible` (`.listview-group-header--focused`).
-- **`.listview-header::after` and `.listview-footer::before` paint the seams of the pinned header and the add-option footer** as backgrounds (`pin_search` or `select_all` pins the header, `accept_new_options` adds the footer). The body drops its top border under a header and its bottom border above a footer. Focus recolors the borders of header, body and footer, so a seam drawn as a border either lights up or notches the outline. Keep the seams non-borders.
 - **`onBodyClick` in `Listview.tsx` forwards a click on the frame's empty space to the listbox** (below the last row of a list shorter than `height`), but only when the target is `.listview-body` itself. Rows and the in-flow search field focus their own target, and forwarding every bubbled click would pull the caret out of an input. It is `onClick`, not `onMousedown`: focus set during mousedown loses to the browser's own mousedown handling unless the default is prevented, and preventing it on the scroll container risks the scrollbar.
 
 ## The tests depend on the markup
