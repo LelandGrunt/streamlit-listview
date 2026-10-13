@@ -95,6 +95,73 @@ describe("index renderer glue", () => {
     expect(root.childElementCount).toBe(0);
   });
 
+  // Streamlit also calls the cleanup for a loader run it cancelled after this
+  // module had initialized, and then calls the renderer again on the same
+  // parentElement (the comment in index.tsx says when). These two tests pin
+  // the host check that tells that call from a real unmount.
+  describe("cleanup for a run Streamlit cancelled after it initialized", () => {
+    function mountInDocument(data: ListviewData) {
+      const host = document.createElement("div");
+      const shadow = host.attachShadow({ mode: "open" });
+      shadow.innerHTML = '<div class="listview-root"></div>';
+      document.body.appendChild(host);
+      return {
+        host,
+        shadow,
+        args: { ...makeArgs(data), parentElement: shadow },
+      };
+    }
+
+    it("keeps the tree while the host is in the document, so the next render keeps the state", async () => {
+      const { host, shadow, args } = mountInDocument(makeData());
+      let cleanup!: () => void;
+      await act(async () => {
+        cleanup = renderListview(args) as () => void;
+      });
+      const listbox = shadow.querySelector<HTMLElement>(".listview-listbox")!;
+      listbox.focus();
+      expect(shadow.activeElement).toBe(listbox);
+
+      await act(async () => {
+        cleanup();
+      });
+      // The next run of Streamlit's effect renders into the same tree.
+      await act(async () => {
+        renderListview({
+          ...args,
+          data: makeData({ items: [{ id: "b", label: "Banana" }] }),
+        });
+      });
+      expect(shadow.querySelector(".listview-listbox")).toBe(listbox);
+      expect(shadow.activeElement).toBe(listbox);
+      expect(
+        shadow.querySelectorAll('[data-testid="stListview"]'),
+      ).toHaveLength(1);
+      expect(
+        shadow.querySelector('[data-testid="stListviewOption-b"]'),
+      ).not.toBeNull();
+      // The real unmount: the host leaves the document first.
+      host.remove();
+      await act(async () => {
+        cleanup();
+      });
+      expect(shadow.querySelector(".listview-root")!.childElementCount).toBe(0);
+    });
+
+    it("unmounts once the host has left the document", async () => {
+      const { host, shadow, args } = mountInDocument(makeData());
+      let cleanup!: () => void;
+      await act(async () => {
+        cleanup = renderListview(args) as () => void;
+      });
+      host.remove();
+      await act(async () => {
+        cleanup();
+      });
+      expect(shadow.querySelector(".listview-root")!.childElementCount).toBe(0);
+    });
+  });
+
   it("a second cleanup call is a no-op (the root was already dropped)", async () => {
     const args = makeArgs(makeData());
     let cleanup!: () => void;

@@ -7,7 +7,7 @@ import { createRoot, Root } from "react-dom/client";
 
 import Listview from "./Listview";
 import type { ListviewData, ListviewState } from "./types";
-import { isInSidebar } from "./utils/container";
+import { isHostConnected, isInSidebar } from "./utils/container";
 import "./listview.css";
 
 // One React root per component instance (parentElement). Streamlit may mount
@@ -56,9 +56,31 @@ const ListviewRoot: FrontendRenderer<ListviewState, ListviewData> = (args) => {
     </StrictMode>,
   );
 
-  // Cleanup on unmount: unmount the tree and drop the cached root so a later
-  // remount starts fresh.
+  // Cleanup. Streamlit calls it in two situations, and only one of them ends
+  // the instance:
+  //
+  // 1. The component unmounts. React has already taken the host out of the
+  //    document, so the tree is unmounted and the cached root dropped; a later
+  //    mount starts fresh.
+  // 2. Streamlit's loader effect (useHandleJsContent) cancelled a run after
+  //    this module had initialized — `adoptCleanup` then runs the cleanup at
+  //    once — and its next run calls this renderer again on the SAME
+  //    parentElement. The effect re-runs on every change of its data or its
+  //    theme, and the sidebar hands it a new theme object on every render
+  //    (ThemedSidebar builds one without memoizing), so one click on a sidebar
+  //    listview runs it about three times within 10 ms, each run cancelling
+  //    the one before. A cancel that lands between a script's `load` event and
+  //    its `import()` completing takes this path. Unmounting here replaced the
+  //    tree on the next run: the click lost the keyboard focus, the search
+  //    text, the collapsed groups and the scroll position, on about one click
+  //    in six in st.sidebar (measured 2026-10-13, Streamlit 1.65).
+  //
+  // The host tells the two apart: it is still in the document in case 2, and
+  // the next run then re-renders into the cached root, which keeps the state.
   return () => {
+    if (isHostConnected(parentElement)) {
+      return;
+    }
     const root = reactRoots.get(parentElement);
     if (root) {
       root.unmount();

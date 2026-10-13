@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { isInSidebar } from "./container";
+import { isHostConnected, isInSidebar } from "./container";
 
 /**
  * Build the production DOM shape: a Streamlit container holding the
@@ -55,5 +55,29 @@ describe("isInSidebar", () => {
   // throw on the missing ancestor.
   it("is false for a detached element", () => {
     expect(isInSidebar(document.createElement("div"))).toBe(false);
+  });
+});
+
+describe("isHostConnected", () => {
+  // The answer is the host's: a shadow root sits in the document only through
+  // its host.
+  it("is true for a shadow root whose host is in the document", () => {
+    expect(isHostConnected(mountHost("stMain"))).toBe(true);
+  });
+
+  it("is false once the shadow host has left the document", () => {
+    const shadow = mountHost("stMain");
+    shadow.host.remove();
+    expect(isHostConnected(shadow)).toBe(false);
+  });
+
+  it("is true for a plain element in the document (isolate_styles=False)", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    expect(isHostConnected(parent)).toBe(true);
+  });
+
+  it("is false for a detached element", () => {
+    expect(isHostConnected(document.createElement("div"))).toBe(false);
   });
 });

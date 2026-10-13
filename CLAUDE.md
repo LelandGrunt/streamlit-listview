@@ -138,7 +138,7 @@ uv run --extra devel streamlit run demo/app.py   # needs the package installed a
 
 **Python wrapper.** `streamlit_listview/__init__.py` declares the component at import time (`js="index-*.js"`, `css="index-*.css"`) and defines `listview(...)`. It validates the parameters, normalizes the options, ships a `data` dict to the frontend, and maps the returned ids back to the original Python objects. `_options.py` holds the option rules. The nested `streamlit_listview/pyproject.toml` ships in the wheel as the component manifest. Its `name`, `streamlit_listview`, must equal the distribution name `streamlit-listview` after PEP 503 normalization, and it prefixes the component key `streamlit_listview.listview`.
 
-**Frontend.** `index.tsx` is the V2 `FrontendRenderer` entry and mounts one React root per instance. `Listview.tsx` composes the hooks (`hooks/`) and the presentational components (`components/`). `utils/` holds the shared helpers. `components/Markdown.tsx` renders Markdown as Streamlit does, with the plugins in `markdown/`; it escapes raw HTML and shows LaTeX as literal text.
+**Frontend.** `index.tsx` is the V2 `FrontendRenderer` entry and mounts one React root per instance. Its cleanup unmounts that root only once the host has left the document: Streamlit also calls the cleanup for a loader run it cancelled, and then calls the renderer again on the same scaffold (`streamlit_listview/frontend/CLAUDE.md`, *Files*). `Listview.tsx` composes the hooks (`hooks/`) and the presentational components (`components/`). `utils/` holds the shared helpers. `components/Markdown.tsx` renders Markdown as Streamlit does, with the plugins in `markdown/`; it escapes raw HTML and shows LaTeX as literal text.
 
 ### Invariants that span both languages
 
