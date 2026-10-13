@@ -26,6 +26,7 @@ navigates to its own query string, and the pure tests need no page at all).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
@@ -34,7 +35,9 @@ from e2e.perf.cells import (
     REPO_ROOT,
     SHAPES,
     SIZES,
+    at_least_one,
     cells,
+    describe_bundle,
     describe_checkout,
     parse_subset,
     require_bundle,
@@ -55,17 +58,17 @@ def pytest_addoption(parser):
     )
     group.addoption(
         "--perf-reps",
-        type=int,
+        type=at_least_one,
         default=3,
         metavar="N",
-        help="measured reps per cell, after one discarded warm-up (default 3)",
+        help="measured reps per cell, after one discarded warm-up; at least 1 (default 3)",
     )
     group.addoption(
         "--perf-throttle",
-        type=int,
+        type=at_least_one,
         default=1,
         metavar="RATE",
-        help="CDP CPU throttling rate: 1 = none (default), 4 = a slow laptop",
+        help="CDP CPU throttling rate of the browser: 1 = none (default), 4 = four times slower",
     )
     group.addoption(
         "--perf-sizes",
@@ -95,6 +98,8 @@ class PerfOptions:
     throttle: int
     root: Path
     branch: str
+    bundle: str
+    streamlit: str
 
 
 @pytest.fixture(scope="module")
@@ -144,4 +149,7 @@ def perf(request) -> PerfOptions:
         throttle=request.config.getoption("--perf-throttle"),
         root=REPO_ROOT,
         branch=describe_checkout(REPO_ROOT),
+        bundle=describe_bundle(REPO_ROOT),
+        # The server runs this interpreter (StreamlitRunner: sys.executable).
+        streamlit=version("streamlit"),
     )

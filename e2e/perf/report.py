@@ -4,7 +4,7 @@
     python -m e2e.perf.report bench-results/branch.jsonl
         medians (with low/high and rep count) per cell, scenario and metric
     python -m e2e.perf.report bench-results/main.jsonl bench-results/branch.jsonl [--markdown]
-        B against A: both medians, the delta and the delta in percent
+        B against A: both medians, ranges and rep counts, the delta and the delta in percent
 
 Pure functions, so e2e/perf/test_report.py covers them without a browser. A
 record that lacks a scenario (ungrouped reps have no group_*; a rep that failed
@@ -26,7 +26,20 @@ from typing import Any
 
 Key = tuple[int, str, str, str]  # (n, shape, scenario, metric)
 
-META = frozenset({"n", "shape", "grouped", "throttle", "rep", "branch", "started"})
+META = frozenset(
+    {
+        "n",
+        "shape",
+        "grouped",
+        "throttle",
+        "rep",
+        "branch",
+        "bundle",
+        "streamlit",
+        "browser",
+        "started",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -152,6 +165,17 @@ def render_summary(stats: dict[Key, Stats], markdown: bool) -> str:
     return _table(header, rows, markdown)
 
 
+def _side(stats: Stats | None) -> list[str]:
+    """One side's median, range and rep count; dashes for a missing side."""
+    if stats is None:
+        return ["—", "—", "—"]
+    return [
+        _fmt(stats.median),
+        f"{_fmt(stats.low)}..{_fmt(stats.high)}",
+        str(stats.count),
+    ]
+
+
 def render_compare(rows: list[Row], markdown: bool) -> str:
     header = [
         "n",
@@ -160,26 +184,24 @@ def render_compare(rows: list[Row], markdown: bool) -> str:
         "metric",
         "A median",
         "A range",
+        "A reps",
         "B median",
         "B range",
+        "B reps",
         "Δ",
         "Δ %",
     ]
     body = []
     for row in rows:
         n, shape, s, m = row.key
-        a_range = "—" if row.a is None else f"{_fmt(row.a.low)}..{_fmt(row.a.high)}"
-        b_range = "—" if row.b is None else f"{_fmt(row.b.low)}..{_fmt(row.b.high)}"
         body.append(
             [
                 str(n),
                 shape,
                 s,
                 m,
-                _fmt(row.a.median if row.a else None),
-                a_range,
-                _fmt(row.b.median if row.b else None),
-                b_range,
+                *_side(row.a),
+                *_side(row.b),
                 _fmt(row.delta),
                 "—" if row.pct is None else f"{row.pct:+.0f}%",
             ]

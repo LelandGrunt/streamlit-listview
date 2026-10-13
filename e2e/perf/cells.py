@@ -2,7 +2,7 @@
 """Pure helpers for the browser-tier performance benchmark (e2e/perf).
 
 The matrix (sizes × shapes), option parsing, the working-directory and bundle
-guards, the checkout description and the JSONL writer. Pure, so e2e/perf/test_cells.py covers them
+guards, the checkout and bundle descriptions and the JSONL writer. Pure, so e2e/perf/test_cells.py covers them
 without a browser or a server.
 
 The benchmark measures the checkout it runs from (REPO_ROOT): Streamlit
@@ -14,6 +14,7 @@ into it and running there.
 
 from __future__ import annotations
 
+import argparse
 import json
 import subprocess
 from collections.abc import Sequence
@@ -49,6 +50,24 @@ def parse_subset(name: str, raw: str | None, allowed: Sequence[T]) -> list[T]:
             )
         out.append(match)
     return out
+
+
+def at_least_one(text: str) -> int:
+    """The argparse ``type`` of --perf-reps and --perf-throttle: a whole number of at least 1.
+
+    Zero reps would run the warm-up, write no record and pass; a throttle below
+    1 would run unthrottled while every record named the value given. pytest
+    refuses either while it parses the command line, before a server boots.
+    """
+    try:
+        value = int(text)
+    except ValueError:
+        value = 0
+    if value < 1:
+        raise argparse.ArgumentTypeError(
+            f"{text!r} is not a whole number of at least 1"
+        )
+    return value
 
 
 @dataclass(frozen=True)
@@ -132,6 +151,18 @@ def require_bundle(root: Path) -> None:
             f"run `npm run build` in {root / 'streamlit_listview' / 'frontend'} first "
             "(the browser benchmark measures the checkout it runs from)."
         )
+
+
+def describe_bundle(root: Path) -> str:
+    """The file name of the built script, ``index-<hash>.js``.
+
+    ``describe_checkout`` names the sources, but the bundle is gitignored: a
+    checkout of other sources leaves the old bundle in place, and only a build
+    replaces it. Vite's content hash in the name tells the two apart. A build
+    leaves exactly one script; should a failed build leave more, every name is
+    listed, comma-separated, so the record shows the anomaly.
+    """
+    return ", ".join(sorted(path.name for path in bundle_dir(root).glob("index-*.js")))
 
 
 def describe_checkout(root: Path) -> str:

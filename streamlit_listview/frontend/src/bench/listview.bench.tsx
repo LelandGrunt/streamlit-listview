@@ -188,13 +188,17 @@ for (const shape of SHAPES) {
         setup: () => {
           mount();
           ring = [freshCopy(base), freshCopy(base)];
+          rerenderWith(ring[1]!);
+          precondition(row(last) !== null, "a rerun keeps the last row");
           turn = 0;
         },
         teardown: release,
       });
 
       // An edited and an unedited copy, alternated: every iteration is then a
-      // one-row change against the previous payload.
+      // one-row change against the previous payload. The setup runs both once,
+      // so a rerun the component ignored cannot pass as a fast one.
+      const midLabel = () => row(base[mid]!.id)?.textContent ?? "";
       bench("rerun_one_changed", () => rerenderWith(ring[turn++ & 1]!), {
         ...cheapOpts,
         setup: () => {
@@ -205,6 +209,16 @@ for (const shape of SHAPES) {
             label: `${edited[mid]!.label} (edited)`,
           };
           ring = [edited, freshCopy(base)];
+          rerenderWith(ring[0]!);
+          precondition(
+            midLabel().includes("(edited)"),
+            "the edited row shows its new label",
+          );
+          rerenderWith(ring[1]!);
+          precondition(
+            !midLabel().includes("(edited)"),
+            "the next rerun restores the label",
+          );
           turn = 0;
         },
         teardown: release,

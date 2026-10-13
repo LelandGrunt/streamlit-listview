@@ -20,6 +20,9 @@ def rec(n=100, shape="grouped", rep=0, **scenarios):
         "rep": rep,
         "branch": "abc",
         "started": "t",
+        "bundle": "index-abc.js",
+        "streamlit": "1.65.0",
+        "browser": "140.0.7339.16",
         **scenarios,
     }
 
@@ -127,6 +130,46 @@ def test_render_compare_markdown_has_a_header_separator_and_dashes_for_missing()
     # Row 1 (grouped) has an A range of 18.0..22.0, row 2 (ungrouped) no A side
     assert "18.0..22.0" in text
     assert text.rstrip().endswith("1 measurement(s) only in A, 1 only in B.")
+
+
+def test_render_compare_shows_how_many_reps_each_side_has():
+    rows = report.compare(
+        {(100, "grouped", "mount", "painted_ms"): Stats(20.0, 18.0, 22.0, 3)},
+        {(100, "grouped", "mount", "painted_ms"): Stats(15.0, 14.0, 16.0, 10)},
+    )
+    lines = report.render_compare(rows, markdown=True).splitlines()
+
+    def cells(line: str) -> list[str]:
+        return [cell.strip() for cell in line.strip("|").split("|")]
+
+    assert cells(lines[0]) == [
+        "n",
+        "shape",
+        "scenario",
+        "metric",
+        "A median",
+        "A range",
+        "A reps",
+        "B median",
+        "B range",
+        "B reps",
+        "Δ",
+        "Δ %",
+    ]
+    assert cells(lines[2]) == [
+        "100",
+        "grouped",
+        "mount",
+        "painted_ms",
+        "20.0",
+        "18.0..22.0",
+        "3",
+        "15.0",
+        "14.0..16.0",
+        "10",
+        "-5.0",
+        "-25%",
+    ]
 
 
 def test_render_summary_plain_lists_median_low_high_and_reps():

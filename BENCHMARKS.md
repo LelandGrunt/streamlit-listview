@@ -39,19 +39,19 @@ PowerShell sets environment variables differently: `$env:LISTVIEW_BENCH_SIZES = 
 |---|---|---|---|
 | Python unit tests (`tests/`) | the wrapper's behavior | yes | 100 % coverage |
 | Frontend unit tests (`src/**/*.test.ts`, `*.test.tsx`) | the React component's behavior | yes | 100 % coverage |
-| End-to-end tests (`e2e/`) | the component inside a real Streamlit app | no | pass/fail |
-| Performance tests (`e2e/test_performance.py`) | 5,000 rows render within 15 s of the page load; six more tests check responsiveness and the off-screen render chunks | no | a 15 s budget; catches only gross regressions |
-| **Performance benchmarks** (this document) | how fast, and whether a change helps | no | none: you read and compare numbers |
+| End-to-end tests (`e2e/`) | the component inside a real Streamlit app | yes, in Chromium | pass/fail |
+| Performance tests (`e2e/test_performance.py`) | 5,000 rows render within 15 s of the page load; six more tests check responsiveness and the off-screen render chunks | yes, with the end-to-end tests | a 15 s budget; catches only gross regressions |
+| **Performance benchmarks** (this document) | how fast, and whether a change helps | no: `pytest e2e/` collects and skips them | none: you read and compare numbers |
 
-A slower result never fails a benchmark. The benchmarks fail only when a scenario cannot run at all (a precondition does not hold, or a wait times out), so a broken measurement never passes as a fast one.
+A slower result never fails a benchmark. A benchmark fails only when a scenario cannot run: a precondition does not hold, or a wait times out. Each scenario checks one or two rows that show its action took effect (see *Design principles*); the unit and end-to-end tests check the full result.
 
 ### Two tiers
 
 | | Frontend tier | Browser tier |
 |---|---|---|
 | Runs in | `vitest bench` in Node, jsdom DOM, React development build | Playwright driving headless Chromium against a real Streamlit server |
-| Measures | React's own work: reconciliation, memo recomputation, DOM mutation | everything a user waits for: Python call, payload transfer, parsing, React, style, layout, paint, scroll |
-| Blind to | layout, paint, scroll, Streamlit's rerun round trip | nothing, but slower and noisier |
+| Measures | React's own work: reconciliation, memo recomputation, DOM mutation | what a user waits for once the page has loaded: Python call, payload transfer, parsing, React, style, layout, paint, scroll |
+| Blind to | layout, paint, scroll, Streamlit's rerun round trip | network latency (the server runs on the same machine), the first page load, the browser's input handling (the scenarios click and scroll from a script), the moment the screen shows a frame |
 | Use it for | quick A/B of React-side changes, many samples per scenario | the numbers you quote; DOM-size or CSS work; anything Streamlit-side |
 | Full matrix | about 25 min on the reference machine, 13 of them in the three 100,000-row cells | about 24 min on the reference machine at 3 reps, 4 of them in the three 100,000-row cells |
 | Results | vitest table, JSON through `--outputJson`, built-in `--compare` | JSONL records, `python -m e2e.perf.report` |
@@ -87,7 +87,7 @@ The frontend tier merges the two reset pairs because vitest's `bench()` has no p
 
 - **Public surface only.** Both tiers drive the component through its props and DOM (frontend) or the `listview()` API and the rendered page (browser). They import no internal helper, so the same benchmark files run unchanged against any version of the component. That lets you benchmark `main` against your branch.
 - **Same machine, no stored baselines.** Absolute numbers depend on the machine, its load and its power settings. A comparison is always two runs on the same machine, close together in time. Results go to the gitignored `bench-results/`; never commit a baseline.
-- **Fail loudly, never time a no-op.** Every scenario but `scroll` waits for a DOM condition that proves its action happened: the last row exists, the search leaves the last row and hides the first, the header collapses the group, Enter adds a row. The frontend tier checks it in the untimed setup; the browser tier makes it the end of the timed wait. In the browser tier a wait inside the page fails after 240 s and a Playwright wait after 300 s; either fails that cell's test, and the other cells still run. An unknown size or shape in a filter stops the run; it never shrinks the matrix silently.
+- **Fail loudly, never time a no-op.** Every scenario but `scroll` checks a DOM condition that shows its action took effect: the last row exists after the mount and after a rerun; the search hides the first row and keeps the last; clearing it brings the first row back; the header hides and restores the group's first row; the edited row shows its new label; a clicked row is selected; Enter adds a row. In the browser tier the two reruns and the click must also reach the app's status line. The frontend tier checks its conditions in the untimed setup, before the warm-up and before the measured run, not in every timed iteration; the browser tier makes the condition the end of the timed wait. A condition samples one or two rows. It shows that the action ran, not that every row is right: the unit and end-to-end tests check that. In the browser tier a wait inside the page fails after 240 s and a Playwright wait after 300 s; either fails that cell's test, and the other cells still run. An unknown size or shape in a filter stops the run, and so does a `--perf-reps` or `--perf-throttle` below 1: a run never shrinks the matrix silently or passes without writing a record.
 
 ---
 
@@ -107,19 +107,19 @@ The frontend tier merges the two reset pairs because vitest's `bench()` has no p
   | `add_option` | 10, fixed, because each added row stays in the list | 15 | 15 | 15 | 15 |
 
   A fixed count runs after one warm-up iteration, two for the sub-second scenarios; the warm-up does not count as a sample.
-- **Positional pairing.** vitest's `--compare` matches benchmarks by the bench file's path and their position in it, not by name; a renamed or moved bench file pairs nothing. The bench file therefore declares every cell and skips the ones a filter leaves out (`describe.skipIf`), so a subset run still aligns with a full baseline, as long as both sides use the same bench file. The `disabled` shape comes last, so a baseline recorded before it existed still aligns with the `grouped` and `ungrouped` cells.
+- **Positional pairing.** vitest's `--compare` matches benchmarks by the bench file's path and their position in it, not by name; a renamed or moved bench file pairs nothing. The bench file therefore declares every cell and skips the ones a filter leaves out (`describe.skipIf`), so a subset run still aligns with a full baseline, as long as both sides use the same bench file. The `disabled` shape comes last, so a baseline recorded before it existed still aligns with the `grouped` and `ungrouped` cells. A new size, by contrast, moves the cells of every later shape (see *Extending the benchmarks*).
 
 ### Browser tier
 
 - **Harness.** pytest starts one Streamlit app (`e2e/perf/app_bench.py`) per session. The query string selects the cell (`?n=…&shape=…&newopt=…`). The list mounts only when the test clicks a "show" button, so the test times the mount itself. A "rerun" button causes an unrelated rerun; an "edit" button flips one option's label. The listview has a `key` (`bench`), as a listview in a dynamic app should.
 - **Fresh state per run.** Each measured run opens two new browser contexts (new Streamlit sessions, viewport 1280×900): one for the main scenarios, and one for `add_option`, which needs `accept_new_options`. The first run of each cell is a warm-up and is discarded. The next `--perf-reps` runs (default 3) each write one JSON line.
-- **Timing inside the page.** Each scenario is a JavaScript snippet that starts `performance.now()`, performs the action, and waits frame by frame for the DOM condition: `rows_ms`. It then waits one animation frame plus a macrotask, so the browser has painted: `painted_ms`. Doing this in the page avoids a Playwright round trip per check, which at this scale would be the measurement.
+- **Timing inside the page.** Each scenario is a JavaScript snippet that starts `performance.now()`, performs the action, and waits frame by frame for the DOM condition: `rows_ms`. It then waits one animation frame plus a macrotask: `painted_ms`. By then the main thread has rendered that frame. The page cannot see when the screen shows it, so `painted_ms` marks the end of the main thread's work, not the moment the pixels appear. Doing this in the page avoids a Playwright round trip per check, which at this scale would be the measurement.
 - **Main-thread work.** Chrome DevTools Protocol `Performance.getMetrics` snapshots around a scenario show how long the main thread was busy: `task_ms`, split into `script_ms`, `recalcstyle_ms` and `layout_ms`. For `mount` the window opens only after the page has settled, so page loading is excluded. The windows include fixed pauses that let trailing work finish (1,200 ms after the mount, 500 ms after the search, 1,500 ms after each rerun or click), so `task_ms` also counts that trailing work.
-- **Two end points for round trips.** `rerun_unchanged`, `rerun_one_changed` and `click_select` go through Python. `roundtrip_ms` ends one painted frame after the app's status line shows the rerun; for `rerun_one_changed` the edited row must also show its new label, and for `click_select` the status line must echo the selection. The component may re-render after that, so `settled_ms` also waits until the main thread has had no long task (≥ 50 ms, through `PerformanceObserver('longtask')`) for 300 ms. It reports the later of the round trip's end and the last long task's end, so without a trailing long task it equals `roundtrip_ms`. Use `settled_ms` or `task_ms` to see the frontend's share. A scenario that calls `settled()` must start `watchLongTasks()` before its action.
-- **Payload.** `ws_bytes` counts the WebSocket bytes the page receives during the mount and during `rerun_unchanged`. The benchmark server runs without websocket compression, so the counts are uncompressed. `py_mount` records the Python call's duration (`py_ms`) and the size of the options as `json.dumps` writes them (`options_bytes`).
+- **Two end points for round trips.** `rerun_unchanged`, `rerun_one_changed` and `click_select` go through Python. `roundtrip_ms` ends one painted frame after the app's status line shows the rerun; for `rerun_one_changed` the edited row must also show its new label, and for `click_select` the status line must echo the selection. The component may re-render after that, so `settled_ms` also waits until the main thread has had no long task (≥ 50 ms, through `PerformanceObserver('longtask')`) for 300 ms. Shorter tasks are invisible to it. It reports the later of the round trip's end and the last long task's end, so without a trailing long task it equals `roundtrip_ms`. Use `settled_ms` or `task_ms` to see the frontend's share. A scenario that calls `settled()` must start `watchLongTasks()` before its action.
+- **Payload.** `ws_bytes` sums the payload lengths of the WebSocket frames the page receives during the mount and during `rerun_unchanged`, without frame headers. The benchmark server starts with `--server.enableWebsocketCompression=false` (`EXTRA_ARGS` in `test_bench.py`). The flag outranks `config.toml` and the `STREAMLIT_*` environment variables, so the frames are always uncompressed. `py_mount` records the Python call's duration (`py_ms`) and the size of the options as `json.dumps` writes them (`options_bytes`).
 - **When Streamlit sends the options.** Streamlit sends a listview's options again only when the listview's payload changes. A rerun that changes nothing sends a cache reference instead, for a payload of 10 KB or more. `rerun_unchanged` is the first rerun after the mount, and on that rerun the payload does change: the harness's listview has a `key`, so from this rerun on the payload carries the selection persisted in `st.session_state`. `rerun_unchanged` therefore measures a rerun that sends the options again, as a click on a keyed listview or a parameter change does. A probe on 2026-10-11 at 10,000 grouped rows received 672 KB for the mount, 672 KB for the first rerun, 1.5 KB for each later rerun that changed nothing, and 672 KB for a click.
-- **CPU throttling.** `--perf-throttle 4` slows the CPU fourfold through `Emulation.setCPUThrottlingRate`, approximating a slow laptop. The default is 1 (none).
-- **Which checkout is measured.** Streamlit registers a component's frontend files from the installed package when the server starts, and `python -m streamlit` puts the working directory first on the import path. The browser tier therefore always measures the checkout it is run from, and refuses to run from any other working directory. Each record carries that checkout's `git describe --always --dirty --abbrev=12` in the field `branch`.
+- **CPU throttling.** `--perf-throttle 4` slows the page's renderer fourfold through `Emulation.setCPUThrottlingRate`. The Python server and the transfer keep their speed, so a throttled run shows a slow browser, not a slow machine: `py_ms` does not change. The default is 1 (none).
+- **Which checkout is measured.** Streamlit registers a component's frontend files from the installed package when the server starts, and `python -m streamlit` puts the working directory first on the import path. The browser tier therefore always measures the checkout it is run from, and refuses to run from any other working directory. Each record carries that checkout's `git describe --always --dirty --abbrev=12` in the field `branch`, and the name of the built script (`index-<hash>.js`) in `bundle`. The bundle is gitignored: a checkout of other sources keeps the old bundle until the next build. When `branch` changes and `bundle` does not, either the change left the frontend alone or nobody rebuilt the bundle. `streamlit` and `browser` hold the Streamlit and Chromium versions.
 
 ### A browser record
 
@@ -127,10 +127,10 @@ One line of the JSONL file, abbreviated:
 
 | Key | Fields |
 |---|---|
-| `n`, `shape`, `grouped`, `throttle`, `rep`, `branch`, `started` | metadata; `branch` holds `git describe`, and `started` is the time in UTC when the rep finished. A record written before the `disabled` shape existed has no `shape`, and the report derives it from `grouped` |
+| `n`, `shape`, `grouped`, `throttle`, `rep`, `branch`, `bundle`, `streamlit`, `browser`, `started` | metadata; `branch` holds `git describe`, `bundle` the built script's file name, `streamlit` and `browser` the versions, and `started` the time in UTC when the rep finished. A record written before the `disabled` shape existed has no `shape`, and the report derives it from `grouped`. A record written before 2026-10-13 has no `bundle`, `streamlit` or `browser` |
 | `mount` | `rows_ms`, `painted_ms`, `task_ms`, `script_ms`, `recalcstyle_ms`, `layout_ms`, `ws_bytes` |
 | `py_mount` | `py_ms`, `options_bytes` |
-| `dom_nodes`, `heap_mb` | after the mount and a forced garbage collection |
+| `dom_nodes`, `heap_mb` | after the mount and a forced garbage collection; `heap_mb` counts MiB (2^20 bytes) |
 | `search_narrow`, `search_clear` | `rows_ms`, `painted_ms` |
 | `search_busy` | main-thread time over both search steps |
 | `rerun_unchanged` | `roundtrip_ms`, `settled_ms`, `task_ms` and its parts, `ws_bytes` |
@@ -185,8 +185,8 @@ uv run --extra devel pytest e2e/perf/ --perf-out bench-results/slow.jsonl --perf
 | Option | Default | Meaning |
 |---|---|---|
 | `--perf-out FILE.jsonl` | none | where to append the records; without it pytest skips the benchmark |
-| `--perf-reps N` | 3 | measured runs per cell, after one discarded warm-up |
-| `--perf-throttle RATE` | 1 | CPU slowdown factor through DevTools |
+| `--perf-reps N` | 3 | measured runs per cell, after one discarded warm-up; at least 1 |
+| `--perf-throttle RATE` | 1 | slowdown factor of the page's renderer through DevTools; at least 1 |
 | `--perf-sizes LIST` | all | subset of `100,1000,5000,10000,25000,50000,100000` |
 | `--perf-shapes LIST` | all | subset of `grouped,ungrouped,disabled` |
 
@@ -247,7 +247,7 @@ git worktree remove --force ../bench-baseline
 
 - **Why copy instead of pointing at the other checkout.** The browser tier always measures the checkout it runs from, and it refuses to run from anywhere else. The frontend tier imports the component relative to the bench file. Copying the benchmark files into the other checkout is the only way to measure its code with these scenarios.
 - **Requirements for the other checkout.** It needs what the benchmark files use. `main` has all of it as of October 2026; much older versions may not.
-  - Frontend tier: vitest 4, `src/test/makeData.ts`, `Listview` exported from `src/Listview.tsx` with the `data` and `setStateValue` props, the types `Id`, `ListviewData` and `ListviewItem` from `src/types.ts`, and the DOM hooks the scenarios find: `listview-opt-<id>`, `stListviewSearch`, `stListviewNewOption` and `button.listview-group-header--collapsible`.
+  - Frontend tier: vitest 4, `src/test/makeData.ts`, `Listview` exported from `src/Listview.tsx` with the `data` and `setStateValue` props, the types `Id`, `ListviewData` and `ListviewItem` from `src/types.ts`, and the DOM hooks the scenarios find: `listview-opt-<id>`, `stListviewSearch`, `stListviewNewOption` and the class `listview-group-header--collapsible`, which marks the group header that a click collapses.
   - Browser tier: `demo/data.py::make_large_dataset` (which imports `demo/parsing.py`), the `app` and `_servers` fixtures of `e2e/conftest.py` with `e2e/e2e_utils.py::StreamlitRunner`, and the hooks above plus `stListview` and `.listview-body`.
 - **Order.** Run the two sides one after the other, never in parallel, and keep the machine otherwise idle.
 
@@ -276,22 +276,22 @@ n      shape      scenario      metric      median   low     high    reps
 50000  ungrouped  search_clear  painted_ms  839      819     2,138   3
 ```
 
-Comparing two files gives both medians, both ranges and the difference, `B − A`:
+Comparing two files gives both medians, both ranges, both rep counts and the difference, `B − A`:
 
 ```text
-n      shape      scenario      metric      A median  A range        B median  B range      Δ       Δ %
-50000  ungrouped  search_clear  painted_ms  3,838     3,827..3,873   839       819..2,138   -2,999  -78%
+n      shape      scenario      metric      A median  A range       A reps  B median  B range     B reps  Δ       Δ %
+50000  ungrouped  search_clear  painted_ms  3,838     3,827..3,873  3       839       819..2,138  3       -2,999  -78%
 ```
 
-A negative `Δ` means B is faster. A row present on only one side shows `—`, and the footer counts such rows; the group scenarios are an example when one side ran ungrouped only. A file recorded before the `disabled` shape existed compares as usual: its `grouped` and `ungrouped` rows pair with the new file's, and the new file's `disabled` rows have no A side.
+A negative `Δ` means B's value is lower: faster for a time, smaller for `ws_bytes`, `options_bytes`, `dom_nodes` and `heap_mb`. A row present on only one side shows `—`, and the footer counts such rows; the group scenarios are an example when one side ran ungrouped only. A file recorded before the `disabled` shape existed compares as usual: its `grouped` and `ungrouped` rows pair with the new file's, and the new file's `disabled` rows have no A side.
 
-The report groups records by size, shape, scenario and metric only. Two runs with a different `--perf-throttle`, or from different checkouts, appended to one file merge without a warning, so give each run a file of its own.
+The report groups records by size, shape, scenario and metric only. It ignores `throttle`, `branch`, `bundle` and the versions, so two runs that differ in any of them merge without a warning when appended to one file. Give each run a file of its own.
 
 ### Which metric answers which question
 
 | Question | Look at |
 |---|---|
-| How long until the user sees the list? | `mount.painted_ms` |
+| How long does the list take to appear once the page has loaded? | `mount.painted_ms` |
 | How long does typing a search, or clearing it, freeze the list? | `search_narrow.painted_ms`, `search_clear.painted_ms` |
 | How expensive is a rerun that sends the options again, such as a parameter change? | `rerun_unchanged.settled_ms` and `.task_ms`; `ws_bytes` for the payload |
 | How quickly does a click show feedback? | `click_select.local_painted_ms`, and `settled_ms` for the full round trip |
@@ -300,19 +300,21 @@ The report groups records by size, shape, scenario and metric only. Two runs wit
 
 ### Rules for drawing conclusions
 
-1. **A difference inside the spread is not a result.** Frontend tier: compare the mean against its rme. Browser tier: compare medians, and check whether the two low..high ranges overlap.
-2. **Check the canaries first.** `mount` and the search scenarios are the canaries: stable, costly, and untouched by most changes. If they moved between A and B by more than the change under test can explain, the machine was disturbed: repeat that cell before reading the cheaper scenarios. Transient load has slowed whole stretches of a run by 2 to 5 times.
+These rules screen results; they are not statistical tests. The rme assumes independent samples from one distribution; garbage collection and JIT compilation break that assumption. A low..high range of three reps is the observed spread, not a confidence interval.
+
+1. **A difference inside the spread is not a result.** Frontend tier: compare the mean against its rme. Browser tier: compare medians, and check whether the two low..high ranges overlap. Such a difference is unresolved, not absent: the run neither shows nor rules out an effect of that size.
+2. **Check the canaries first.** `mount` and the search scenarios are the canaries: stable, costly, and untouched by most changes. If they moved between A and B by more than the change under test can explain, the machine was disturbed: repeat that cell before reading the cheaper scenarios. Transient load has slowed whole stretches of a run by 2 to 5 times. A change to the mount or the search leaves no canary of its own; read `py_mount.py_ms` instead, which no frontend change affects.
 3. **Compare like with like.** Same machine, same size and shape selection, same benchmark files, runs close together in time. The first cell of a run starts cold; that once made a 100-row mount read twice as slow in a subset run. Prefer full runs, or the same subset on both sides.
 4. **Frontend numbers are relative.** jsdom is not a browser, and React runs its development build there. Use them to rank alternatives; quote browser numbers.
 5. **Expect the browser tier to show a smaller gain for React-side fixes.** A rerun that sends the options also contains the Python call (about 110 ms at 50,000 grouped rows), the payload transfer (2.3 to 4.3 MB at 50,000 rows, depending on the shape), parsing, and Chrome's style, layout and paint for the rows near the frame. Only the React part shrinks.
 6. **Small sizes are noisy and fast.** Below 5,000 rows most scenarios take a few milliseconds. `scroll` sits at the 60 Hz frame time at every size. Base decisions on 10,000 to 100,000 rows.
-7. **Three reps detect large effects.** For a suspected 5 to 10 % effect in the browser tier, run that cell with `--perf-reps 10` on both sides.
+7. **Three reps detect large effects.** For a suspected 5 to 10 % effect in the browser tier, run that cell with `--perf-reps 10` on both sides. Alternate the sides (A, B, A, B), appending each A run to one file and each B run to another, so a drift in machine load reaches both. More reps narrow the range; they do not guarantee that an effect of that size shows.
 
 ---
 
 ## Worked example: `main` vs. the render-chunk branch
 
-The first comparison, on 2026-10-03, measured `main` against a branch that reuses unchanged option objects across reruns and renders rows in keyed chunks of 100. The machine ran Windows 11 on a Core Ultra 7, with CPU throttling off.
+The first comparison, on 2026-10-03, measured `main` (`5dfc413`) against a branch that reuses unchanged option objects across reruns and renders rows in keyed chunks of 100 (merged as `62bdc43`). The machine ran Windows 11 on a Core Ultra 7, with CPU throttling off. These numbers, and those of the sections below, hold for the named commits on that machine; they guide design decisions and set no thresholds.
 
 | Measurement | Rows | main | branch |
 |---|---|---|---|
@@ -326,7 +328,7 @@ How to read it:
 
 - **The rerun fix** cut React's rerun work about fourfold in the frontend tier. In the browser it saved about 45 % at 50,000 ungrouped rows, because the payload transfer and Chrome's work over the full DOM remain. Rule 5 applies; this is not a contradiction.
 - **The chunking fix** made clearing the search 4.5 times faster in the browser and 5.6 times faster in the frontend tier. That cost was almost entirely React inserting rows.
-- **Mount** was not a target and did not change.
+- **Mount** was not a target and stayed within the spread.
 - **One stretch of the first frontend run** ran 2 to 5 times slower, including 100-row cells the change cannot affect. Re-running those cells gave normal numbers. Rules 2 and 3 caught it.
 
 ---
@@ -342,7 +344,7 @@ On 2026-10-11 the full matrix ran on the reference machine: Windows 11, Core Ult
 | A rerun that sends the options again | `rerun_unchanged.settled_ms` | 89 ms | 229 ms | 398 ms |
 | Rerun, one option changed | `rerun_one_changed.settled_ms` | 82 ms | 230 ms | 423 ms |
 | Click: the row highlights | `click_select.local_painted_ms` | 10 ms | 41 ms | 81 ms |
-| Click: the app settles | `click_select.settled_ms` | 92 ms | 244 ms | 508 ms |
+| Click: the round trip and its long tasks end | `click_select.settled_ms` | 92 ms | 244 ms | 508 ms |
 | Scroll frame, median / p95 | `scroll.p50_ms` / `p95_ms` | 17 / 18 ms | 17 / 18 ms | 17 / 18 ms |
 | Payload sent with the list | `mount.ws_bytes` | 0.67 MB | 3.35 MB | 6.70 MB |
 | The `listview()` call in Python | `py_mount.py_ms` | 22 ms | 110 ms | 216 ms |
@@ -353,14 +355,14 @@ The ungrouped shape scrolls the same and is 10 to 26 % faster in the other scena
 How to read it:
 
 - **Everything that touches the rows grows in proportion to them.** Doubling the rows from 50,000 to 100,000 multiplies the mount, the search, both reruns and a click by 1.7 to 2.1.
-- **Scrolling does not depend on the size.** A scroll frame takes 17 ms at the median and 18 ms at the 95th percentile at every size: the 60 Hz frame time.
+- **Scrolling stays at the frame rate at every size measured.** Over the 60 scripted scroll steps a frame takes 17 ms at the median and 18 ms at the 95th percentile, from 100 to 100,000 rows: the 60 Hz frame time.
 - **What remains of a click is the round trip.** At 100,000 rows a click's `roundtrip_ms` is 457 ms of its 508 ms `settled_ms`. A click on a keyed listview sends the 6.7 MB options again, and the rerun calls `listview()` again (218 ms, `py_rerun.py_ms`). The main thread is busy for 312 ms of the click (`click_select.task_ms`), 156 ms of it in script.
 - **Compared with 2026-10-07**, before the off-screen render chunks, the list appears 2.3 times sooner at 100,000 rows (2,596 ms then), a click settles 2.6 times sooner (1,308 ms), and a scroll frame's p95 falls from 198 ms to 18 ms. The DOM holds 24 % fewer nodes (410,274 then), because a row in a skipped render chunk has no `::before`.
 - **The frontend tier** ran every cell. Its 100,000-row mount takes 6.7 s grouped and 6.1 s ungrouped in jsdom, and the worker peaked at 3.8 GB of memory.
 
 ### The `disabled` shape
 
-Later on 2026-10-07 the `grouped` and `disabled` shapes ran together at every size, in both tiers, on the same machine. Browser tier, medians of 3 reps, with the low..high range:
+Later on 2026-10-07 the `grouped` and `disabled` shapes ran together at every size, in both tiers, on the same machine, with the code of `328affd`. Browser tier, medians of 3 reps, with the low..high range:
 
 | Measurement at 100,000 rows | Metric | `grouped` | `disabled` | Δ |
 |---|---|---|---|---|
@@ -372,20 +374,20 @@ Later on 2026-10-07 the `grouped` and `disabled` shapes ran together at every si
 How to read it:
 
 - **The cost is the key in the payload.** Every row carries `"disabled": false` or `"disabled": true`, so the options grow by 28 % at every size. Python builds that larger payload on every rerun, and Streamlit sends it whenever the payload changes.
-- **Everything else stays within the spread.** At 100,000 rows the search, a click, the group toggles, scrolling and `add_option` show ranges that overlap between the two shapes. The disabled rows themselves add no measurable work.
+- **Everything else stays within the spread.** At 100,000 rows the search, a click, the group toggles, scrolling and `add_option` show ranges that overlap between the two shapes. The run measured no cost of the disabled rows themselves.
 - **The frontend tier agrees.** Only the 100,000-row `mount` moved beyond its error margin: 5.51 s instead of 5.26 s (+5 %, rme ±3 %). The `disabled` cells ran to completion at every size, 100,000 rows included.
 - **An app can avoid the cost.** A row without the key is enabled, so passing `disabled` only on the rows that are disabled sends the smaller payload.
 - **Since the off-screen render chunks, a click shows the cost too.** In the reference run of 2026-10-11, at 100,000 rows, a click settled in 584 ms with the key and 508 ms without (+15 %), a rerun that sends the options took 448 ms instead of 398 ms (+13 %), and the `listview()` call 249 ms instead of 216 ms (+15 %). Paint no longer hides the transfer, and a click on a keyed listview sends the larger payload again. Search and scrolling take as long as without the key, and a group toggle 5 % longer.
 
 ### Off-screen render chunks
 
-On 2026-10-07 the browser tier compared `main` with the branch that turns each 100-row render chunk into an element with `content-visibility: auto`, on the reference machine with CPU throttling off. Medians of 3 reps, with the low..high range:
+On 2026-10-07 the browser tier compared `main` (`328affd`) with the branch that turns each 100-row render chunk into an element with `content-visibility: auto` (merged as `35f6706`), on the reference machine with CPU throttling off. Medians of 3 reps, with the low..high range:
 
 | Measurement at 100,000 rows, grouped | Metric | `main` | branch | Δ |
 |---|---|---|---|---|
 | The list appears | `mount.painted_ms` | 2,310 ms (2,252..2,323) | 1,120 ms (1,108..1,141) | −52 % |
 | Click: the row highlights | `click_select.local_painted_ms` | 262 ms (259..272) | 80 ms (76..81) | −70 % |
-| Click: the app settles | `click_select.settled_ms` | 1,254 ms (1,249..1,259) | 475 ms (448..487) | −62 % |
+| Click: the round trip and its long tasks end | `click_select.settled_ms` | 1,254 ms (1,249..1,259) | 475 ms (448..487) | −62 % |
 | Rerun, options unchanged | `rerun_unchanged.settled_ms` | 780 ms (774..853) | 384 ms (383..400) | −51 % |
 | Rerun, one option changed | `rerun_one_changed.settled_ms` | 1,183 ms (1,183..1,186) | 424 ms (422..426) | −64 % |
 | Clearing the search | `search_clear.painted_ms` | 1,797 ms (1,783..1,826) | 550 ms (548..556) | −69 % |
@@ -403,7 +405,7 @@ How to read it:
 - **Sizes.** At 50,000 rows the scenarios in the table fall by 28 to 76 %. At 10,000 rows the mount, a click and clearing the search fall by 22 to 67 %, and an unchanged rerun stays within the spread. At 1,000 rows, measured with 10 reps on both sides, the painted times stay within the spread, and three DOM-update times (`add_option`, `group_collapse`, `search_clear`) rise by 1 to 2 ms. Scrolling runs at the 60 Hz frame time at every size.
 - **The ungrouped shape behaves the same.** A click settles in 380 ms instead of 763 ms, and a scroll frame's p95 falls from 190 ms to 18 ms.
 - **The frontend tier cannot see the gain.** jsdom performs no layout or paint.
-- **The review fix leaves these numbers standing.** `useResetChunkHeights`, added after the final review, runs only when the blocks change, never on a click. A rerun of the 100,000-row cells after it stayed within the spread for the ungrouped shape. The grouped cell ran 3 to 11 % slower, and its unchanged Python call ran 7 % slower with it: the sign of machine load (rule 2), not of the change.
+- **The review fix leaves these numbers standing.** `useResetChunkHeights`, added after the final review, runs only when the blocks change, never on a click. A rerun of the 100,000-row cells after it stayed within the spread for the ungrouped shape. The grouped cell ran 3 to 11 % slower, and its Python call, which the fix does not touch, ran 7 % slower with it. That points to machine load (rule 2); the run cannot rule out a small cost of the fix.
 
 ---
 
@@ -413,6 +415,7 @@ How to read it:
 |---|---|
 | `LISTVIEW_BENCH_SIZES: "2000" is not one of …` | a typo in the filter; use the listed values |
 | `--perf-sizes: '2000' is not one of …` | the same for the browser tier |
+| `argument --perf-reps: '0' is not a whole number of at least 1` | `--perf-reps` and `--perf-throttle` take 1 or more |
 | `pytest: error: unrecognized arguments: --perf-out` | the options exist only with `e2e/perf/` on the command line; run `pytest e2e/perf/ …` |
 | all browser benchmarks show `SKIPPED` | `--perf-out` is missing |
 | `no built bundle under …/frontend/build` | run `npm run build` in that checkout's `streamlit_listview/frontend/` |
@@ -423,7 +426,7 @@ How to read it:
 | the frontend run dies with a heap or worker error at 50k or 100k | not enough memory; run a subset or close other applications |
 | `UnicodeEncodeError` from the report | an old copy of `report.py`; the current one forces UTF-8 output |
 
-**Known limitation: virtualization.** Both tiers consider a mount finished when the last row exists in the DOM. A virtualized (windowed) list never renders it, so the frontend tier fails its precondition and the browser tier times out. Before a virtualized implementation can be benchmarked, `mount` needs a different end condition, such as the scroll height or a row-count attribute.
+**Known limitation: virtualization.** Both tiers consider a mount finished when the last row exists in the DOM. A virtualized (windowed) list never renders it, so the frontend tier fails its precondition and the browser tier times out. Before a virtualized implementation can be benchmarked, `mount` needs a different end condition, such as the scroll height or a row-count attribute. That condition must stand for the work a user waits for, not merely let the scenario finish.
 
 ---
 
@@ -440,7 +443,7 @@ Appending keeps every existing pairing, so saved frontend baselines stay compara
 
 **A new browser scenario.** Add a JavaScript snippet to `e2e/perf/measure.py`, using `window.__bench` helpers such as `until`, `painted`, `byId` and `settled`, and call it from `run_cell`. A snippet that reports `settled_ms` calls `watchLongTasks()` before its action and passes the watcher to `settled()`. The record key you write becomes the scenario name. `report.py` includes every numeric field at the top level of a record and one level inside a dict; it skips booleans and the metadata keys in `META`. A new metadata field therefore goes into `META` too, or the report reads it as a measurement.
 
-**A new size or shape.** Extend `SIZES` / `SHAPES` in both `src/bench/fixtures.ts` and `e2e/perf/cells.py`, and adjust the sample budgets for anything larger than 100,000 rows. A size above 100,000 also needs a sixth digit in both dataset generators, since `item-100000` would sort before `item-99999`. A new shape goes at the **end** of both `SHAPES`, for the same positional pairing as a new scenario. Build its rows in `makeLargeDataset` and in `cells.shape_rows`, pin both to the same literals in `fixtures.test.ts` and `e2e/perf/test_cells.py`, and say whether it has groups in `isGrouped` and `Cell.grouped`. The browser tier repeats the grouping rule in `app_bench.py` (`grouped = shape != "ungrouped"`) and takes the scenario's row ids and search text from the grouped rows in `measure.py::cell_ids`; check both, and the shape lists in the `--perf-shapes` help text in `e2e/perf/conftest.py` and in `app_bench.py`'s docstring.
+**A new size or shape.** Extend `SIZES` / `SHAPES` in both `src/bench/fixtures.ts` and `e2e/perf/cells.py`, and adjust the sample budgets for anything larger than 100,000 rows. A size above 100,000 also needs a sixth digit in both dataset generators, since `item-100000` would sort before `item-99999`. A new size, wherever it goes in `SIZES`, moves every cell of the later shapes: the bench file declares the cells shape by shape, each shape with every size, and vitest's `--compare` pairs them by position. A frontend baseline saved before the change therefore pairs the wrong cells; record both sides again with the new bench file. The browser report pairs records by size and shape and needs nothing. A new shape goes at the **end** of both `SHAPES`, for the same positional pairing as a new scenario. Build its rows in `makeLargeDataset` and in `cells.shape_rows`, pin both to the same literals in `fixtures.test.ts` and `e2e/perf/test_cells.py`, and say whether it has groups in `isGrouped` and `Cell.grouped`. The browser tier repeats the grouping rule in `app_bench.py` (`grouped = shape != "ungrouped"`) and takes the scenario's row ids and search text from the grouped rows in `measure.py::cell_ids`; check both, and the shape lists in the `--perf-shapes` help text in `e2e/perf/conftest.py` and in `app_bench.py`'s docstring.
 
 **After any change to the benchmark code**, run the quick checks:
 
@@ -462,9 +465,9 @@ uv run --extra devel pytest e2e/perf/ -q --perf-out bench-results/smoke.jsonl --
 | `streamlit_listview/frontend/vitest.config.ts` | `benchmark.include`; bench files excluded from coverage |
 | `e2e/perf/app_bench.py` | the Streamlit app the browser tier drives |
 | `e2e/perf/measure.py` | in-page timing snippets and the per-run measurement procedure |
-| `e2e/perf/test_bench.py` | one test per cell: warm-up, then `--perf-reps` records |
+| `e2e/perf/test_bench.py` | one test per cell: warm-up, then `--perf-reps` records; the server's flags |
 | `e2e/perf/conftest.py` | `--perf-*` options, the `perf` marker, the skip and working-directory guards |
-| `e2e/perf/cells.py` | the matrix, each shape's rows, option parsing, bundle check, JSONL writer |
+| `e2e/perf/cells.py` | the matrix, each shape's rows, option parsing, bundle check and name, JSONL writer |
 | `e2e/perf/report.py` | the summary and comparison report |
 | `bench-results/` | your results (gitignored) |
 | `CLAUDE.md`, section "Performance benchmarks" | a summary for coding agents that points here |

@@ -15,6 +15,12 @@ import pytest
 from e2e.perf.cells import Cell, append_record
 from e2e.perf.measure import run_cell
 
+# e2e/conftest.py starts this module's server with these flags. Streamlit's
+# default already sends uncompressed frames, but config.toml or a
+# STREAMLIT_SERVER_ENABLE_WEBSOCKET_COMPRESSION variable could turn compression
+# on and change what every round trip costs; a command line flag outranks both.
+EXTRA_ARGS = ["--server.enableWebsocketCompression=false"]
+
 
 @pytest.mark.perf
 def test_cell(cell: Cell, browser, app, perf):
@@ -26,6 +32,9 @@ def test_cell(cell: Cell, browser, app, perf):
         record.update(
             rep=rep,
             branch=perf.branch,
+            bundle=perf.bundle,
+            streamlit=perf.streamlit,
+            browser=browser.version,
             started=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         )
         append_record(perf.out, record)

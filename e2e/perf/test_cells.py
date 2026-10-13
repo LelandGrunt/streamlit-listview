@@ -3,7 +3,9 @@
 so they run under a plain ``pytest e2e/`` (e2e/perf/conftest.py's go_to_app
 override takes no page)."""
 
+import argparse
 import json
+import subprocess
 import sys
 
 import pytest
@@ -37,6 +39,55 @@ def test_parse_subset_refuses_unknown_or_blank_entries_naming_the_option():
         cells.parse_subset("--perf-sizes", "100,2000", cells.SIZES)
     with pytest.raises(ValueError, match=r"--perf-sizes: '' is not one of"):
         cells.parse_subset("--perf-sizes", "100,,5000", cells.SIZES)
+
+
+@pytest.mark.parametrize("text", ["1", "4", " 10 "])
+def test_at_least_one_accepts_a_whole_number_of_one_or_more(text):
+    assert cells.at_least_one(text) == int(text)
+
+
+@pytest.mark.parametrize("text", ["0", "-1", "2.5", "four", ""])
+def test_at_least_one_refuses_anything_else_naming_the_value(text):
+    with pytest.raises(argparse.ArgumentTypeError) as exc:
+        cells.at_least_one(text)
+    assert str(exc.value) == f"{text!r} is not a whole number of at least 1"
+
+
+@pytest.mark.parametrize("option", ["--perf-reps", "--perf-throttle"])
+def test_pytest_refuses_a_count_below_one_before_collecting(option):
+    # Zero reps once ran the warm-up, wrote no record and passed; a throttle of
+    # 0 ran unthrottled while the record said 0. The command line must fail.
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "e2e/perf/test_cells.py",
+            "--collect-only",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            option,
+            "0",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=cells.REPO_ROOT,
+        check=False,  # the asserts below report the output
+    )
+    assert result.returncode == 4, result.stdout + result.stderr  # usage error
+    assert f"argument {option}: '0' is not a whole number of at least 1" in (
+        result.stderr
+    )
+
+
+def test_the_benchmark_server_sends_uncompressed_websocket_frames():
+    # e2e/conftest.py starts the module's server with its EXTRA_ARGS; a command
+    # line flag outranks config.toml and STREAMLIT_* variables, which could
+    # otherwise turn compression on and change what the round trips cost.
+    from e2e.perf import test_bench
+
+    assert "--server.enableWebsocketCompression=false" in test_bench.EXTRA_ARGS
 
 
 def test_cells_are_shape_major_with_stable_ids():
@@ -117,6 +168,16 @@ def test_require_bundle_refuses_a_checkout_without_a_bundle(tmp_path):
     message = str(exc.value)
     assert str(cells.bundle_dir(tmp_path)) in message
     assert "npm run build" in message
+
+
+def test_describe_bundle_names_the_built_script(tmp_path):
+    # The bundle is gitignored and outlives a checkout of other sources, so the
+    # records name it: its content hash changes with every rebuilt change.
+    build = cells.bundle_dir(tmp_path)
+    build.mkdir(parents=True)
+    (build / "index-abc123.js").write_text("", encoding="utf-8")
+    (build / "index-def456.css").write_text("", encoding="utf-8")
+    assert cells.describe_bundle(tmp_path) == "index-abc123.js"
 
 
 def test_require_run_from_passes_for_the_checkout_root(tmp_path):
