@@ -9,9 +9,16 @@ import re
 import sys
 import zipfile
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 ROOT = Path(__file__).resolve().parent.parent
+
+DISTRIBUTION = "streamlit-listview"
+MANIFEST = "streamlit_listview/pyproject.toml"
+# The component entry __init__.py registers ("streamlit_listview.listview"),
+# and the directory the wheel ships its bundle in.
+COMPONENT_NAME = "listview"
+ASSET_DIR = "frontend/build"
 
 
 def _newest_wheel() -> Path:
@@ -45,6 +52,76 @@ def project_version(pyproject_text: str) -> str:
     return cast(str, match.group(1))
 
 
+def _parse_toml(text: str) -> dict[str, Any]:
+    """Parse `text` as Streamlit does, with `toml`; without it, with `tomllib`.
+
+    Streamlit reads the shipped manifest with `toml` when the server starts
+    (components/v2/manifest_scanner.py). scripts/push_gate.py imports this
+    module on the standard library alone, so `toml` is imported here, not at
+    the top, and the standard library's parser stands in when it is absent.
+    Both raise a ValueError for a document they cannot parse.
+    """
+    try:
+        import toml
+    except ModuleNotFoundError:
+        # ty resolves against Python 3.10, the project's floor; tomllib
+        # arrived in 3.11.
+        import tomllib  # ty: ignore[unresolved-import]
+
+        return tomllib.loads(text)
+    return cast(dict[str, Any], toml.loads(text))
+
+
+def _table(data: Any, *keys: str) -> dict[str, Any]:
+    """The table under `keys`, or an empty one where the path is not a table."""
+    for key in keys:
+        data = data.get(key) if isinstance(data, dict) else None
+    return data if isinstance(data, dict) else {}
+
+
+def manifest_problems(text: str, version: str) -> list[str]:
+    """What keeps Streamlit from using this component manifest; empty if nothing.
+
+    Streamlit takes the manifest only when `[project].name` names the
+    distribution after PEP 503 normalization, and it finds the bundle through
+    the component's `asset_dir`. A manifest that fails to parse or to match
+    leaves the component without its bundle. The version must equal the
+    release's, as tests/test_packaging.py requires of the source copy.
+    """
+    try:
+        data = _parse_toml(text)
+    except ValueError as error:
+        return [f"{MANIFEST} is not valid TOML ({error})"]
+    problems: list[str] = []
+    project = _table(data, "project")
+    name = str(project.get("name", ""))
+    # PEP 503 normalization, as packaging.utils.canonicalize_name does it; the
+    # push gate runs this module without `packaging`.
+    if re.sub(r"[-_.]+", "-", name).lower() != DISTRIBUTION:
+        problems.append(
+            f"[project].name {name!r} is not the distribution {DISTRIBUTION!r}"
+        )
+    if project.get("version") != version:
+        problems.append(
+            f"[project].version {project.get('version')!r} is not {version!r}"
+        )
+    # Streamlit reads only the list's dict entries and treats anything else
+    # as no component at all.
+    components = _table(data, "tool", "streamlit", "component").get("components")
+    entries = components if isinstance(components, list) else []
+    if not any(
+        isinstance(entry, dict)
+        and entry.get("name") == COMPONENT_NAME
+        and entry.get("asset_dir") == ASSET_DIR
+        for entry in entries
+    ):
+        problems.append(
+            "no [[tool.streamlit.component.components]] entry with "
+            f"name {COMPONENT_NAME!r} and asset_dir {ASSET_DIR!r}"
+        )
+    return problems
+
+
 def _expected_version() -> str:
     """Read [project].version from the root pyproject.toml (single source)."""
     text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
@@ -58,6 +135,7 @@ def main() -> None:
     wheel = Path(sys.argv[1]) if len(sys.argv) > 1 else _newest_wheel()
     with zipfile.ZipFile(wheel) as zf:
         names = zf.namelist()
+        manifest = zf.read(MANIFEST).decode("utf-8") if MANIFEST in names else None
 
     def has(pred, desc):
         if not any(pred(n) for n in names):
@@ -133,10 +211,12 @@ def main() -> None:
         )
     print("  ok: frontend/build/ carries nothing beside the bundle and its licenses")
 
-    has(
-        lambda n: n == "streamlit_listview/pyproject.toml",
-        "the nested component manifest",
-    )
+    has(lambda n: n == MANIFEST, "the nested component manifest")
+    expected = _expected_version()
+    problems = manifest_problems(cast(str, manifest), expected)
+    if problems:
+        sys.exit(f"FAIL: wheel {wheel.name}: {'; '.join(problems)}")
+    print("  ok: the manifest names the distribution, the component and its bundle")
 
     # PEP 639: license-files = ["LICENSE", "NOTICE"] must land in dist-info/licenses/
     # so every distributed artifact carries the license text and the third-party
@@ -175,7 +255,6 @@ def main() -> None:
 
     # version sanity: the wheel filename carries the version declared in
     # pyproject.toml (precise prefix match so e.g. 11.0.0 can't satisfy 1.0.0).
-    expected = _expected_version()
     if not wheel.name.startswith(f"streamlit_listview-{expected}-"):
         sys.exit(f"FAIL: wheel {wheel.name} is not version {expected}")
     print(f"  ok: wheel filename is {expected}")

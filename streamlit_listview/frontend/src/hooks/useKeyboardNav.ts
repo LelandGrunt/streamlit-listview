@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import type { Id, ListviewItem } from "../types";
 import { elementAt } from "../utils/arrays";
+import { idKey } from "../utils/ids";
 import type { GroupKey } from "./useCollapse";
 
 /**
@@ -233,12 +234,10 @@ export function useKeyboardNav({
     setGroupState(focus.group);
   }, []);
 
-  // Raw id keys (not `idKey`) are exact here: every focus id originates from
-  // `nodes` itself — either read off a row or handed to `setFocusToId` as that
-  // row's own id — so it is never a foreign spelling of the same key. Map lookup
-  // is SameValueZero, which agrees with `===` for every id the boundary admits
-  // (`7` and `"7"` stay distinct; Python rejects float ids, so NaN — the one
-  // case the two differ on — cannot occur).
+  // Rows are keyed by `idKey`, the one row identity, not by the raw id: a
+  // rerun can ship the focused row with its id in another type (`7` becomes
+  // `"7"` when a DataFrame column changes type), and a raw key then lost the
+  // focus while the row stayed on screen.
   //
   // Maps rather than a scan because `indexOf` runs in the render body: a
   // findIndex compared every row and returned -1 on EVERY render while nothing
@@ -246,13 +245,13 @@ export function useKeyboardNav({
   // two more scans — ~5000 comparisons apiece at the design target. The build
   // is O(rows) at the same cadence as the `focusable` filter above it.
   const { rowIndex, groupIndex } = useMemo(() => {
-    const rows = new Map<Id, number>();
+    const rows = new Map<string, number>();
     const groups = new Map<GroupKey, number>();
     focusable.forEach((node, index) => {
       if (node instanceof GroupNode) {
         groups.set(node.group, index);
       } else {
-        rows.set(node.id, index);
+        rows.set(idKey(node.id), index);
       }
     });
     return { rowIndex: rows, groupIndex: groups };
@@ -263,19 +262,25 @@ export function useKeyboardNav({
       if (group !== undefined) {
         return groupIndex.get(group) ?? -1;
       }
-      return row === null ? -1 : (rowIndex.get(row) ?? -1);
+      return row === null ? -1 : (rowIndex.get(idKey(row)) ?? -1);
     },
     [rowIndex, groupIndex],
   );
 
   // One of the two is set at a time (setFocused writes both).
-  const shown = indexOf({ row: rowState, group: groupState }) >= 0;
-  const focusedId = shown ? rowState : null;
-  const focusedGroup = shown ? groupState : undefined;
+  const index = indexOf({ row: rowState, group: groupState });
+  const focusedNode = index >= 0 ? elementAt(focusable, index) : undefined;
+  // The row's id as `nodes` spells it now, which GroupBlock compares with `===`.
+  const focusedId =
+    focusedNode === undefined || focusedNode instanceof GroupNode
+      ? null
+      : focusedNode.id;
+  const focusedGroup =
+    focusedNode instanceof GroupNode ? focusedNode.group : undefined;
 
   const setFocusToId = useCallback(
     (id: Id) => {
-      if (rowIndex.has(id)) {
+      if (rowIndex.has(idKey(id))) {
         setFocused({ row: id, group: undefined });
       }
     },

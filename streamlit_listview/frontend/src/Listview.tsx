@@ -21,6 +21,7 @@ import { useGroupCollapse } from "./hooks/useGroupCollapse";
 import { useRenderBlocks } from "./hooks/useRenderBlocks";
 import { useSelectAll } from "./hooks/useSelectAll";
 import { useScrollToGroup, useScrollToId } from "./hooks/useScrollToId";
+import { useLatestRequest } from "./hooks/useLatestRequest";
 import type { GroupKey } from "./hooks/useCollapse";
 import { reuseUnchangedItems } from "./utils/items";
 
@@ -225,8 +226,11 @@ export const Listview: FC<ListviewProps> = ({
 
   // DOM scroll for a row id, shared by jump-to-default, keyboard navigation
   // and the reveal of an added row; and for a header the keyboard lands on.
-  const scrollToId = useScrollToId(bodyRef, remeasureRowHeight);
-  const scrollToGroup = useScrollToGroup(bodyRef);
+  // Both start their requests through one counter, so only the latest one
+  // scrolls.
+  const beginScroll = useLatestRequest();
+  const scrollToId = useScrollToId(bodyRef, remeasureRowHeight, beginScroll);
+  const scrollToGroup = useScrollToGroup(bodyRef, beginScroll);
 
   // Keyboard focus moves only need the row brought just inside the frame:
   // "nearest" leaves an already-visible row exactly where it is, so arrowing
@@ -292,6 +296,7 @@ export const Listview: FC<ListviewProps> = ({
   const onAddNewOption = useAddNewOption({
     widgetDisabled,
     allItems,
+    ungroupedLabel,
     selection,
     maxSelections: data.max_selections,
     newOptionKind: data.new_option_kind,

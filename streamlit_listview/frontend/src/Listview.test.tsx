@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { useLayoutEffect } from "react";
 import { Listview } from "./Listview";
 import { ROW_HEIGHT_PROPERTY } from "./hooks/useRowHeight";
-import type { ListviewData } from "./types";
+import type { ListviewData, ListviewItem } from "./types";
 import { makeData } from "./test/makeData";
 
 describe("Listview", () => {
@@ -136,6 +136,36 @@ describe("Listview", () => {
     expect(listbox.getAttribute("aria-activedescendant")).toBe(
       "listview-opt-c",
     );
+  });
+
+  it("keeps the keyboard focus on a row whose id changes type on a rerun", () => {
+    const setStateValue = vi.fn();
+    const items = (id: number | string) => [
+      { id: "first", label: "First" },
+      { id, label: "Seven" },
+    ];
+    const { rerender } = render(
+      <Listview
+        data={makeData({ items: items(7) })}
+        setStateValue={setStateValue}
+      />,
+    );
+    const listbox = screen.getByRole("listbox");
+    fireEvent.keyDown(listbox, { key: "End" });
+    rerender(
+      <Listview
+        data={makeData({ items: items("7") })}
+        setStateValue={setStateValue}
+      />,
+    );
+    const seven = screen.getByText("Seven").closest('[role="option"]')!;
+    expect(listbox.getAttribute("aria-activedescendant")).toBe(
+      "listview-opt-7",
+    );
+    expect(seven.id).toBe("listview-opt-7");
+    expect(seven.classList.contains("listview-item--focused")).toBe(true);
+    fireEvent.keyDown(listbox, { key: "Enter" });
+    expect(setStateValue).toHaveBeenLastCalledWith("selection", ["7"]);
   });
 
   it("multi mode marks the listbox aria-multiselectable and toggles members", async () => {
@@ -492,6 +522,27 @@ describe("collapsible groups", () => {
     expect(screen.queryByText("Apple")).toBeNull(); // collapsed initially
     await user.type(screen.getByTestId("stListviewSearch"), "apple");
     expect(screen.getByText("Apple")).toBeInTheDocument();
+  });
+
+  it("reports a closed group as closed while a search shows its rows", async () => {
+    // aria-expanded follows the group's own state, as the chevron does, not
+    // whether a search shows the rows: clearing the search hides them again.
+    const user = userEvent.setup();
+    render(
+      <Listview
+        data={baseData({
+          enable_search: true,
+          collapsible_groups: true,
+          collapsed_groups: "all",
+        })}
+        setStateValue={vi.fn()}
+      />,
+    );
+    await user.type(screen.getByTestId("stListviewSearch"), "apple");
+    expect(screen.getByText("Apple")).toBeInTheDocument();
+    expect(groupItem("Fruit").getAttribute("aria-expanded")).toBe("false");
+    await user.clear(screen.getByTestId("stListviewSearch"));
+    expect(screen.queryByText("Apple")).toBeNull();
   });
 });
 
@@ -1066,6 +1117,57 @@ describe("accept_new_options", () => {
     await user.keyboard("{Enter}");
     expect(setStateValue).toHaveBeenLastCalledWith("selection", ["muenchen"]);
     expect(screen.getAllByRole("option")).toHaveLength(2); // no new row
+  });
+
+  describe("two rows that match the typed text", () => {
+    // The block without a group renders last wherever its rows stand in the
+    // options, so the order on screen differs from the order of `options`.
+    // The add takes the first match on screen, the row the user sees first.
+    async function addTo(items: ListviewItem[], typed: string) {
+      const user = userEvent.setup();
+      const setStateValue = vi.fn();
+      render(
+        <Listview
+          data={baseData({
+            items,
+            accept_new_options: true,
+            selection_mode: "multi",
+          })}
+          setStateValue={setStateValue}
+        />,
+      );
+      await user.type(screen.getByTestId("stListviewNewOption"), typed);
+      await user.keyboard("{Enter}");
+      return setStateValue;
+    }
+
+    it("selects the first of two equal labels on screen", async () => {
+      const setStateValue = await addTo(
+        [
+          { id: "loose", label: "Match" },
+          { id: "grouped", label: "Match", group: "G" },
+        ],
+        "match",
+      );
+      expect(
+        screen
+          .getAllByTestId(/^stListviewOption-/)
+          .map((row) => row.getAttribute("data-testid")),
+      ).toEqual(["stListviewOption-grouped", "stListviewOption-loose"]);
+      expect(setStateValue).toHaveBeenLastCalledWith("selection", ["grouped"]);
+    });
+
+    it("selects the first of two ids that fold alike on screen", async () => {
+      const setStateValue = await addTo(
+        [
+          { id: "MATCH", label: "Upper" },
+          { id: "match", label: "Lower", group: "G" },
+        ],
+        "Match",
+      );
+      expect(rowTexts()).toEqual(["Lower", "Upper"]);
+      expect(setStateValue).toHaveBeenLastCalledWith("selection", ["match"]);
+    });
   });
 
   it("still adds a value that only PARTIALLY matches an existing label", async () => {
@@ -1828,6 +1930,79 @@ describe("jump to default before the stylesheet applies", () => {
     nextFrame();
     unmount();
     nextFrame();
+    expect(pending()).toBe(0);
+  });
+
+  it("stops waiting when a key moves the focus first", () => {
+    // The jump waits for the sheet; Home asks for another row meanwhile. The
+    // older request gives up, so only the newer one keeps a frame queued.
+    const { body } = jumpBeforeTheSheet();
+    nextFrame();
+    fireEvent.keyDown(screen.getByRole("listbox"), { key: "Home" });
+    expect(pending()).toBe(2);
+    nextFrame();
+    expect(pending()).toBe(1);
+    body.style.overflowY = "auto";
+    nextFrame();
+    expect(body.scrollTop).toBe(0); // Apple, the focused row, stays in view
+    expect(pending()).toBe(0);
+  });
+});
+
+describe("only the latest scroll request moves the list", () => {
+  // Each scroll waits a frame, and a row whose chunk forgets its height waits
+  // up to four more. A request made in the meantime must win: an older one
+  // that scrolled after it moved the list away from the focused node.
+  const { nextFrame, pending } = queueFrames();
+  const FORGET = "listview-chunk--forget";
+
+  /** Apple at the top of the content, Carrot at 260, scrolled to 200. */
+  function setup(data: ListviewData) {
+    const { container } = render(
+      <Listview data={data} setStateValue={vi.fn()} />,
+    );
+    const body = container.querySelector(".listview-body") as HTMLElement;
+    stubGeometry(body, rowFor("Carrot"), { top: 260, scrollTop: 200 });
+    rowFor("Apple").getBoundingClientRect = () =>
+      ({ top: 0 - body.scrollTop, height: 20 }) as DOMRect;
+    const carrotChunk = rowFor("Carrot").parentElement as HTMLElement;
+    carrotChunk.classList.add(FORGET);
+    return { body, carrotChunk };
+  }
+
+  it("lets a newer row request win over an older one that waits for its chunk", () => {
+    const { body, carrotChunk } = setup(baseData());
+    const listbox = screen.getByRole("listbox");
+    fireEvent.keyDown(listbox, { key: "End" }); // Carrot, in a forgetting chunk
+    nextFrame();
+    fireEvent.keyDown(listbox, { key: "Home" }); // Apple
+    nextFrame();
+    expect(body.scrollTop).toBe(0);
+    carrotChunk.classList.remove(FORGET);
+    nextFrame();
+    expect(body.scrollTop).toBe(0); // not 180, Carrot's place
+    expect(listbox.getAttribute("aria-activedescendant")).toBe(
+      "listview-opt-apple",
+    );
+    expect(pending()).toBe(0);
+  });
+
+  it("lets a header the keyboard lands on win over an older row request", () => {
+    const { body, carrotChunk } = setup(baseData({ collapsible_groups: true }));
+    const tree = screen.getByRole("tree");
+    // Fruit's block: content top 0, 90 px tall, under a 30 px header.
+    groupItem("Fruit").getBoundingClientRect = () =>
+      ({ top: 0 - body.scrollTop, height: 90 }) as DOMRect;
+    groupHeader("Fruit").getBoundingClientRect = () =>
+      ({ top: 0, height: 30 }) as DOMRect;
+    fireEvent.keyDown(tree, { key: "End" }); // Carrot, in a forgetting chunk
+    nextFrame();
+    fireEvent.keyDown(tree, { key: "Home" }); // the Fruit header
+    nextFrame();
+    expect(body.scrollTop).toBe(0);
+    carrotChunk.classList.remove(FORGET);
+    nextFrame();
+    expect(body.scrollTop).toBe(0);
     expect(pending()).toBe(0);
   });
 });

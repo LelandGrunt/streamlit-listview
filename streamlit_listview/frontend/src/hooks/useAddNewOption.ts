@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Id, ListviewItem, NewOptionKind } from "../types";
+import { blocksFor } from "../utils/blocks";
 import { idKey, parseNewIntId } from "../utils/ids";
 import { foldForMatch } from "../utils/text";
 import type { ScrollBlock } from "./useScrollToId";
@@ -70,8 +71,11 @@ function refusalForRow(
  * row whose invisible id happened to spell the same text.
  *
  * Ties within a step (two rows folding to the same text) resolve to the first in
- * render order. A disabled row resolves like any other, so typing its label is
- * refused (refusalForRow) rather than spawning a duplicate row.
+ * render order, the row the user sees first, so the caller passes `items` in
+ * that order. The order of `options` differs from it: the block without a group
+ * renders last wherever its rows stand. A disabled row resolves like any other,
+ * so typing its label is refused (refusalForRow) rather than spawning a
+ * duplicate row.
  */
 function findExistingRow(
   items: ListviewItem[],
@@ -93,6 +97,8 @@ export interface UseAddNewOptionArgs {
   widgetDisabled: boolean;
   /** Every rendered row: the options and the synthetic rows (`useNewOptionRows`). */
   allItems: ListviewItem[];
+  /** The header of the block without a group, which `blocksFor` orders by. */
+  ungroupedLabel: string;
   selection: UseSelectionResult;
   /** The `max_selections` cap, which the refusal at the cap names. */
   maxSelections: number | null;
@@ -116,6 +122,7 @@ export interface UseAddNewOptionArgs {
 export function useAddNewOption({
   widgetDisabled,
   allItems,
+  ungroupedLabel,
   selection,
   maxSelections,
   newOptionKind,
@@ -156,8 +163,12 @@ export function useAddNewOption({
       // ones) by row identity AND by visible label, so it matches an existing row
       // whether that row is a known option or an already-added / selected
       // synthetic one. Resolved here in the cold add path, not as a per-render
-      // memo over every row.
-      const existing = findExistingRow(allItems, value);
+      // memo over every row; blocksFor puts the rows in render order, as the
+      // list draws them.
+      const existing = findExistingRow(
+        blocksFor(allItems, ungroupedLabel).flatMap((block) => block.items),
+        value,
+      );
       if (existing !== undefined) {
         // Matches an existing option (a numeric id typed as text, or the label the
         // user can actually see): select that option rather than spawn a
@@ -196,6 +207,7 @@ export function useAddNewOption({
     [
       widgetDisabled,
       allItems,
+      ungroupedLabel,
       selection,
       maxSelections,
       newOptionKind,

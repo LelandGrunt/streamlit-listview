@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Locator, Page, expect
 
 APP_FILE = Path(__file__).with_name("app_native_parity.py")
 AXE = (
@@ -57,25 +57,31 @@ INHERITED: dict[tuple[str, str], str] = {}
 KNOWN_DEFECTS: dict[tuple[str, str], str] = {}
 
 
-def _violations(page: Page) -> list[dict[str, Any]]:
-    """Every violation axe-core reports inside the listview, exceptions included."""
+def _violations(page: Page, root: Locator | None = None) -> list[dict[str, Any]]:
+    """Every violation axe-core reports inside the listview, exceptions included.
+
+    `root` is the listview's stListview element; by default the page's only one.
+    """
     if not AXE.exists():
         pytest.fail(f"{AXE} is missing. Run npm ci in streamlit_listview/frontend.")
     page.add_script_tag(path=str(AXE))
-    result = cast(dict[str, Any], page.get_by_test_id("stListview").evaluate(_RUN))
+    widget = page.get_by_test_id("stListview") if root is None else root
+    result = cast(dict[str, Any], widget.evaluate(_RUN))
     # An empty context reports no violations either, so zero violations prove
     # something only when the scan checked the widget.
     assert result["passes"] > 0, "axe-core checked nothing inside the listview"
     return cast(list[dict[str, Any]], result["violations"])
 
 
-def _scan(page: Page) -> list[dict[str, Any]]:
+def _scan(page: Page, root: Locator | None = None) -> list[dict[str, Any]]:
     excepted = INHERITED.keys() | KNOWN_DEFECTS.keys()
-    return [v for v in _violations(page) if (v["rule"], v["target"]) not in excepted]
+    return [
+        v for v in _violations(page, root) if (v["rule"], v["target"]) not in excepted
+    ]
 
 
-def _assert_accessible(page: Page) -> None:
-    violations = _scan(page)
+def _assert_accessible(page: Page, root: Locator | None = None) -> None:
+    violations = _scan(page, root)
     report = "\n".join(
         f"{v['rule']} ({v['impact']}) at {v['target']}: {v['help']} ({v['url']})"
         for v in violations

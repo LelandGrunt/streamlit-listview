@@ -70,16 +70,14 @@ def test_root_packagedata_bundles_build_and_nested_manifest():
 
 
 def test_nested_manifest_declares_component():
-    text = _read(NESTED_PYPROJECT)
-    assert "[[tool.streamlit.component.components]]" in text
-    assert re.search(r'(?m)^\s*asset_dir\s*=\s*"frontend/build"', text)
     # The component segment stays "listview"; the manifest's [project] name is
     # "streamlit_listview" (canonically matches the distribution "streamlit-listview"),
     # so the qualified name is "streamlit_listview.listview" — matching
-    # st.components.v2.component(...) in __init__.py.
-    names = re.findall(r'(?m)^\s*name\s*=\s*"([^"]+)"', text)
-    assert "listview" in names
-    assert "streamlit_listview" in names
+    # st.components.v2.component(...) in __init__.py. Parsed with the parser
+    # Streamlit reads the shipped copy with, as verify_wheel does.
+    assert (
+        verify_wheel.manifest_problems(_read(NESTED_PYPROJECT), EXPECTED_VERSION) == []
+    )
 
 
 def test_init_registers_qualified_name():
@@ -92,12 +90,26 @@ def test_init_registers_qualified_name():
 _DIST_INFO = f"streamlit_listview-{EXPECTED_VERSION}.dist-info"
 
 
-def _fake_wheel(tmp_path: Path, entries: list[str]) -> Path:
-    """Zip up `entries` under a correctly named wheel filename."""
+_MANIFEST_ENTRY = verify_wheel.MANIFEST
+
+
+def _fake_wheel(
+    tmp_path: Path, entries: list[str], manifest: str | None = None
+) -> Path:
+    """Zip up `entries` under a correctly named wheel filename.
+
+    The component manifest holds `manifest`, by default the source's own, since
+    verify_wheel parses it; every other entry holds a placeholder.
+    """
     wheel = tmp_path / f"streamlit_listview-{EXPECTED_VERSION}-py3-none-any.whl"
     with zipfile.ZipFile(wheel, "w") as zf:
         for name in entries:
-            zf.writestr(name, "x")
+            if name == _MANIFEST_ENTRY:
+                zf.writestr(
+                    name, _read(NESTED_PYPROJECT) if manifest is None else manifest
+                )
+            else:
+                zf.writestr(name, "x")
     return wheel
 
 
@@ -109,7 +121,7 @@ def _good_entries() -> list[str]:
         "streamlit_listview/frontend/build/index-abc123.js",
         "streamlit_listview/frontend/build/index-abc123.css",
         "streamlit_listview/frontend/build/THIRD_PARTY_LICENSES.md",
-        "streamlit_listview/pyproject.toml",
+        _MANIFEST_ENTRY,
         f"{_DIST_INFO}/licenses/LICENSE",
         f"{_DIST_INFO}/licenses/NOTICE",
     ]
@@ -182,6 +194,74 @@ def test_verify_wheel_rejects_a_module_missing_from_the_source(monkeypatch, tmp_
         "files absent from the source tree: streamlit_listview/_removed_module.py"
         in str(exc.value)
     )
+
+
+_SOURCE_MANIFEST = _read(NESTED_PYPROJECT)
+_NO_COMPONENT = (
+    "no [[tool.streamlit.component.components]] entry with "
+    "name 'listview' and asset_dir 'frontend/build'"
+)
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "message"),
+    [
+        (
+            "[project]",
+            "[project",
+            "streamlit_listview/pyproject.toml is not valid TOML",
+        ),
+        (
+            'name = "streamlit_listview"',
+            'name = "other_package"',
+            (
+                "[project].name 'other_package' is not the distribution "
+                "'streamlit-listview'"
+            ),
+        ),
+        (
+            f'version = "{EXPECTED_VERSION}"',
+            'version = "9.9.9"',
+            f"[project].version '9.9.9' is not '{EXPECTED_VERSION}'",
+        ),
+        ('asset_dir = "frontend/build"', 'asset_dir = "build"', _NO_COMPONENT),
+        ('name = "listview"', 'name = "list_view"', _NO_COMPONENT),
+        # Not a table, not a list, not a dict entry: Streamlit registers nothing.
+        ("[project]", "project = 1\n[other]", "[project].name '' is not"),
+        (
+            "[[tool.streamlit.component.components]]",
+            "components = 1\n[x]",
+            _NO_COMPONENT,
+        ),
+        (
+            "[[tool.streamlit.component.components]]",
+            '[tool.streamlit.component]\ncomponents = ["listview"]\n[x]',
+            _NO_COMPONENT,
+        ),
+    ],
+)
+def test_verify_wheel_rejects_a_manifest_streamlit_cannot_use(
+    monkeypatch, tmp_path, old, new, message
+):
+    # Streamlit reads the shipped manifest when the server starts: it matches
+    # [project].name to the distribution and finds the bundle by the
+    # component's asset_dir. A wheel whose manifest fails either registers no
+    # component, so the gate parses it, not just its file name.
+    assert old in _SOURCE_MANIFEST
+    manifest = _SOURCE_MANIFEST.replace(old, new, 1)
+    with pytest.raises(SystemExit) as exc:
+        _verify(monkeypatch, _fake_wheel(tmp_path, _good_entries(), manifest))
+    assert message in str(exc.value)
+
+
+def test_verify_wheel_parses_the_manifest_without_toml(monkeypatch):
+    # scripts/push_gate.py imports verify_wheel on the standard library alone,
+    # so the manifest parse must work without Streamlit's `toml` package.
+    monkeypatch.setitem(sys.modules, "toml", None)
+    assert verify_wheel.manifest_problems(_SOURCE_MANIFEST, EXPECTED_VERSION) == []
+    problems = verify_wheel.manifest_problems("[project", EXPECTED_VERSION)
+    assert len(problems) == 1
+    assert problems[0].startswith(f"{verify_wheel.MANIFEST} is not valid TOML")
 
 
 def test_verify_wheel_rejects_a_leaked_build_backend(monkeypatch, tmp_path):

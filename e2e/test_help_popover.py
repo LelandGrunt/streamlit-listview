@@ -12,6 +12,8 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import Locator, Page, expect
 
+from e2e.test_accessibility import _assert_accessible
+
 APP_FILE = Path(__file__).with_name("app_help.py")
 
 # Playwright's WebKit, like Safari by default, leaves links out of the Tab
@@ -118,3 +120,10 @@ def test_long_help_in_the_sidebar_stays_inside_the_viewport(page: Page):
 def test_a_code_label_names_the_listbox_by_its_text(page: Page):
     # The label renders "*" in a code chip; the name must say the same.
     expect(page.get_by_role("listbox", name="*", exact=True)).to_have_count(1)
+
+
+def test_a_code_label_passes_the_accessibility_scan(page: Page):
+    # Without a name, axe-core reports aria-input-field-name (serious).
+    root = _listview(page, "*")
+    expect(root).to_have_count(1)
+    _assert_accessible(page, root)

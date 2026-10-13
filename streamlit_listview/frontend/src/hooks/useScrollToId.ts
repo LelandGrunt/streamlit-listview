@@ -121,6 +121,13 @@ function findNode(
  * the listbox resized, which is a frame after this jump would measure. So
  * attempt() measures the first row again before it measures the target.
  *
+ * Both waits span frames, so a later request can overtake an earlier one:
+ * End waits for a forgetting chunk, Home scrolls, and the End retry then
+ * scrolled the list away from the focused row. `beginRequest` (the `begin`
+ * of useLatestRequest) numbers the requests, and a request that is no longer
+ * the latest stops at its next frame. useScrollToGroup counts with the same
+ * `begin`, so a header the keyboard lands on supersedes a waiting row too.
+ *
  * `remeasureRowHeight` is the function useRowHeight returns. The returned
  * callback keeps its identity across renders (its inputs do), which the
  * reveal effect in useAddNewOption relies on.
@@ -128,10 +135,15 @@ function findNode(
 export function useScrollToId(
   bodyRef: RefObject<HTMLDivElement | null>,
   remeasureRowHeight: () => void,
+  beginRequest: () => () => boolean,
 ): (id: Id, block?: ScrollBlock) => void {
   return useCallback(
     (id: Id, block: ScrollBlock = "center") => {
+      const isLatest = beginRequest();
       const attempt = (framesLeft: number): void => {
+        if (!isLatest()) {
+          return;
+        }
         const body = bodyRef.current;
         // Unreachable in practice: the body renders unconditionally, and this
         // callback only runs after a commit. It guards an unmount racing the
@@ -191,8 +203,8 @@ export function useScrollToId(
       };
       const whenStyled = (framesLeft: number): void => {
         const body = bodyRef.current;
-        if (!body) {
-          return; // unmounted while it waited
+        if (!body || !isLatest()) {
+          return; // unmounted, or a later request took over, while it waited
         }
         if (framesLeft > 0 && !isStyled(body)) {
           requestAnimationFrame(() => whenStyled(framesLeft - 1));
@@ -202,7 +214,7 @@ export function useScrollToId(
       };
       requestAnimationFrame(() => whenStyled(STYLE_WAIT_FRAMES));
     },
-    [bodyRef, remeasureRowHeight],
+    [bodyRef, remeasureRowHeight, beginRequest],
   );
 }
 
@@ -213,12 +225,18 @@ export function useScrollToId(
  * the header's bottom edge, the way a row does; a group scrolled away above
  * comes back to the frame's top, header and first rows. Measured from the
  * group's block, which is not sticky. The list body only, as in useScrollToId.
+ *
+ * It scrolls in its first frame, so no later request can overtake it; it only
+ * starts a request with the `beginRequest` useScrollToId gets, so a row
+ * request still waiting for its chunk gives up.
  */
 export function useScrollToGroup(
   bodyRef: RefObject<HTMLDivElement | null>,
+  beginRequest: () => () => boolean,
 ): (group: GroupKey) => void {
   return useCallback(
     (group: GroupKey) => {
+      beginRequest();
       requestAnimationFrame(() => {
         const body = bodyRef.current;
         // Unreachable in practice: it guards an unmount racing the rAF.
@@ -242,6 +260,6 @@ export function useScrollToGroup(
         }
       });
     },
-    [bodyRef],
+    [bodyRef, beginRequest],
   );
 }

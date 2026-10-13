@@ -75,6 +75,31 @@ describe("WidgetLabel", () => {
     ).not.toBeNull();
   });
 
+  it.each([
+    ["`*`", "*"],
+    ["`__init__`", "__init__"],
+    ["`:material/check:`", ":material/check:"],
+  ])(
+    "names a code label %s by the text its code chip shows",
+    (label, shown) => {
+      // Code renders verbatim, so the name keeps its markers and icon syntax.
+      const { container } = render(
+        <WidgetLabel
+          label={label}
+          help={null}
+          labelVisibility="visible"
+          disabled={false}
+          textId="name-src"
+        />,
+      );
+      expect(
+        container.querySelector(".listview-widget-label__text code")
+          ?.textContent,
+      ).toBe(shown);
+      expect(container.querySelector("#name-src")?.textContent).toBe(shown);
+    },
+  );
+
   it("hides the row with visibility:hidden when label_visibility=hidden", () => {
     const { container } = render(
       <WidgetLabel

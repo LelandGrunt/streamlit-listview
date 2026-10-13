@@ -165,9 +165,9 @@ flowchart LR
   | `tests/test_push_gate.py` | The workflows call the push gate with the full git history, and CI's `e2e` job runs the browser suite that the push gate runs. |
   | `tests/test_harness.py` | CI's `lint` job checks out the whole history for gitleaks, and the hooks that need the network or a browser stay manual. |
 
-- **Two rules exist in both languages:** row identity and the canonical integer for new entries. Both suites test the canonical-integer rule with the same input table.
+- **Five rules exist in both languages:** row identity, the canonical integer for new entries, the block a row renders in, the row of a new entry with dict options, and the reconciliation of the selection. The root `CLAUDE.md` names both copies of each. Both suites test the canonical-integer rule with the same input table.
 - **The e2e suite** (Playwright) drives a real Streamlit server: harness apps, the demo, and regression tests for fixed rendering bugs. CI's `e2e` job and the push gate run it in Chromium; a manual hook runs it in Firefox and WebKit.
-  - `e2e/test_accessibility.py` scans the widget with axe-core against WCAG 2.1 A and AA, in seven states and both themes. Its `color-contrast` rule is the contrast check.
+  - `e2e/test_accessibility.py` scans the widget with axe-core against WCAG 2.1 A and AA, in seven states and both themes. Its `color-contrast` rule is the contrast check. `e2e/test_help_popover.py` runs the same scan on a listview whose label is written as code.
   - *Gaps and next steps* lists the widget defects that the scan excepts or that make a test skip a browser. A test fails once the scan stops reporting an excepted defect, so the defect's fix removes its entry.
   - The native-parity tests compare the widget's measured colors with the native Streamlit widget on the same page, never with a hardcoded value. They run again under the dark theme.
 - **The benchmarks and the visual comparison** run by hand. [BENCHMARKS.md](BENCHMARKS.md) and [scripts/gif/README.md](scripts/gif/README.md) describe them.
@@ -176,7 +176,7 @@ flowchart LR
 
 - **The build backend** (`_build_backend.py`) runs `npm run build` for every wheel, sdist and editable build. With `LISTVIEW_SKIP_NPM_BUILD=1`, or without `frontend/src`, it skips npm and fails unless `build/` holds exactly one `index-*.js` and one `index-*.css`. Before a wheel it drops setuptools' staged copy of the package in `build/lib`, whose old bundle or deleted modules would otherwise ship beside the current files, and it stops the build when it cannot.
 - **Registration** requires exactly one `index-*.js` and one `index-*.css`; a second chunk fails at import.
-- **`scripts/verify_wheel.py`** checks the built wheel: under `frontend/build/` exactly one JS file, one CSS file and `THIRD_PARTY_LICENSES.md`, and nothing else; no other package file that the source tree lacks; the component manifest; the license files; and no `_build_backend.py`. It also checks that the file name carries the version of the root `pyproject.toml`.
+- **`scripts/verify_wheel.py`** checks the built wheel: under `frontend/build/` exactly one JS file, one CSS file and `THIRD_PARTY_LICENSES.md`, and nothing else; no other package file that the source tree lacks; the component manifest, parsed with `toml` as Streamlit parses it (with the standard library's `tomllib` where `toml` is absent, as in the push gate), for the distribution's name, the release's version and the `listview` component with its `asset_dir`; the license files; and no `_build_backend.py`. It also checks that the file name carries the version of the root `pyproject.toml`.
 - **The licenses of the bundled packages:** Vite writes every npm package the bundle carries, with its license text, into `THIRD_PARTY_LICENSES.md` next to the bundle (`build.license`), and `NOTICE` points to it.
 - **`licenses.test.ts`** allows MIT, ISC, Apache-2.0, BSD-2-Clause, BSD-3-Clause and 0BSD for every npm package that can reach the bundle; a dev-only package is exempt.
 - **`twine check --strict`** checks that PyPI can render the package metadata.
@@ -342,7 +342,7 @@ The tables follow the nine categories of the Harness Inventory and list each of 
 | JSON Schema, OpenAPI validation | 🟡 | ◐ | no schema; `listview()` validates every argument before the JSON boundary, and TypeScript types the payload | runtime, CI | yes |
 | Database migration dry-run | 🟡 | — | no database | — | — |
 | PII scanner | 🟡 | — | the widget stores no personal data | — | — |
-| Config validation | 🔴 | ✅ | the push gate checks the version in five places, `uv.lock` and the changelog; `test_packaging.py` checks the component manifest; `uv audit --locked` fails on a stale `uv.lock` | pre-commit, push gate, CI, release | yes |
+| Config validation | 🔴 | ✅ | the push gate checks the version in five places, `uv.lock` and the changelog; `test_packaging.py` and `verify_wheel.py` parse the component manifest; `uv audit --locked` fails on a stale `uv.lock` | pre-commit, push gate, CI, release | yes |
 | Data contract | 🔴 | — | no data pipeline | — | — |
 
 ### 6. UX, accessibility, internationalization

@@ -610,6 +610,43 @@ describe("focus while the focusable list changes", () => {
     expect(seen).toEqual(["d"]);
   });
 
+  // A rerun can ship the same row with its id in another type, as when a
+  // DataFrame column changes from int to str. idKey keys both spellings as one
+  // row, so the focus must stay on it.
+  it.each([
+    [7, "7"],
+    ["7", 7],
+  ] as const)(
+    "keeps the focus on a row whose id changes from %j to %j",
+    (from, to) => {
+      const withSeven = (id: Id): ListviewItem[] => [
+        { id: "a", label: "Alpha" },
+        { id, label: "Seven" },
+        { id: "z", label: "Zulu" },
+      ];
+      const { result, rerender, onSelect } = setup(withSeven(from));
+      act(() => result.current.onKeyDown(keyEvent("ArrowDown")));
+      act(() => result.current.onKeyDown(keyEvent("ArrowDown")));
+      expect(result.current.focusedId).toBe(from);
+      rerender({ items: withSeven(to) });
+      // The row's current spelling, which GroupBlock compares with `===`.
+      expect(result.current.focusedId).toBe(to);
+      act(() => result.current.onKeyDown(keyEvent("Enter")));
+      expect(onSelect).toHaveBeenCalledWith(to);
+      act(() => result.current.onKeyDown(keyEvent("ArrowDown")));
+      expect(result.current.focusedId).toBe("z");
+    },
+  );
+
+  it("setFocusToId finds a row by another spelling of its id", () => {
+    const { result } = setup([
+      { id: "a", label: "Alpha" },
+      { id: 7, label: "Seven" },
+    ]);
+    act(() => result.current.setFocusToId("7"));
+    expect(result.current.focusedId).toBe(7);
+  });
+
   it("navigating while the focused row is hidden starts over from the top", () => {
     const { result, rerender } = setup(full);
     act(() => result.current.onKeyDown(keyEvent("End")));

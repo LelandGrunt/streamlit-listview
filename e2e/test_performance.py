@@ -46,14 +46,19 @@ def test_large_list_renders_all_rows_within_budget(page: Page, app: StreamlitRun
     page.goto(app.server_url)
     root = page.get_by_test_id("stListview").first
     expect(root).to_be_visible(timeout=20000)
-    # Non-virtualized: the LAST row existing in the DOM proves the whole list
-    # rendered. Assert presence (count), not visibility — it sits below the fold.
-    last = root.get_by_test_id(f"stListviewOption-{LAST_ID}")
-    expect(last).to_have_count(1, timeout=30000)
+    # Non-virtualized: every row is in the DOM. Count them all, because the
+    # last row stays in place when a render chunk in the middle goes missing.
+    # Assert presence (count), not visibility — most rows sit below the fold.
+    rows = root.locator("[data-testid^='stListviewOption-']")
+    expect(rows).to_have_count(N, timeout=30000)
     elapsed = time.perf_counter() - start
     assert elapsed < RENDER_BUDGET_S, (
         f"render took {elapsed:.1f}s (budget {RENDER_BUDGET_S}s)"
     )
+    # The groups are contiguous batches of the generated rows, so the list
+    # renders them in the generator's order.
+    rendered = rows.evaluate_all("(rows) => rows.map((row) => row.dataset.testid)")
+    assert rendered == [f"stListviewOption-{row['id']}" for row in _ROWS]
 
 
 def test_large_list_stays_responsive(page: Page, app: StreamlitRunner):
