@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import reprlib
 from collections.abc import Callable, Iterable
 from typing import Any, Literal, TypeGuard
 
@@ -108,6 +109,8 @@ def _validate_params(  # noqa: C901 -- older than the complexity limit; split it
     disabled: Any,
     format_func: Any,
     on_change: Any,
+    args: Any,
+    kwargs: Any,
     select_all: Any,
     sort: Any,
     sort_ascending: Any,
@@ -213,6 +216,18 @@ def _validate_params(  # noqa: C901 -- older than the complexity limit; split it
     if on_change is not None and not callable(on_change):
         raise ValueError("on_change must be callable or None.")
 
+    # args and kwargs reach on_change only when the user changes the selection,
+    # so a wrong type would surface at the first click instead of here. The
+    # accepted shapes are Streamlit's own (WidgetArgs, WidgetKwargs).
+    if args is not None and not isinstance(args, (tuple, list)):
+        raise ValueError(f"args must be a tuple, a list or None, got {args!r}.")
+    if kwargs is not None and not (
+        isinstance(kwargs, dict) and all(isinstance(name, str) for name in kwargs)
+    ):
+        raise ValueError(
+            f"kwargs must be a dict with str keys or None, got {kwargs!r}."
+        )
+
 
 def _resolve_default_ids(  # noqa: C901 -- older than the complexity limit; split it when you next change it
     default: Any,
@@ -225,7 +240,7 @@ def _resolve_default_ids(  # noqa: C901 -- older than the complexity limit; spli
     single: a scalar (non-list) default d -> [d] (or [] when None).
     multi:  a list default -> that list (or [] when None).
     Shape mismatches raise ValueError. Every id must pass the same boundary gate
-    as an option id (``_validate_id``: exactly str or int, bool rejected, ints
+    as an option id (``_validate_id``: str or int, bool rejected, ints
     within the JS safe range) — a default is seeded straight into the frontend
     selection, so it crosses the same JSON/``String(id)`` boundary. When
     ``kind`` is None (``accept_new_options`` off), every resolved id must
@@ -349,41 +364,46 @@ def _persisted_selection(key: str | None) -> list[Any] | None:
     the rows from ``default`` while ``listview()`` kept returning the persisted
     selection, and the next click silently overwrote it.
 
-    Best-effort by design: anything short of a well-shaped state degrades to
-    None ("nothing persisted; seed from default_ids"). That covers no ``key``,
-    a first run where the widget state does not exist yet (KeyError), and an
-    environment with no Streamlit runtime at all — the unit suite imports real
-    streamlit without a script run context, where the read hits the bare-mode
-    mock session state and raises KeyError too. The shape check (a dict with a
-    list under "selection" whose every element passes ``_validate_id``) guards
-    against a caller having overwritten the key with arbitrary user state — the
-    key is user-writable, and an app that pre-seeds it (or assigns the selection
-    from data) can put a Decimal, a date or a numpy int in the list. Those ids
-    cross the same JSON/``String(id)`` boundary as an option id, and an
-    unrepresentable one blanks the widget with no Python error (see
-    ``_validate_id``), so the list is trusted whole or not at all: filtering
-    single elements would be a fourth way for the rendered rows to disagree
-    with the returned value.
+    None means "nothing persisted; seed from default_ids": no ``key``, or a
+    first run where the widget state does not exist yet (KeyError). An
+    environment with no Streamlit runtime at all answers the same — the unit
+    suite imports real streamlit without a script run context, where the read
+    hits the bare-mode mock session state and raises KeyError too.
+
+    Any other value must be a well-shaped state — a dict with a list under
+    "selection" whose every element passes ``_validate_id`` — or this raises
+    ValueError before the widget mounts. The key is user-writable, and an app
+    that pre-seeds it (or assigns the selection from data) can put anything
+    there: a Decimal, a date or a numpy int in the list, or no list at all. The
+    component reads that value back as its state, so ``listview()`` would map
+    it to a return value while the rows showed ``default``: ``[1.0]`` against
+    the options "1.0" and "fallback" showed "fallback" and returned "1.0", on
+    every rerun, with no error. Degrading to None therefore cannot keep the two
+    in step, and neither can filtering out single elements.
     """
     if key is None:
         return None
     try:
         state = st.session_state[key]
-    except Exception:  # noqa: BLE001
-        # A missing key raises KeyError; session-state access can also raise
-        # StreamlitAPIException for keys it refuses to serve. Every failure
-        # means the same thing here: nothing persisted.
+    except KeyError:
         return None
-    if not isinstance(state, dict):
-        return None
-    selection = state.get("selection")
+    remedy = (
+        f"st.session_state[{key!r}] must hold the state of a listview: a dict "
+        "whose 'selection' is a list of str or int ids. Keep your own data "
+        f"under another key, or delete this one (del st.session_state[{key!r}]) "
+        "before the listview renders; pass default= to preselect rows."
+    )
+    selection = state.get("selection") if isinstance(state, dict) else None
     if not isinstance(selection, list):
-        return None
+        # reprlib: the value can be anything, a million-element list included.
+        raise ValueError(f"{remedy} It holds {reprlib.repr(state)}.")
     try:
         for item_id in selection:
-            _validate_id(item_id, kind="persisted")
-    except ValueError:
-        return None
+            _validate_id(
+                item_id, kind="persisted", context=f" in st.session_state[{key!r}]"
+            )
+    except ValueError as exc:
+        raise ValueError(f"{exc} {remedy}") from None
     # A copy: the V2 presenter hands out a live write-through view of the
     # widget state, and the payload must not alias it.
     return list(selection)
@@ -417,7 +437,7 @@ def listview(
     disabled: bool = False,
     label_visibility: Literal["visible", "hidden", "collapsed"] = "visible",
     on_change: Callable[..., None] | None = None,
-    args: tuple[Any, ...] | None = None,
+    args: tuple[Any, ...] | list[Any] | None = None,
     kwargs: dict[str, Any] | None = None,
     key: str | None = None,
 ) -> dict[str, Any] | str | int | list[Any] | None:
@@ -494,6 +514,8 @@ def listview(
         disabled=disabled,
         format_func=format_func,
         on_change=on_change,
+        args=args,
+        kwargs=kwargs,
         select_all=select_all,
         sort=sort,
         sort_ascending=sort_ascending,
@@ -557,8 +579,8 @@ def listview(
     if on_change is None:
         on_selection_change = lambda: None
     else:
-        cb_args = args or ()
-        cb_kwargs = kwargs or {}
+        cb_args = () if args is None else args
+        cb_kwargs = {} if kwargs is None else kwargs
 
         def on_selection_change() -> None:
             on_change(*cb_args, **cb_kwargs)

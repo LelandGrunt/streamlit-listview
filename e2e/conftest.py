@@ -38,6 +38,7 @@ LISTVIEW_COUNTS = {
     "app_remount.py": 1,  # keyed single that moves between sidebar and main
     "app_jump_remount.py": 1,  # a keyed list whose key carries its default
     "app_row_height.py": 1,  # a keyed list whose rows change height on a rerun
+    "app_enum_ids.py": 2,  # keyed lists whose ids subclass str and int
     "app_sidebar_theme.py": 2,  # the same list in the sidebar and the main body
     "app_native_parity.py": 1,  # one list beside the native widgets it mirrors
     "app_help.py": 4,  # long help, linked help, a code label, long help in the sidebar

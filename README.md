@@ -167,15 +167,15 @@ def listview(
 | `disabled`           | Disables the whole widget.                                                                                                           |
 | `label_visibility`   | `"visible"`, `"hidden"` (keeps the label's space), or `"collapsed"`.                                                                 |
 | `on_change`          | Callback invoked when the selection changes, called as `on_change(*args, **kwargs)`.                                                 |
-| `args`               | Positional arguments for `on_change`.                                                                                                |
-| `kwargs`             | Keyword arguments for `on_change`.                                                                                                   |
+| `args`               | Positional arguments for `on_change`: a tuple or a list.                                                                             |
+| `kwargs`             | Keyword arguments for `on_change`: a dict with `str` keys.                                                                           |
 | `key`                | Widget identity across reruns — strongly recommended (see [Keying](#keying)).                                                        |
 
 ### Options
 
 - **Simple values** (`str | int`): the value is both the id and the label, e.g. `["Apple", "Banana"]`.
 - **Dicts**: `{"id": ..., "label": ..., "group": ..., "disabled": ...}`
-  - `id` (**required**; `str` or `int` — nothing else, not even `bool` or `float`)
+  - `id` (**required**; `str` or `int`, an enum member of either included — nothing else, not even `bool` or `float`)
   - `label` (optional display text). When it is missing, `None` or NaN, `format_func(option)` supplies the label, or `str(id)` when `format_func` is `None` (the default). `df.to_dict("records")` yields `None` or NaN for a NULL cell.
   - `group` (optional `str`). Options sharing a `group` render under one header. Once any option has a `group`, the options without one render last, under the `ungrouped_label` header. A group named like that header shares their block; set another `ungrouped_label`, such as `"N/A"`, to keep the two apart.
   - `disabled` (optional `bool`; visible but not selectable)
@@ -184,6 +184,8 @@ def listview(
 An empty `options` with `accept_new_options=False` leaves nothing to select: the widget is disabled and shows `placeholder`, by default "No options to select".
 
 Ids are validated at the boundary, because the frontend identifies each row by JavaScript `String(id)`. They must be **unique as rendered**: `1` and `"1"` collide. An `int` id must fit JavaScript's safe-integer range (`abs(id) <= 2**53 - 1`), because the payload travels as JSON and larger ints lose precision as doubles; use the string form for BIGINT or snowflake keys.
+
+An id that subclasses `str` or `int`, such as a member of `class Color(str, Enum)` or of an `IntEnum`, counts as its value, the form in which JSON carries it: a click on the row of `Color.RED` returns that option, `default="red"` names that row, and `Color.RED` collides with `"red"`. Its label stays `str(id)`, here `"Color.RED"`, unless the option has a `label` or `format_func` supplies one.
 
 `default` ids are validated exactly like option ids: `str` or `int` only (`bool` is rejected), an `int` must satisfy `abs(id) <= 2**53 - 1`, and — unless `accept_new_options=True` — each must name an option by its rendered `String(id)` identity. With `accept_new_options=True` and int options, an unknown `default` must be a whole number (`42` or `"42"`), because it comes back as an int; anything else raises `ValueError`.
 
@@ -318,7 +320,7 @@ The hover highlight uses CSS relative color syntax (Chrome/Edge 119+, Firefox 12
 
 `key` is **strongly recommended for any dynamic app.** With a `key`, Streamlit updates the existing element in place when other parameters change, so frontend-local UI state (collapse, search text, focus, scroll) **and** the selection survive. Without a `key`, *any* parameter change remounts the widget and resets that state — so changing the `key` is the deliberate way to reset the widget.
 
-A keyed widget's selection also survives moving it between containers (say `st.sidebar` ↔ the main body): the move rebuilds the frontend, but the widget re-seeds its rows from the selection persisted in `st.session_state`, so the rows and the returned value both carry over — only frontend-local UI state (search text, scroll, collapse) resets.
+A keyed widget's selection also survives moving it between containers (say `st.sidebar` ↔ the main body): the move rebuilds the frontend, but the widget re-seeds its rows from the selection persisted in `st.session_state`, so the rows and the returned value both carry over — only frontend-local UI state (search text, scroll, collapse) resets. Keep data of your own under another key: a value in `st.session_state[key]` that is not the listview's state raises `ValueError`, because the rows could not show it while `listview()` returned it.
 
 Because the selection survives, two parameters only take effect at mount: changing `default` on a keyed widget moves neither the displayed selection nor the returned value — it only scrolls the newly named row into view — and changing `collapsed_groups` never re-collapses a group that has already been shown ([Collapsible groups](#collapsible-groups)). Change the `key` to re-apply either. A keyed selection that no longer fits the current parameters is corrected instead — see [Changing `options`, `max_selections` or `selection_mode` later](#changing-options-max_selections-or-selection_mode-later).
 

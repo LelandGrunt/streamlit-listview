@@ -103,6 +103,9 @@ def _fake_wheel(tmp_path: Path, entries: list[str]) -> Path:
 
 def _good_entries() -> list[str]:
     return [
+        "streamlit_listview/__init__.py",
+        "streamlit_listview/_options.py",
+        "streamlit_listview/py.typed",
         "streamlit_listview/frontend/build/index-abc123.js",
         "streamlit_listview/frontend/build/index-abc123.css",
         "streamlit_listview/frontend/build/THIRD_PARTY_LICENSES.md",
@@ -164,6 +167,20 @@ def test_verify_wheel_rejects_an_extra_file_under_build(monkeypatch, tmp_path):
     assert (
         "unexpected files under frontend/build/: "
         "streamlit_listview/frontend/build/extra.txt" in str(exc.value)
+    )
+
+
+def test_verify_wheel_rejects_a_module_missing_from_the_source(monkeypatch, tmp_path):
+    # setuptools ships whatever its staging directory build/lib holds, so a
+    # module deleted from the source can ship from an earlier build's copy.
+    wheel = _fake_wheel(
+        tmp_path, [*_good_entries(), "streamlit_listview/_removed_module.py"]
+    )
+    with pytest.raises(SystemExit) as exc:
+        _verify(monkeypatch, wheel)
+    assert (
+        "files absent from the source tree: streamlit_listview/_removed_module.py"
+        in str(exc.value)
     )
 
 

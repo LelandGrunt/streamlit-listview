@@ -174,9 +174,9 @@ flowchart LR
 
 ### Build and packaging checks
 
-- **The build backend** (`_build_backend.py`) runs `npm run build` for every wheel, sdist and editable build. With `LISTVIEW_SKIP_NPM_BUILD=1`, or without `frontend/src`, it skips npm and fails unless `build/` holds exactly one `index-*.js` and one `index-*.css`. Before a wheel it drops setuptools' staged copy of the package in `build/lib`, whose old bundle or deleted modules would otherwise ship beside the current files.
+- **The build backend** (`_build_backend.py`) runs `npm run build` for every wheel, sdist and editable build. With `LISTVIEW_SKIP_NPM_BUILD=1`, or without `frontend/src`, it skips npm and fails unless `build/` holds exactly one `index-*.js` and one `index-*.css`. Before a wheel it drops setuptools' staged copy of the package in `build/lib`, whose old bundle or deleted modules would otherwise ship beside the current files, and it stops the build when it cannot.
 - **Registration** requires exactly one `index-*.js` and one `index-*.css`; a second chunk fails at import.
-- **`scripts/verify_wheel.py`** checks the built wheel: under `frontend/build/` exactly one JS file, one CSS file and `THIRD_PARTY_LICENSES.md`, and nothing else; the component manifest; the license files; and no `_build_backend.py`. It also checks that the file name carries the version of the root `pyproject.toml`.
+- **`scripts/verify_wheel.py`** checks the built wheel: under `frontend/build/` exactly one JS file, one CSS file and `THIRD_PARTY_LICENSES.md`, and nothing else; no other package file that the source tree lacks; the component manifest; the license files; and no `_build_backend.py`. It also checks that the file name carries the version of the root `pyproject.toml`.
 - **The licenses of the bundled packages:** Vite writes every npm package the bundle carries, with its license text, into `THIRD_PARTY_LICENSES.md` next to the bundle (`build.license`), and `NOTICE` points to it.
 - **`licenses.test.ts`** allows MIT, ISC, Apache-2.0, BSD-2-Clause, BSD-3-Clause and 0BSD for every npm package that can reach the bundle; a dev-only package is exempt.
 - **`twine check --strict`** checks that PyPI can render the package metadata.

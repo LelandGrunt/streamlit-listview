@@ -153,6 +153,26 @@ def main() -> None:
         sys.exit(f"FAIL: wheel {wheel.name} must not ship _build_backend.py")
     print("  ok: build backend excluded from the wheel")
 
+    # setuptools ships whatever its staging directory build/lib holds, so a
+    # module deleted from the source can ship from an earlier build's copy.
+    # _build_backend deletes that copy and stops when it cannot; this check
+    # catches a wheel built some other way. The source tree is the list, so a
+    # new module needs no entry here.
+    absent = sorted(
+        n
+        for n in names
+        if n.startswith("streamlit_listview/")
+        and not n.startswith("streamlit_listview/frontend/build/")
+        and not n.endswith("/")
+        and not (ROOT / n).is_file()
+    )
+    if absent:
+        sys.exit(
+            f"FAIL: wheel {wheel.name} ships files absent from the source tree: "
+            f"{', '.join(absent)}"
+        )
+    print("  ok: every package file outside frontend/build/ exists in the source")
+
     # version sanity: the wheel filename carries the version declared in
     # pyproject.toml (precise prefix match so e.g. 11.0.0 can't satisfy 1.0.0).
     expected = _expected_version()

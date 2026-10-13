@@ -157,9 +157,31 @@ def prepare_metadata_for_build_editable(metadata_directory, config_settings=None
     )
 
 
+def _drop_stale_package() -> None:
+    """Delete setuptools' staged copy of the package, or stop the build.
+
+    No copy is fine: a fresh checkout has never built. A copy that cannot be
+    deleted is not: setuptools would ship what is left of it, such as a module
+    deleted from the source, beside the current files. On Windows that happens
+    when another process holds one of its files open.
+    """
+    try:
+        shutil.rmtree(_STALE_PACKAGE)
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise RuntimeError(
+            f"[listview build] could not delete {exc.filename or _STALE_PACKAGE} "
+            f"({exc.strerror or exc}). setuptools would ship what is left of the staged "
+            f"package {_STALE_PACKAGE} beside the current files. Close the "
+            "program that holds the file open (an editor, a Python process, a "
+            "virus scanner), or delete the directory by hand, then build again."
+        ) from exc
+
+
 def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     _run_npm_build()
-    shutil.rmtree(_STALE_PACKAGE, ignore_errors=True)
+    _drop_stale_package()
     return _backend().build_wheel(wheel_directory, config_settings, metadata_directory)
 
 

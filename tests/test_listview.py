@@ -1,4 +1,5 @@
 import datetime
+import enum
 import re
 from decimal import Decimal
 from pathlib import Path
@@ -865,9 +866,9 @@ def test_mount_passes_key_through(listview_mod):
 # --------------------------------------------------------------------------
 # Payload: state_selection — the persisted st.session_state selection that
 # re-seeds a frontend remount which kept the Python-side widget state (a keyed
-# widget moved between st.sidebar and the main body). _persisted_selection is
-# best-effort: everything short of a well-shaped state ships None, which the
-# frontend reads as "seed from default_ids".
+# widget moved between st.sidebar and the main body). No key, or no state yet,
+# ships None, which the frontend reads as "seed from default_ids"; any other
+# value that is not a well-shaped state raises before the widget mounts.
 # --------------------------------------------------------------------------
 
 
@@ -902,6 +903,17 @@ def test_state_selection_mirrors_a_well_formed_persisted_state(
     assert shipped is not persisted
 
 
+def test_state_selection_ships_an_empty_persisted_selection(listview_mod, monkeypatch):
+    # A cleared selection, not "nothing persisted": the rows must stay empty
+    # rather than fall back to default.
+    import streamlit as st
+
+    mod, fake = listview_mod
+    monkeypatch.setattr(st, "session_state", {"lv": {"selection": []}})
+    call(mod, key="lv", default="a")
+    assert fake.last["data"]["state_selection"] == []
+
+
 @pytest.mark.parametrize(
     "state",
     [
@@ -924,21 +936,58 @@ def test_state_selection_mirrors_a_well_formed_persisted_state(
         {"selection": [2**53 + 1]},
         {"selection": [1.0]},
         {"selection": [None]},
-        {"selection": ["a", Decimal(7)]},  # whole list or nothing, not filtered
+        {"selection": ["a", Decimal(7)]},  # one bad id spoils the list
     ],
 )
-def test_state_selection_is_none_for_malformed_persisted_state(
+def test_a_malformed_persisted_state_raises_before_mount(
     listview_mod, monkeypatch, state
 ):
-    # st.session_state[key] is user-writable, so the persisted value can be
-    # anything; only a dict with a list of boundary-safe ids under "selection"
-    # is trusted.
+    # st.session_state[key] is user-writable. The rows cannot show a value
+    # that is not a well-shaped state, yet listview() returns what the
+    # component reads back from it: {"selection": [1.0]} against the options
+    # "1.0" and "fallback" showed "fallback" and returned "1.0".
     import streamlit as st
 
     mod, fake = listview_mod
     monkeypatch.setattr(st, "session_state", {"lv": state})
-    call(mod, key="lv")
-    assert fake.last["data"]["state_selection"] is None
+    with pytest.raises(ValueError, match=r"st\.session_state\['lv'\]"):
+        call(mod, key="lv")
+    assert fake.calls == []
+
+
+def test_a_malformed_persisted_state_message_is_bounded(listview_mod, monkeypatch):
+    # The value under the key can be anything, a million-element list included;
+    # the error names it in short.
+    import streamlit as st
+
+    mod, _fake = listview_mod
+    monkeypatch.setattr(st, "session_state", {"lv": list(range(1_000_000))})
+    with pytest.raises(ValueError) as exc:
+        call(mod, key="lv")
+    assert len(str(exc.value)) < 600
+
+
+def test_a_malformed_persisted_id_names_the_remedy(listview_mod, monkeypatch):
+    import streamlit as st
+
+    mod, _fake = listview_mod
+    monkeypatch.setattr(st, "session_state", {"lv": {"selection": [1.0]}})
+    with pytest.raises(ValueError, match=r"del st\.session_state\['lv'\]"):
+        call(mod, key="lv")
+
+
+def test_an_unexpected_session_state_error_propagates(listview_mod, monkeypatch):
+    # Only a missing key means "nothing persisted"; any other failure is real.
+    import streamlit as st
+
+    class Broken(dict[str, object]):
+        def __getitem__(self, key):
+            raise RuntimeError("session state unavailable")
+
+    mod, _fake = listview_mod
+    monkeypatch.setattr(st, "session_state", Broken())
+    with pytest.raises(RuntimeError, match="session state unavailable"):
+        call(mod, key="lv")
 
 
 def test_mount_seeds_default_selection(listview_mod):
@@ -968,6 +1017,35 @@ def test_first_render_single_returns_mapped_default(listview_mod):
     mod, _fake = listview_mod
     result = call(mod, selection_mode="single", default="b")
     assert result == "b"
+
+
+class _Color(str, enum.Enum):
+    # str() spells "_Color.RED"; JSON, and so the frontend, carries "red".
+    RED = "red"
+    BLUE = "blue"
+
+
+class _DisplayId(int):
+    def __str__(self) -> str:
+        return f"item-{int(self)}"
+
+
+def test_default_names_a_str_enum_row_by_the_value_json_carries(listview_mod):
+    mod, fake = listview_mod
+    red = {"id": _Color.RED, "label": "Red"}
+    result = call(
+        mod, options=[red, {"id": _Color.BLUE, "label": "Blue"}], default="red"
+    )
+    # Seeded in the option's own spelling, and mapped back to the option.
+    assert fake.last["default"]["selection"][0] is _Color.RED
+    assert result is red
+
+
+def test_a_frontend_selection_returns_the_int_subclass_option(listview_mod):
+    mod, fake = listview_mod
+    one = {"id": _DisplayId(1), "label": "One"}
+    fake.return_value = {"selection": [1]}  # JSON carried the id as 1
+    assert call(mod, options=[one, {"id": _DisplayId(2), "label": "Two"}]) is one
 
 
 def test_on_selection_change_always_registered(listview_mod):
@@ -1007,6 +1085,76 @@ def test_on_selection_change_wrapper_handles_missing_args_kwargs(listview_mod):
     call(mod, on_change=lambda: calls.append(True))
     fake.last["on_selection_change"]()
     assert calls == [True]
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        pytest.param(
+            {"args": 42}, "args must be a tuple, a list or None, got 42.", id="args-int"
+        ),
+        pytest.param(
+            {"args": "ab"},
+            "args must be a tuple, a list or None, got 'ab'.",
+            id="args-str",
+        ),
+        pytest.param(
+            {"args": 0}, "args must be a tuple, a list or None, got 0.", id="args-falsy"
+        ),
+        pytest.param(
+            {"kwargs": 42},
+            "kwargs must be a dict with str keys or None, got 42.",
+            id="kwargs-int",
+        ),
+        pytest.param(
+            {"kwargs": [("x", 1)]},
+            "kwargs must be a dict with str keys or None, got [('x', 1)].",
+            id="kwargs-pairs",
+        ),
+        pytest.param(
+            {"kwargs": ""},
+            "kwargs must be a dict with str keys or None, got ''.",
+            id="kwargs-falsy",
+        ),
+        pytest.param(
+            {"kwargs": {1: "x"}},
+            "kwargs must be a dict with str keys or None, got {1: 'x'}.",
+            id="kwargs-int-key",
+        ),
+    ],
+)
+def test_invalid_callback_arguments_raise_before_mount(
+    listview_mod, overrides, message
+):
+    # Without the check, kwargs=42 mounted fine and raised TypeError only when
+    # the user clicked; a falsy args=0 or kwargs="" was dropped without a word.
+    mod, fake = listview_mod
+    with pytest.raises(ValueError, match=re.escape(message)):
+        call(mod, on_change=lambda *a, **k: None, **overrides)
+    assert fake.calls == []
+
+
+def test_callback_arguments_may_be_a_list_or_empty(listview_mod):
+    # Streamlit's own widgets take a tuple or a list (WidgetArgs).
+    mod, fake = listview_mod
+    received = []
+    on_change = lambda *a, **k: received.append((a, k))
+    call(mod, on_change=on_change, args=[1, 2], kwargs={"x": 9})
+    fake.last["on_selection_change"]()
+    call(mod, on_change=on_change, args=(), kwargs={})
+    fake.last["on_selection_change"]()
+    assert received == [((1, 2), {"x": 9}), ((), {})]
+
+
+def test_an_exception_from_the_callback_propagates(listview_mod):
+    mod, fake = listview_mod
+
+    def on_change():
+        raise LookupError("from the app")
+
+    call(mod, on_change=on_change)
+    with pytest.raises(LookupError, match="from the app"):
+        fake.last["on_selection_change"]()
 
 
 def test_data_payload_has_exact_listview_data_keys(listview_mod):

@@ -12,6 +12,7 @@ presence drives the branch under test, and stubs `subprocess.run` so npm never
 actually runs.
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -171,6 +172,73 @@ def test_build_wheel_drops_the_stale_package_copy(monkeypatch, tmp_path):
     monkeypatch.setattr(bb, "_backend", Backend)
     assert bb.build_wheel("dist") == "streamlit_listview-1.0.1-py3-none-any.whl"
     assert seen == [False]
+
+
+def _stale_copy_with_a_module(monkeypatch, tmp_path):
+    """Point build_wheel at a staged copy that holds one module.
+
+    Returns the module and the list of calls that reach setuptools.
+    """
+    stale = tmp_path / "build" / "lib" / "streamlit_listview"
+    stale.mkdir(parents=True)
+    module = stale / "_removed_module.py"
+    module.write_text("# deleted since", encoding="utf-8")
+    monkeypatch.setattr(bb, "_STALE_PACKAGE", stale)
+    monkeypatch.setattr(bb, "_run_npm_build", lambda: None)
+    calls: list[tuple[object, ...]] = []
+
+    class Backend:
+        def build_wheel(self, *args):
+            calls.append(args)
+            return "streamlit_listview-1.0.1-py3-none-any.whl"
+
+    monkeypatch.setattr(bb, "_backend", Backend)
+    return module, calls
+
+
+def test_build_wheel_stops_when_the_stale_copy_cannot_be_removed(monkeypatch, tmp_path):
+    # A file another process holds open cannot be deleted on Windows; the copy
+    # left behind would ship in the wheel. This is the error rmtree raises then.
+    module, calls = _stale_copy_with_a_module(monkeypatch, tmp_path)
+
+    def locked(path):
+        raise PermissionError(
+            13,
+            "The process cannot access the file because it is being used by "
+            "another process",
+            str(module),
+        )
+
+    monkeypatch.setattr(bb.shutil, "rmtree", locked)
+    with pytest.raises(RuntimeError, match=re.escape(str(module))):
+        bb.build_wheel("dist")
+    assert calls == []
+
+
+def test_build_wheel_reports_an_error_without_strerror(monkeypatch, tmp_path):
+    _module, calls = _stale_copy_with_a_module(monkeypatch, tmp_path)
+
+    def failing(path):
+        raise OSError("disk went away")
+
+    monkeypatch.setattr(bb.shutil, "rmtree", failing)
+    with pytest.raises(RuntimeError, match="disk went away") as exc:
+        bb.build_wheel("dist")
+    assert "None" not in str(exc.value)
+    assert calls == []
+
+
+@pytest.mark.skipif(
+    sys.platform != "win32", reason="only Windows refuses to delete an open file"
+)
+def test_build_wheel_stops_on_a_real_file_lock(monkeypatch, tmp_path):
+    module, calls = _stale_copy_with_a_module(monkeypatch, tmp_path)
+    with (
+        module.open(encoding="utf-8"),
+        pytest.raises(RuntimeError, match=re.escape(str(module))),
+    ):
+        bb.build_wheel("dist")
+    assert calls == []
 
 
 def test_the_stale_copy_is_the_whole_staged_package():

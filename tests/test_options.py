@@ -1,4 +1,5 @@
 import datetime
+import enum
 import types
 
 import pytest
@@ -390,6 +391,66 @@ def test_normalize_distinct_stringified_ids_ok():
     # No collision: distinct string forms pass through unchanged.
     items, _ = normalize_options([1, 2, "x"], None)
     assert [it["id"] for it in items] == [1, 2, "x"]
+
+
+class _Color(str, enum.Enum):
+    # The common "string enum" idiom: str() spells "_Color.RED", while JSON
+    # carries "red", the value the frontend keys the row by.
+    RED = "red"
+    BLUE = "blue"
+
+
+class _Prio(enum.IntEnum):
+    HIGH = 1
+    LOW = 2
+
+    def __str__(self) -> str:
+        # Python 3.10's IntEnum.__str__; from 3.11 on, str() spells the value.
+        return f"{type(self).__name__}.{self.name}"
+
+
+class _DisplayId(int):
+    def __str__(self) -> str:
+        return f"item-{int(self)}"
+
+
+def test_map_resolves_a_str_enum_id_by_the_value_json_carries():
+    red = {"id": _Color.RED, "label": "Red"}
+    _, id_to_original = normalize_options(
+        [red, {"id": _Color.BLUE, "label": "Blue"}], None
+    )
+    assert map_selection(["red"], id_to_original, "single", kind=None) is red
+
+
+@pytest.mark.parametrize(
+    "item_id", [_Prio.HIGH, _DisplayId(1)], ids=["intenum-3.10-str", "own-str"]
+)
+def test_map_resolves_an_int_subclass_id_by_the_value_json_carries(item_id):
+    one = {"id": item_id, "label": "One"}
+    _, id_to_original = normalize_options([one, {"id": 2, "label": "Two"}], None)
+    assert map_selection([1], id_to_original, "single", kind=None) is one
+
+
+@pytest.mark.parametrize(
+    "item_id", [_Prio.HIGH, _DisplayId(1)], ids=["intenum-3.10-str", "own-str"]
+)
+def test_normalize_rejects_a_subclass_id_that_renders_as_another_row(item_id):
+    # Both ids reach the frontend as the row "1": two rows with one React key
+    # and one DOM id.
+    with pytest.raises(ValueError, match="collides"):
+        normalize_options([item_id, "1"], None)
+
+
+def test_normalize_labels_a_subclass_id_by_its_own_str():
+    # The default label is display, not row identity: it stays str(id).
+    items, _ = normalize_options([_Color.RED, _DisplayId(2)], None)
+    assert [it["label"] for it in items] == ["_Color.RED", "item-2"]
+
+
+def test_map_does_not_resolve_a_tampered_bool_to_an_int_row():
+    # JSON true arrives as True, an int subclass. It names no row: String(true)
+    # is "true", not "1".
+    assert map_selection([True], {1: 1}, "single", kind=None) is None
 
 
 def test_normalize_unhashable_simple_id_raises():

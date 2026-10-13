@@ -24,16 +24,29 @@ def _id_key(item_id: Any) -> str:
     """The row-identity key for an option id — the Python mirror of ``idKey``.
 
     The frontend keys every row (React key, DOM id, "is this the same row?"
-    comparison) by JavaScript ``String(id)``, so anything Python asks about row
-    identity has to ask it the same way. ``str()`` agrees with ``String()`` for
-    exactly the ids the boundary admits — ``str`` and ``int`` within
-    ``MAX_SAFE_JS_INT``, which ``normalize_options`` enforces — which is what makes
-    this a faithful mirror rather than a coincidence.
+    comparison) by JavaScript ``String(id)`` of the value JSON carried, so
+    anything Python asks about row identity has to ask it of that value. For the
+    ids the boundary admits — ``str`` and ``int`` within ``MAX_SAFE_JS_INT``,
+    which ``normalize_options`` enforces — that is the id's plain value, which is
+    what makes this a faithful mirror rather than a coincidence.
+
+    A subclass is keyed by its plain value too, never by its own ``str()``:
+    ``json.dumps`` writes a ``str`` subclass's characters and an ``int``
+    subclass's ``int.__repr__``, whatever ``__str__`` says. For a member of
+    ``class Color(str, Enum)``, ``str(Color.RED)`` is "Color.RED" while the row
+    is "red"; an ``IntEnum`` on Python 3.10 differs the same way. bool is an
+    ``int`` subclass that JSON writes as ``true``, so it keeps ``str()`` with
+    every other value the boundary refuses — a selection from a tampered
+    frontend.
 
     One definition, so the collision guard below, the ``default`` membership and
     de-duplication in ``_resolve_default_ids``, and the way-out resolution in
     ``map_selection`` cannot disagree about when two ids are one row.
     """
+    if isinstance(item_id, str):
+        return str.__str__(item_id)
+    if isinstance(item_id, int) and not isinstance(item_id, bool):
+        return int.__repr__(item_id)
     return str(item_id)
 
 
@@ -51,10 +64,12 @@ def _validate_id(item_id: Any, *, kind: str, context: str = "") -> None:
     message ("option" / "default" / "persisted" / "selected"); ``context`` is
     appended verbatim after the offending value (e.g. ``" (from option ...)"``).
 
-    Ids are restricted to exactly str or int, positively. The frontend
-    identifies rows by JavaScript ``String(id)``, which diverges from Python
-    ``str()`` for every other type, so anything else renders ambiguously or does
-    not survive the JSON round-trip:
+    Ids are restricted to str or int, positively. A subclass passes (a
+    ``class Color(str, Enum)`` member, an ``IntEnum``): JSON carries its plain
+    value, and ``_id_key`` keys the row by that value. The frontend identifies
+    rows by JavaScript ``String(id)``, which diverges from Python ``str()`` for
+    every other type, so anything else renders ambiguously or does not survive
+    the JSON round-trip:
       * float — str(1.0) == '1.0' but String(1.0) === '1', so a float 1.0 and an
         int 1 / str '1' collapse to one row yet spell their row differently on
         the two sides; non-finite floats (NaN/Infinity) also break the selection
@@ -90,8 +105,8 @@ def _validate_id(item_id: Any, *, kind: str, context: str = "") -> None:
 
     if isinstance(item_id, int) and abs(item_id) > MAX_SAFE_JS_INT:
         raise ValueError(
-            f"{kind} id {item_id!r} exceeds JavaScript's safe integer range "
-            f"(abs(id) must be <= {MAX_SAFE_JS_INT}). Ids cross a JSON "
+            f"{kind} id {item_id!r}{context} exceeds JavaScript's safe integer "
+            f"range (abs(id) must be <= {MAX_SAFE_JS_INT}). Ids cross a JSON "
             "boundary and become IEEE-754 doubles on the frontend, which "
             "cannot represent this int exactly, so it would render "
             "ambiguously and never map back to its option. Use the string "
@@ -179,11 +194,12 @@ def normalize_options(  # noqa: C901 -- older than the complexity limit; split i
 
     items: list[dict[str, Any]] = []
     id_to_original: dict[Any, Any] = {}
-    # Track str(id) too: the frontend identifies rows by String(id) (React keys,
-    # DOM ids, the jump-to-default scroll selector, aria-activedescendant), so two
-    # ids that collapse to the same string (e.g. 1 and "1") would render as
-    # indistinguishable rows. Reject that at the boundary instead of shipping
-    # ambiguous data the frontend cannot disambiguate.
+    # Track the row key (_id_key) too: the frontend identifies rows by String(id)
+    # (React keys, DOM ids, the jump-to-default scroll selector,
+    # aria-activedescendant), so two ids that collapse to the same string (e.g. 1
+    # and "1") would render as indistinguishable rows. Reject that at the
+    # boundary instead of shipping ambiguous data the frontend cannot
+    # disambiguate.
     seen_str_ids: set[str] = set()
 
     for option in iterator:
@@ -222,7 +238,7 @@ def normalize_options(  # noqa: C901 -- older than the complexity limit; split i
                 f"option id is unhashable: {item_id!r} (from option {option!r})"
             ) from exc
 
-        # The per-id boundary gate (exactly str/int, bool rejected, |int| within
+        # The per-id boundary gate (str/int, bool rejected, |int| within
         # the JS safe range) — shared with _resolve_default_ids; _validate_id's
         # docstring carries the reasons for each rule.
         _validate_id(item_id, kind="option", context=f" (from option {option!r})")
@@ -233,9 +249,9 @@ def normalize_options(  # noqa: C901 -- older than the complexity limit; split i
         str_id = _id_key(item_id)
         if str_id in seen_str_ids:
             raise ValueError(
-                f"option id {item_id!r} collides with another option after "
-                f"string conversion (str(id) == {str_id!r}); option ids must be "
-                "unique as rendered."
+                f"option id {item_id!r} collides with another option: both "
+                f"render as the row {str_id!r}. Option ids must be unique as "
+                "rendered."
             )
         seen_str_ids.add(str_id)
 
