@@ -19,7 +19,7 @@ ROOT_PYPROJECT = ROOT / "pyproject.toml"
 NESTED_PYPROJECT = ROOT / "streamlit_listview" / "pyproject.toml"
 DEMO_REQUIREMENTS = ROOT / "demo" / "requirements.txt"
 
-EXPECTED_VERSION = "1.0.1"
+EXPECTED_VERSION = "1.1.0"
 
 sys.path.insert(0, str(ROOT / "scripts"))
 

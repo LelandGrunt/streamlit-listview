@@ -2,7 +2,7 @@
 
 Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version numbers follow [Semantic Versioning](https://semver.org/) with one exception: a release that breaks compatibility raises the minor version, not the major one, so the package stays on 1.x. Such a release says so at the top of its notes.
 
-## [Unreleased]
+## [1.1.0] - 2026-10-14
 
 **This release breaks compatibility within 1.x.** Three changes to `accept_new_options` with int or dict options can break code that relied on the old behavior. The entries marked **Breaking** under *Changed* say what to change.
 
@@ -72,7 +72,6 @@ Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](h
 - **The list keeps the focused row in view when keys follow each other quickly after a rerun.** A scroll to a row waits up to four frames while the rows around it change size, as they do on the rerun that changed them. A second key pressed during that wait scrolled to its row first, and the earlier scroll then moved the list away from it. The latest scroll now wins, whether it comes from a key, the jump to `default`, or an added entry.
 - **The add field resolves text that matches two rows to the first of them on screen.** The options without a group render last in a grouped list, so the first match in `options` could be the lower of the two rows on screen.
 - **A link or image in `label` or `help` keeps a `:material/…:` or `:streamlit:` token in its address, title and alt text.** The tokens became icons everywhere in the text, so a link to `https://example.com/:material/check:` pointed at another address, and an image's alt text carried an invisible character. Only the visible text turns these tokens into icons now.
-
 - **A click on an option whose id is an enum member returns that option.** The browser receives an id as JSON, so a `class Color(str, Enum)` member arrives as `"red"` and an `IntEnum` member as `1`. `listview()` looked the id up by `str()`: `"Color.RED"`, or a name such as `"Priority.HIGH"` for an `IntEnum` on Python 3.10. A click highlighted the row while `listview()` returned `None`. It now looks an id up by the value JSON carries, so `default="red"` names the row of `Color.RED` too. Two ids that the browser shows as one row, such as an `int` subclass whose value is `1` and the string `"1"`, raise `ValueError`, as `1` and `"1"` do.
 - **`listview()` raises `ValueError` when `st.session_state[key]` holds a value that is not the listview's state.** An app that wrote, say, `{"selection": [1.0]}` or a string under the listview's key saw the rows of `default`, while `listview()` returned a value read from that state, such as `"1.0"` or `None`, on every rerun. The error names the key and the value. A key without a value still means a first run.
 - **`listview()` checks the type of `args` and `kwargs`.** `kwargs=42` raised `TypeError` only at the first click, and `args=0` or `kwargs=""` was dropped without a word. A wrong type now raises `ValueError`. As in Streamlit's own widgets, `args` takes a tuple or a list, and `kwargs` a dict with `str` keys.
@@ -107,6 +106,6 @@ The first render, scrolling, and the data sent per rerun are unchanged. A rerun 
 
 First stable release.
 
-[Unreleased]: https://github.com/LelandGrunt/streamlit-listview/compare/v1.0.1...HEAD
+[1.1.0]: https://github.com/LelandGrunt/streamlit-listview/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/LelandGrunt/streamlit-listview/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/LelandGrunt/streamlit-listview/releases/tag/v1.0.0

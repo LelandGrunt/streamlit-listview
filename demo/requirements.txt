@@ -10,4 +10,4 @@
 # The demo needs Streamlit 1.56 or later: it passes `required` to st.pills and
 # st.segmented_control. The package itself needs only Streamlit 1.51.
 streamlit>=1.56
-streamlit-listview==1.0.1
+streamlit-listview==1.1.0

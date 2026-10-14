@@ -465,8 +465,8 @@ needed, then `npm run build`) before packaging, so the wheel bundles that
 `streamlit_listview/pyproject.toml` component manifest (Streamlit reads it at
 runtime to resolve the asset globs). This produces `dist/`:
 
-- `dist/streamlit_listview-1.0.1-py3-none-any.whl`
-- `dist/streamlit_listview-1.0.1.tar.gz` (sdist)
+- `dist/streamlit_listview-1.1.0-py3-none-any.whl`
+- `dist/streamlit_listview-1.1.0.tar.gz` (sdist)
 
 Two builds reuse the bundle already in `streamlit_listview/frontend/build`
 instead of compiling it: a build with `LISTVIEW_SKIP_NPM_BUILD=1`, and a build
