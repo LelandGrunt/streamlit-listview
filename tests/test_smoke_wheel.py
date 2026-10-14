@@ -5,6 +5,7 @@ recording runner. The check that runs in the new environment runs here for
 real, against the editable install and the built bundle.
 """
 
+import ast
 import json
 import runpy
 import sys
@@ -172,6 +173,23 @@ def test_the_check_reports_what_streamlit_resolved(tmp_path):
     assert report["js"] == [next(build.glob("index-*.js")).name]
     assert report["css"] == [next(build.glob("index-*.css")).name]
     assert Path(report["module"]).is_relative_to(ROOT / "streamlit_listview")
+
+
+def test_the_check_gives_a_cold_start_more_than_apptests_default():
+    """A new environment imports Streamlit cold: the first run took 5.1 s on
+    Windows, against AppTest's default of 3 s."""
+    run = next(
+        node
+        for node in ast.walk(ast.parse(smoke_wheel.CHECK))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "run"
+    )
+    timeouts = [kw.value for kw in run.keywords if kw.arg == "timeout"]
+    assert len(timeouts) == 1, "AppTest.run() needs one timeout above its 3 s default"
+    (timeout,) = timeouts
+    assert isinstance(timeout, ast.Constant)
+    assert isinstance(timeout.value, (int, float)) and timeout.value > 3
 
 
 def test_run_returns_the_output_and_names_a_failed_command(tmp_path):

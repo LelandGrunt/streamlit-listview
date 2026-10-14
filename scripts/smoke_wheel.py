@@ -41,10 +41,12 @@ import json
 from streamlit.testing.v1 import AppTest
 
 spec = importlib.util.find_spec("streamlit_listview")
+# A new environment imports Streamlit cold. The first run took 5.1 s on
+# Windows, against AppTest's default timeout of 3 s.
 app = AppTest.from_string(
     "from streamlit_listview import listview\\n"
     "listview('Smoke test', ['a', 'b'], key='smoke')\\n"
-).run()
+).run(timeout=60)
 listviews = app.get("bidi_component")
 print(json.dumps({
     "module": spec.origin if spec else None,
