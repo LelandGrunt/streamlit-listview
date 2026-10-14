@@ -83,9 +83,13 @@ def _parse_toml(text: str) -> dict[str, Any]:
     try:
         import toml
     except ModuleNotFoundError:
-        # ty resolves against Python 3.10, the project's floor; tomllib
-        # arrived in 3.11.
-        import tomllib  # ty: ignore[unresolved-import]
+        # tomllib arrived in Python 3.11. ty checks against 3.10, the floor of
+        # requires-python, unless UV_PYTHON names a version, as in CI; an
+        # ignore comment on the import is unused under one of the two, while
+        # this check holds under both.
+        if sys.version_info < (3, 11):
+            raise
+        import tomllib
 
         return tomllib.loads(text)
     return cast(dict[str, Any], toml.loads(text))

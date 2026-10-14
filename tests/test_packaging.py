@@ -325,6 +325,16 @@ def test_verify_wheel_parses_the_manifest_without_toml(monkeypatch):
     assert problems[0].startswith(f"{verify_wheel.MANIFEST} is not valid TOML")
 
 
+def test_verify_wheel_needs_toml_on_python_3_10(monkeypatch):
+    # tomllib arrived in Python 3.11, so on 3.10 the manifest parse needs `toml`
+    # and names it when it is missing.
+    monkeypatch.setitem(sys.modules, "toml", None)
+    monkeypatch.setattr(sys, "version_info", (3, 10, 0))
+    with pytest.raises(ModuleNotFoundError) as exc:
+        verify_wheel.manifest_problems(_SOURCE_MANIFEST, EXPECTED_VERSION)
+    assert exc.value.name == "toml"
+
+
 def test_verify_wheel_rejects_a_leaked_build_backend(monkeypatch, tmp_path):
     wheel = _fake_wheel(
         tmp_path, [*_good_entries(), "streamlit_listview/_build_backend.py"]
