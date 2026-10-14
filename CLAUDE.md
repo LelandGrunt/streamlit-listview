@@ -160,7 +160,7 @@ A `v*.*.*` tag pushed to GitHub publishes to PyPI through Trusted Publishing (`.
 
 ### Pushing to GitHub
 
-GitHub `main` shows released code only: Streamlit Community Cloud runs the hosted demo from it and installs the version that `demo/requirements.txt` pins from PyPI. A pre-push hook, `scripts/push_gate.py`, checks every push to a remote URL that contains `github.com`, in four stages: the refs (only `main` and a new tag `v<version>`), the local state (a command-line confirmation that names the version, a clean tree, the seven version files in agreement), the release order (the tag, then the PyPI release, then `main`), and CI's suite on the pushed commit, which needs npm, uv and uvx on `PATH`. `HARNESS.md` (*The push gate*) describes each stage. **`main` must carry the library code of its release tag,** so between releases GitHub `main` takes no change to the shipped package; docs, tests, the demo and the scripts may change. CI's `push-gate` job and `release.yml` repeat the version and release checks on GitHub.
+GitHub `main` shows released code only: Streamlit Community Cloud runs the hosted demo from it and installs the version that `demo/requirements.txt` pins from PyPI. A pre-push hook, `scripts/push_gate.py`, checks every push to a remote URL that contains `github.com`, in four stages: the refs (only `main` and a new tag `v<version>`), the local state (a command-line confirmation that names the version, a clean tree, the seven version files in agreement), the release order (the tag, then the PyPI release, then `main`), and CI's suite on the pushed commit, which needs npm, uv and uvx on `PATH` and a Python 3.12, which uv downloads when the machine has none. `HARNESS.md` (*The push gate*) describes each stage. **`main` must carry the library code of its release tag,** so between releases GitHub `main` takes no change to the shipped package; docs, tests, the demo and the scripts may change. CI's `push-gate` job and `release.yml` repeat the version and release checks on GitHub.
 
 ```sh
 uv run --no-project python scripts/push_gate.py install       # once per clone; the worktrees share the hook
@@ -171,6 +171,7 @@ git -c listview.pushGithub=<version> push origin v<version>   # then the same fo
 - **Never pass `--no-verify`.** CI reports such a push on `main`, but by then the commit is public. On a tag, `release.yml` runs CI's jobs and publishes only when they pass.
 - **`git push --dry-run` runs the hook and sends nothing.** Use it to see what the gate says.
 - **The suite runs once per commit.** `.git/push-gate/passed` lists the commits that passed; delete the file to force a new run.
+- **The suite runs on CI's Python, 3.12,** in its own environment, `.git/push-gate/venv`. The checkout's `.venv` keeps its version.
 
 ## Docs
 

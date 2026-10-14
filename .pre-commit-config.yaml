@@ -34,11 +34,12 @@ repos:
       # environment (uv check). --extra devel adds pytest and Playwright for the
       # test code; --no-install-project skips the editable install, which would
       # build the frontend bundle; --frozen leaves uv.lock alone. ty checks
-      # against the Python version UV_PYTHON names (3.12 in CI), else against
-      # the floor of requires-python (3.10), and [tool.ty.environment]
-      # python-version does not override it. Guard an import that exists only
-      # in some versions with `sys.version_info`, not with an ignore comment:
-      # the comment is unused under one of the two versions, and ty fails.
+      # against the Python version UV_PYTHON names (3.12 in CI and in the push
+      # gate), else against the floor of requires-python (3.10), and
+      # [tool.ty.environment] python-version does not override it. Guard an
+      # import that exists only in some versions with `sys.version_info`, not
+      # with an ignore comment: the comment is unused under one of the two
+      # versions, and ty fails.
       - id: ty
         args: [--extra, devel, --no-install-project, --frozen]
 

@@ -47,6 +47,13 @@ PYPI_URL = "https://pypi.org/pypi/streamlit-listview/{version}/json"
 PYPI_TIMEOUT_S = 10
 FRONTEND = "streamlit_listview/frontend"
 
+# The Python version of CI: every job in .github/workflows/ci.yml sets up uv with
+# this python-version, which setup-uv exports to the job as UV_PYTHON. ty checks
+# against the version UV_PYTHON names, else against the floor of
+# requires-python, so the suite runs with it too. tests/test_push_gate.py pins
+# it to the workflows.
+CI_PYTHON = "3.12"
+
 # X.Y.Z, or X.Y.Z with a pre-release suffix: the spellings the release skill
 # allows, without leading zeros. The wheel filename normalizes "1.0.0-rc.1" to
 # "1.0.0rc1" and "1.0.02" to "1.0.2", while the release checks compare the raw
@@ -646,7 +653,7 @@ Runner = Callable[[Step, Path, dict[str, str]], int]
 
 def suite_steps(version: str, wheel_dir: Path) -> list[Step]:
     """What CI runs: ci.yml's lint job, its test-build-verify job, and its e2e
-    job's browser suite in Chromium.
+    job's browser suite in Chromium. run_suite runs them on CI's Python.
 
     `npm ci` comes first: the pre-commit hooks for the frontend need
     node_modules, as in CI's lint job. `playwright install chromium` does
@@ -677,11 +684,13 @@ def suite_steps(version: str, wheel_dir: Path) -> list[Step]:
         Step("wheel build", ("uv", "build", "--wheel", "--out-dir", str(wheel_dir))),
         Step(
             "verify_wheel.py",
-            (sys.executable, "scripts/verify_wheel.py", str(wheel)),
+            (*devel, "python", "scripts/verify_wheel.py", str(wheel)),
+            env=skip_npm,
         ),
         Step(
             "smoke_wheel.py",
-            (sys.executable, "scripts/smoke_wheel.py", str(wheel)),
+            (*devel, "python", "scripts/smoke_wheel.py", str(wheel)),
+            env=skip_npm,
         ),
     ]
 
@@ -730,6 +739,11 @@ def run_suite(
         for name, value in os.environ.items()
         if not name.upper().startswith("GIT_")
     }
+    # CI's Python, in a project environment of the suite's own. uv replaces a
+    # project environment of another Python version, and on Windows that fails
+    # halfway through the checkout's .venv when the hook runs from it.
+    env["UV_PYTHON"] = CI_PYTHON
+    env["UV_PROJECT_ENVIRONMENT"] = str(cache.parent / "venv")
     with tempfile.TemporaryDirectory(
         prefix="push-gate-", ignore_cleanup_errors=True
     ) as wheel_dir:

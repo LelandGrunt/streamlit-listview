@@ -9,6 +9,7 @@ through the installed hook with real git.
 
 import io
 import os
+import re
 import runpy
 import shutil
 import subprocess
@@ -840,8 +841,10 @@ def test_suite_steps_run_cis_commands_and_verify_the_versions_wheel(tmp_path):
     skip_npm = {"LISTVIEW_SKIP_NPM_BUILD": "1"}
     assert [dict(step.env) for step in steps[4:7]] == [skip_npm] * 3
     wheel = str(tmp_path / "streamlit_listview-1.2.3-py3-none-any.whl")
-    assert steps[-2].args == (sys.executable, "scripts/verify_wheel.py", wheel)
-    assert steps[-1].args == (sys.executable, "scripts/smoke_wheel.py", wheel)
+    # CI runs both scripts with the Python of its environment, as here.
+    assert steps[-2].args == (*devel, "python", "scripts/verify_wheel.py", wheel)
+    assert steps[-1].args == (*devel, "python", "scripts/smoke_wheel.py", wheel)
+    assert [dict(step.env) for step in steps[-2:]] == [skip_npm] * 2
 
 
 def test_the_suite_runs_in_order_and_remembers_the_pass(repo):
@@ -868,8 +871,22 @@ def test_the_suite_runs_without_git_variables(repo, monkeypatch):
     push_gate.run_suite(repo.path, VERSION, repo.head, runner)
     for name, env in runner.envs.items():
         assert not [key for key in env if key.upper().startswith("GIT_")], name
-        skips_npm = name in {"pytest", "playwright install", "e2e"}
+        in_devel_env = {"pytest", "playwright install", "e2e"}
+        skips_npm = name in in_devel_env | {"verify_wheel.py", "smoke_wheel.py"}
         assert ("LISTVIEW_SKIP_NPM_BUILD" in env) == skips_npm, name
+
+
+def test_the_suite_runs_cis_python_in_an_environment_of_its_own(repo, monkeypatch):
+    # The caller's own choices give way: the suite stands in for CI.
+    monkeypatch.setenv("UV_PYTHON", "3.10")
+    monkeypatch.setenv("UV_PROJECT_ENVIRONMENT", str(repo.path / ".venv"))
+    runner = Recorder()
+    push_gate.run_suite(repo.path, VERSION, repo.head, runner)
+    venv = str(push_gate.suite_cache(repo.path).parent / "venv")
+    assert runner.names == STEPS
+    for name, env in runner.envs.items():
+        assert env["UV_PYTHON"] == push_gate.CI_PYTHON, name
+        assert env["UV_PROJECT_ENVIRONMENT"] == venv, name
 
 
 def test_a_passed_commit_skips_the_suite(repo, capsys):
@@ -1164,6 +1181,17 @@ def test_every_workflow_that_verifies_the_wheel_also_installs_it(workflow):
     text = (ROOT / ".github" / "workflows" / workflow).read_text(encoding="utf-8")
     verify = text.index("scripts/verify_wheel.py")
     assert verify < text.index("scripts/smoke_wheel.py")
+
+
+@pytest.mark.parametrize("workflow", ["ci.yml", "release.yml"])
+def test_every_workflow_sets_up_uv_with_the_gates_python(workflow):
+    """Drift guard: setup-uv exports its python-version as UV_PYTHON, and ty
+    checks against that version; the gate hands uv CI_PYTHON (run_suite)."""
+    text = (ROOT / ".github" / "workflows" / workflow).read_text(encoding="utf-8")
+    versions = re.findall(r'(?m)^\s*python-version:\s*"?([^"\s]+)"?\s*$', text)
+    steps = re.findall(r"(?m)^\s*-?\s*uses:\s*astral-sh/setup-uv@", text)
+    assert len(versions) == len(steps), "a setup-uv step without python-version"
+    assert set(versions) == {push_gate.CI_PYTHON}
 
 
 def test_ci_runs_the_browser_suite_that_the_gate_runs():
