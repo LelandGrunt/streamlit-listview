@@ -14,7 +14,7 @@ Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](h
 - The demo turns on Streamlit's websocket compression (`server.enableWebsocketCompression`). At 100,000 options a click or settings change then sends 0.48 MB over the network instead of 6.75 MB, for about 0.1 s more server CPU. An app of your own with a large option list can turn on the same setting.
 - **The README opens with a 50-second tour of the demo app**, recorded with Streamlit's own *Record screen*: multi-select, search, collapsible groups, sorting, a default far down the list, two brand themes, 100,000 options and the sidebar. `scripts/gif/screencast.py` records it again.
 - **The README lists the keys the listview answers to**, among them Esc, which clears the search and then the selection. A new section on large lists gives the measured times and the data Streamlit sends per rerun, and shows how websocket compression shrinks it.
-- **The performance benchmarks cover 100,000 rows and dict options that carry a `disabled` key.** At 100,000 options the options take 6.7 MB to send. Streamlit sends them whenever the listview's payload changes: when its parameters change, on the first rerun after a listview with a `key` appears, and on each click on such a listview. A `disabled` key on every row makes the options 28 % larger (8.6 MB), the `listview()` call 15 % slower, and a rerun that sends the options or a click on a keyed listview 13 to 15 % slower; search and scrolling take as long as without it. A row without the key is enabled, so pass `disabled` only on the rows you disable. See [BENCHMARKS.md](BENCHMARKS.md).
+- **The performance benchmarks cover 100,000 rows and dict options that carry a `disabled` key.** At 100,000 options the options take 6.7 MB to send. Streamlit sends them whenever the listview's payload changes: when its parameters change, on the first rerun after a listview with a `key` appears, and on each click on such a listview. A `disabled` key on every row makes the options 28 % larger (8.6 MB), the `listview()` call 15 % slower, a rerun that sends the options or a click on a keyed listview 10 to 16 % slower, and the first render 6 % slower; search and scrolling take as long as without it. A row without the key is enabled, so pass `disabled` only on the rows you disable. See [BENCHMARKS.md](BENCHMARKS.md).
 - **Each release on GitHub shows its notes from this changelog.** Before, the release page showed only a link that compares the release with the one before.
 - For maintainers: `scripts/gif/compare.py` compares two recordings of the widget scenarios in `scripts/gif/` frame by frame and writes an HTML report that marks the changed pixels in red. It shows what a change did to the widget's look; see `scripts/gif/README.md`.
 
@@ -31,17 +31,17 @@ Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](h
   The same rule covers an unknown `default` and a selected id that a keyed widget keeps after you remove it from `options`. If your code tested a returned value for `str` to find added entries, test for the option's type instead: with dict options an added entry is a dict whose `id` is the typed text.
 - **Breaking: with int options, the add field accepts only whole numbers.** It takes `42` or `-5` and refuses `abc`, `1.5`, `007` and `+5`, with the hint "Enter a whole number" below the field. Text that matches an existing row's id or label still selects that row, but users can no longer add free text to a list of int options.
 - **Breaking: with int options, an unknown `default` must be a whole number.** `default="abc"` raises `ValueError`; `default=42` and `default="42"` both come back as `42`.
-- **The browser lays out and paints only the rows near the visible frame.** Every row stays in the page, but rows outside the frame skip style, layout and paint until the list scrolls to them. Measured in Chromium with 100,000 options in groups of 100 (medians of 3 runs):
+- **The browser lays out and paints only the rows near the visible frame.** Every row stays in the page, but rows outside the frame skip style, layout and paint until the list scrolls to them. Measured in Chromium against 1.0.1, with 100,000 options in groups of 100 (medians of 3 runs):
 
-  | Measurement                          | Before   | Now      |
+  | Measurement                          | 1.0.1    | Now      |
   | ------------------------------------ | -------- | -------- |
-  | The list appears                     | 2,310 ms | 1,120 ms |
-  | The app settles after a click        | 1,254 ms | 475 ms   |
-  | A rerun that sends the options again | 780 ms   | 384 ms   |
-  | Clearing the search                  | 1,797 ms | 550 ms   |
-  | A scroll frame, 95th percentile      | 158 ms   | 18 ms    |
+  | The list appears                     | 2,387 ms | 1,149 ms |
+  | The app settles after a click        | 1,255 ms | 488 ms   |
+  | A rerun that sends the options again | 780 ms   | 410 ms   |
+  | Clearing the search                  | 1,856 ms | 544 ms   |
+  | A scroll frame, 95th percentile      | 196 ms   | 18 ms    |
 
-  At 1,000 options the times stay within the spread of the measurement. In Chromium a screen reader sees only the rows near the frame, and the other rows as the list scrolls to them; each row's `aria-posinset` and `aria-setsize` give its place in the whole list. Firefox before 125 and Safari before 18 ignore the setting and draw every row as before.
+  At 1,000 options clearing the search takes 10 ms instead of 18 ms, and the other times stay within the spread of the measurement. In Chromium a screen reader sees only the rows near the frame, and the other rows as the list scrolls to them; each row's `aria-posinset` and `aria-setsize` give its place in the whole list. Firefox before 125 and Safari before 18 ignore the setting and draw every row as before.
 - **In a grouped list, the options without a group render last, under their own header.** Before, they rendered without a header where the first of them stood in `options`, so an option placed first, such as "All cities", sat above every group. It now renders at the end. `collapsed_groups="all"` collapses this header too, and so does a list that names `ungrouped_label`.
 - **The add field of `accept_new_options` sits in a footer below the list** and stays in view while the list scrolls. The widget grows by the height of that footer; `height` still sets the height of the scrolling list. After an add, the list opens the block the entry appears in and scrolls to the entry.
 - **Select all adds the rows in the order shown, so a `max_selections` cap takes them from the top of the list.** Before, it took the options in the order you passed them, which grouping can rearrange.

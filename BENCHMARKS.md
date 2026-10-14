@@ -335,30 +335,30 @@ How to read it:
 
 ## Reference run: 100 to 100,000 rows
 
-On 2026-10-11 the full matrix ran on the reference machine: Windows 11, Core Ultra 7 155H, 32 GB, on mains power, CPU throttling off, at commit `8351738`. Both tiers completed every cell, the frontend tier in 25 minutes and the browser tier in 24. Browser tier, grouped shape, medians of 3 reps:
+On 2026-10-13 the full matrix ran on the reference machine: Windows 11, Core Ultra 7 155H, 32 GB, on mains power, CPU throttling off, at commit `6a4f035`, with Streamlit 1.65.0 and Chromium 153. Both tiers completed every cell, the frontend tier in 25 minutes and the browser tier in 24. Browser tier, grouped shape, medians of 3 reps:
 
 | Measurement | Metric | 10,000 | 50,000 | 100,000 |
 |---|---|---|---|---|
-| The list appears | `mount.painted_ms` | 209 ms | 605 ms | 1,118 ms |
-| Clearing the search | `search_clear.painted_ms` | 73 ms | 295 ms | 573 ms |
-| A rerun that sends the options again | `rerun_unchanged.settled_ms` | 89 ms | 229 ms | 398 ms |
-| Rerun, one option changed | `rerun_one_changed.settled_ms` | 82 ms | 230 ms | 423 ms |
-| Click: the row highlights | `click_select.local_painted_ms` | 10 ms | 41 ms | 81 ms |
-| Click: the round trip and its long tasks end | `click_select.settled_ms` | 92 ms | 244 ms | 508 ms |
+| The list appears | `mount.painted_ms` | 219 ms | 600 ms | 1,149 ms |
+| Clearing the search | `search_clear.painted_ms` | 83 ms | 277 ms | 544 ms |
+| A rerun that sends the options again | `rerun_unchanged.settled_ms` | 77 ms | 230 ms | 410 ms |
+| Rerun, one option changed | `rerun_one_changed.settled_ms` | 90 ms | 228 ms | 422 ms |
+| Click: the row highlights | `click_select.local_painted_ms` | 17 ms | 37 ms | 78 ms |
+| Click: the round trip and its long tasks end | `click_select.settled_ms` | 98 ms | 262 ms | 488 ms |
 | Scroll frame, median / p95 | `scroll.p50_ms` / `p95_ms` | 17 / 18 ms | 17 / 18 ms | 17 / 18 ms |
 | Payload sent with the list | `mount.ws_bytes` | 0.67 MB | 3.35 MB | 6.70 MB |
-| The `listview()` call in Python | `py_mount.py_ms` | 22 ms | 110 ms | 216 ms |
-| DOM nodes | `dom_nodes` | 31,474 | 155,874 | 311,374 |
+| The `listview()` call in Python | `py_mount.py_ms` | 21 ms | 110 ms | 235 ms |
+| DOM nodes | `dom_nodes` | 31,555 | 156,355 | 312,355 |
 
-The ungrouped shape scrolls the same and is 10 to 26 % faster in the other scenarios at 50,000 and 100,000 rows; its payload is a third smaller: 4.5 MB at 100,000 rows.
+The ungrouped shape scrolls the same and is 7 to 28 % faster in the other scenarios at 50,000 and 100,000 rows; its payload is a third smaller: 4.5 MB at 100,000 rows.
 
 How to read it:
 
-- **Everything that touches the rows grows in proportion to them.** Doubling the rows from 50,000 to 100,000 multiplies the mount, the search, both reruns and a click by 1.7 to 2.1.
-- **Scrolling stays at the frame rate at every size measured.** Over the 60 scripted scroll steps a frame takes 17 ms at the median and 18 ms at the 95th percentile, from 100 to 100,000 rows: the 60 Hz frame time.
-- **What remains of a click is the round trip.** At 100,000 rows a click's `roundtrip_ms` is 457 ms of its 508 ms `settled_ms`. A click on a keyed listview sends the 6.7 MB options again, and the rerun calls `listview()` again (218 ms, `py_rerun.py_ms`). The main thread is busy for 312 ms of the click (`click_select.task_ms`), 156 ms of it in script.
-- **Compared with 2026-10-07**, before the off-screen render chunks, the list appears 2.3 times sooner at 100,000 rows (2,596 ms then), a click settles 2.6 times sooner (1,308 ms), and a scroll frame's p95 falls from 198 ms to 18 ms. The DOM holds 24 % fewer nodes (410,274 then), because a row in a skipped render chunk has no `::before`.
-- **The frontend tier** ran every cell. Its 100,000-row mount takes 6.7 s grouped and 6.1 s ungrouped in jsdom, and the worker peaked at 3.8 GB of memory.
+- **Everything that touches the rows grows in proportion to them.** Doubling the rows from 50,000 to 100,000 multiplies the mount, the search, both reruns and a click by 1.8 to 2.1.
+- **Scrolling stays at the frame rate at every size measured.** Over the 60 scripted scroll steps a frame takes 17 ms at the median and 18 ms at the 95th percentile, from 100 to 100,000 rows, in all three shapes: the 60 Hz frame time.
+- **What remains of a click is the round trip.** At 100,000 rows a click's `roundtrip_ms` and `settled_ms` both have a median of 488 ms; a long task followed the round trip in one of the three reps. A click on a keyed listview sends the 6.7 MB options again, and the rerun calls `listview()` again (239 ms, `py_rerun.py_ms`). The main thread is busy for 311 ms of the click (`click_select.task_ms`), 165 ms of it in script.
+- **Compared with 1.0.1**, measured the same evening from GitHub `main` (`307c2a6`, the library code of the `v1.0.1` tag, with Streamlit 1.64.0), the list appears 2.1 times sooner at 100,000 rows (2,387 ms then), a click settles 2.6 times sooner (1,255 ms), and a scroll frame's p95 falls from 196 ms to 18 ms. The DOM holds 24 % fewer nodes (410,274 then), because a row in a skipped render chunk has no `::before`. The mount's `script_ms` rises by 20 % (561 ms then) and `heap_mb` by 5 %. The `listview()` call stays within the spread in 17 of 21 cells, so the newer Streamlit does not explain the gain.
+- **The frontend tier** ran every cell. Its 100,000-row mount takes 6.7 s grouped, 6.4 s ungrouped and 6.8 s disabled in jsdom. Against 1.0.1 it shows only the added script, because jsdom performs no layout or paint: React's work takes 1.1 to 1.6 times as long in 55 of the 76 cells from 10,000 rows up, and the rest stay within their rme. `add_option` in the ungrouped shape takes 3.9 to 5.0 times as long, because an option added to a list without groups changes `aria-setsize` on every row.
 
 ### The `disabled` shape
 
@@ -377,7 +377,7 @@ How to read it:
 - **Everything else stays within the spread.** At 100,000 rows the search, a click, the group toggles, scrolling and `add_option` show ranges that overlap between the two shapes. The run measured no cost of the disabled rows themselves.
 - **The frontend tier agrees.** Only the 100,000-row `mount` moved beyond its error margin: 5.51 s instead of 5.26 s (+5 %, rme ±3 %). The `disabled` cells ran to completion at every size, 100,000 rows included.
 - **An app can avoid the cost.** A row without the key is enabled, so passing `disabled` only on the rows that are disabled sends the smaller payload.
-- **Since the off-screen render chunks, a click shows the cost too.** In the reference run of 2026-10-11, at 100,000 rows, a click settled in 584 ms with the key and 508 ms without (+15 %), a rerun that sends the options took 448 ms instead of 398 ms (+13 %), and the `listview()` call 249 ms instead of 216 ms (+15 %). Paint no longer hides the transfer, and a click on a keyed listview sends the larger payload again. Search and scrolling take as long as without the key, and a group toggle 5 % longer.
+- **Since the off-screen render chunks, a rerun and a click show the cost too.** In the reference run of 2026-10-13, at 100,000 rows, a rerun that sends the options took 475 ms with the key and 410 ms without (+16 %), the `listview()` call 271 ms instead of 235 ms (+15 %), and the list appeared after 1,222 ms instead of 1,149 ms (+6 %). A click settled in 537 ms instead of 488 ms (+10 %); the ranges of the 3 reps overlap, and the run of 2026-10-11 measured +15 %. Paint no longer hides the transfer, and a click on a keyed listview sends the larger payload again. Search, scrolling and the group toggles take as long as without the key.
 
 ### Off-screen render chunks
 
