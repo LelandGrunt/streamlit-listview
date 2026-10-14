@@ -207,6 +207,15 @@ def test_height_invalid_raises(listview_mod, bad):
         call(mod, height=bad)
 
 
+def test_height_refuses_a_numpy_integer(listview_mod):
+    # The README says the sizes take a Python int. A NumPy integer, such as
+    # df.shape[0], is none: it does not subclass int (see _is_int_at_least).
+    np = pytest.importorskip("numpy")
+    mod, _fake = listview_mod
+    with pytest.raises(ValueError, match="height"):
+        call(mod, height=np.int64(300))
+
+
 def test_height_min_boundary_ok(listview_mod):
     mod, _fake = listview_mod
     # Min boundary (100) must not raise.
@@ -912,6 +921,33 @@ def test_state_selection_ships_an_empty_persisted_selection(listview_mod, monkey
     monkeypatch.setattr(st, "session_state", {"lv": {"selection": []}})
     call(mod, key="lv", default="a")
     assert fake.last["data"]["state_selection"] == []
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"options": ["b"], "default": "a"}, "not present in options"),
+        (
+            {"selection_mode": "multi", "default": ["a", "b"], "max_selections": 1},
+            "max_selections",
+        ),
+        ({"selection_mode": "single", "default": ["a", "b"]}, "must not be a list"),
+    ],
+)
+def test_a_persisted_selection_does_not_exempt_default_from_checks(
+    listview_mod, monkeypatch, overrides, message
+):
+    # A keyed widget applies default only at mount, yet every call checks it
+    # against the current parameters, whatever is persisted. The README tells
+    # callers to change default together with options, max_selections and
+    # selection_mode for this reason.
+    import streamlit as st
+
+    mod, fake = listview_mod
+    monkeypatch.setattr(st, "session_state", {"lv": {"selection": ["b"]}})
+    with pytest.raises(ValueError, match=message):
+        call(mod, key="lv", **overrides)
+    assert fake.calls == []
 
 
 @pytest.mark.parametrize(

@@ -1119,6 +1119,31 @@ describe("accept_new_options", () => {
     expect(screen.getAllByRole("option")).toHaveLength(2); // no new row
   });
 
+  it("an exact id match beats another row's visible label", async () => {
+    // The first pass compares the text with each row's id exactly, before any
+    // label: "Paris" selects the row whose id it is, which reads "Berlin",
+    // although the other row reads "Paris". The README shows this example.
+    const user = userEvent.setup();
+    const setStateValue = vi.fn();
+    render(
+      <Listview
+        data={baseData({
+          items: [
+            { id: "Paris", label: "Berlin" },
+            { id: "other", label: "Paris" },
+          ],
+          accept_new_options: true,
+          selection_mode: "multi",
+        })}
+        setStateValue={setStateValue}
+      />,
+    );
+    await user.type(screen.getByTestId("stListviewNewOption"), "Paris");
+    await user.keyboard("{Enter}");
+    expect(setStateValue).toHaveBeenLastCalledWith("selection", ["Paris"]);
+    expect(screen.getAllByRole("option")).toHaveLength(2); // no new row
+  });
+
   describe("two rows that match the typed text", () => {
     // The block without a group renders last wherever its rows stand in the
     // options, so the order on screen differs from the order of `options`.

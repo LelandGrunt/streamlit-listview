@@ -36,6 +36,7 @@ LISTVIEW_COUNTS = {
     "app.py": 4,  # single, multi, default-seeded single, markdown
     "app_features.py": 9,  # search, pinned, collapsible, jump, newopt, newopt_int, selectall, sorted, groupednew
     "app_remount.py": 1,  # keyed single that moves between sidebar and main
+    "app_on_change.py": 1,  # the README's recipe for user input only
     "app_jump_remount.py": 1,  # a keyed list whose key carries its default
     "app_row_height.py": 1,  # a keyed list whose rows change height on a rerun
     "app_enum_ids.py": 2,  # keyed lists whose ids subclass str and int

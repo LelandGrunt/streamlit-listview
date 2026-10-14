@@ -109,6 +109,8 @@ max-complexity = 10
 "streamlit_listview/**" = ["TRY004"]
 # The demo's snippet generator is tested by executing the code it emits.
 "tests/test_demo.py" = ["S102"]
+# The harness runs the README's recipe for on_change as a reader copies it.
+"e2e/app_on_change.py" = ["S102"]
 
 [tool.ty.environment]
 # demo/ and scripts/ hold top-level modules that the tests and e2e harnesses

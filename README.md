@@ -31,12 +31,12 @@ A selectable, scrollable **list widget** for Streamlit — with grouping, search
 - **Live search** — filters by label as you type, optionally **pinned** (stays put while the list scrolls).
 - **Sorting** — order items, group headers, or both alphabetically (ascending or descending).
 - **Select all / Deselect all** toggle for multi-select, scoped to the rows matching the current search — including rows inside collapsed groups (collapse is visual, not a filter) — excluding disabled rows. Select all adds the rows in the order shown, so a `max_selections` cap takes them from the top of the list.
-- **Add new options** — let users enter values that aren't in the list, in a field below it; each comes back in the type of the other options (see [Return value](#return-value)). Typing the visible text of an option that is already there selects that option instead of adding a duplicate row. Either way, the list scrolls to that row, unless the search hides it. At the `max_selections` cap, or for the text of a disabled option, the field keeps the text and says why it selected nothing.
+- **Add new options** — let users enter values that aren't in the list, in a field below it; each comes back in the type of the other options (see [Return value](#return-value)). Text that names an option already in the list selects that option instead of adding a duplicate row ([Return value](#return-value) says how text names an option). Either way, the list scrolls to that row, unless the search hides it. At the `max_selections` cap, or for the text of a disabled option, the field keeps the text and says why it selected nothing — unless that option is already selected, which the field takes as it is.
 - **Jump to default** — scrolls the first `default` id into view on first render, and again whenever `default` changes; a collapsed group that holds it opens. The list scrolls, never the surrounding page.
 - **Native theming** — pure `--st-*` CSS variables, so light, dark, and custom themes apply automatically. No Bootstrap, no hardcoded palette.
 - **Markdown labels & help** — the Markdown of Streamlit's own widgets (GFM + Streamlit directives like `:red[…]`, badges, `:material/icon:`, `:streamlit:`, emoji), with three exceptions (see [Markdown](#markdown-label--help)).
-- **Keyboard & screen-reader friendly** — `role="listbox"`/`option`, named `role="group"` per group header, the listbox named after your `label` (also when it is hidden or collapsed), each option's place in the whole list (`aria-posinset`/`aria-setsize`), and `aria-*` state. With `collapsible_groups=True` the list is a `role="tree"`: each group is a `treeitem` that reports whether it is open (`aria-expanded`), and its options are the `treeitem`s one level below. Arrow keys, Home/End, Enter/Space, `/` and Esc work as listed under [Keyboard](#keyboard).
-- **Large lists** — the browser lays out and paints only the rows near the visible frame, so in Chromium a list of 100,000 options scrolls at 60 frames per second (see [Large lists](#large-lists)).
+- **Keyboard access and ARIA markup** — `role="listbox"`/`option`, named `role="group"` per group header, the listbox named after your `label` (also when it is hidden or collapsed), each option's place in the whole list (`aria-posinset`/`aria-setsize`), and `aria-*` state. With `collapsible_groups=True` the list is a `role="tree"`: each group is a `treeitem` that reports whether it is open (`aria-expanded`; for a search, see [Collapsible groups](#collapsible-groups)), and its options are the `treeitem`s one level below. Arrow keys, Home/End, Enter/Space, `/` and Esc work as listed under [Keyboard](#keyboard). axe-core checks the markup against WCAG 2.1 A and AA in both themes; no screen reader has been tested ([HARNESS.md](https://github.com/LelandGrunt/streamlit-listview/blob/HEAD/HARNESS.md) lists the checks).
+- **Large lists** — the browser lays out and paints only the rows near the visible frame, so in the benchmark a list of 100,000 options scrolled at 60 frames per second in Chromium (see [Large lists](#large-lists)).
 - **Returns what you passed in** — select a dict, get that dict back (metadata and all); an entry the user adds comes back in the same type.
 
 Built on [**Streamlit Components V2**](https://docs.streamlit.io/develop/concepts/custom-components/components-v2): the widget renders inline in the host page (inside a Shadow DOM), not in an iframe.
@@ -71,7 +71,13 @@ choice = listview(
 st.write("You picked:", choice)
 ```
 
-Grouped, multi-select, searchable, with a help tooltip:
+Save it as `app.py` and start it with Streamlit (in a uv project, `uv run streamlit run app.py`):
+
+```sh
+streamlit run app.py
+```
+
+The examples below reuse these imports. Grouped, multi-select, searchable, with a help tooltip:
 
 ```python
 choice = listview(
@@ -144,7 +150,7 @@ def listview(
 | `label`              | Text above the list; renders inline Markdown (see [Markdown](#markdown-label--help)).                                                |
 | `options`            | The options — simple `str`/`int` values or dicts (see [Options](#options)).                                                          |
 | `selection_mode`     | `"single"` (the default) or `"multi"`.                                                                                               |
-| `default`            | Initially selected option id (or list of ids in multi mode); applied at mount only (see [Keying](#keying)).                          |
+| `default`            | Initially selected option id (or list of ids in multi mode); applied at mount only, checked on every call (see [Keying](#keying)).   |
 | `format_func`        | Maps an **option** — the dict, or the scalar itself — to its display label; an explicit dict `label` wins (see [Options](#options)). |
 | `enable_search`      | Adds a search field that live-filters the list by label.                                                                             |
 | `pin_search`         | Keeps the search field in view while the list scrolls; requires `enable_search=True`.                                                |
@@ -170,6 +176,8 @@ def listview(
 | `args`               | Positional arguments for `on_change`: a tuple or a list.                                                                             |
 | `kwargs`             | Keyword arguments for `on_change`: a dict with `str` keys.                                                                           |
 | `key`                | Widget identity across reruns — strongly recommended (see [Keying](#keying)).                                                        |
+
+Every invalid argument raises `ValueError` before the widget renders, a wrong type included. The flags take a `bool`, and the sizes and `max_selections` a Python `int`: `True`, `300.0` and a NumPy integer are refused. `default` takes one id in single mode and a list of ids in multi mode.
 
 ### Options
 
@@ -212,7 +220,7 @@ Two things to know about which options reach it:
 
 ### Sorting
 
-By default options render in the order you pass them (`sort=None`). Set `sort` to reorder alphabetically by the displayed label / group name (case-insensitive, stable):
+By default (`sort=None`) the list keeps the order you pass, group by group: each group appears where its first option stands and collects its options in their input order. The options `A1`, `B1`, `A2` of the groups A and B therefore render as `A1`, `A2`, `B1`. Set `sort` to reorder alphabetically by the displayed label / group name (case-insensitive, stable):
 
 - `sort="items"` — sort options within each group; group order unchanged.
 - `sort="groups"` — sort the group headers; option order within a group unchanged.
@@ -227,6 +235,8 @@ With `collapsible_groups=True` every group header becomes a toggle. `collapsed_g
 The sharp edge of "per group": with `collapsed_groups="all"`, a **brand-new group that appears after mount starts collapsed**. If you append a group to a live list and want it open, name the groups explicitly instead of using `"all"`. A group that disappears and later comes back still counts as seen, so it returns **open** rather than collapsed a second time.
 
 In a grouped list, the header of the options without a group is a toggle too. `collapsed_groups="all"` collapses it, and so does a list that names `ungrouped_label`.
+
+A search shows the matching rows of a closed group too. The group itself stays closed: its chevron and `aria-expanded` still report it closed, and its rows hide again when the search is cleared. A screen reader is therefore told that the group is collapsed while its matching rows are in the list.
 
 The widget itself opens a collapsed block in two cases. When the user adds an entry, the list opens the block the entry appears in and scrolls to it; an entry the search does not match stays hidden until the search is cleared. When the list scrolls its `default` into view, it first opens the block that holds it.
 
@@ -245,10 +255,20 @@ An entry the user adds via `accept_new_options` comes back in the type of the ot
 | all `int`                 | `42`          | `42`                                |
 | all `str`, mixed, or none | `Mango`       | `"Mango"`                           |
 
-- With int options the add field accepts only a whole number written plainly — `42` or `-5`, not `007`, `+5` or `1.5` — and shows a hint below the field for anything else. Text that matches an existing row, by id or by visible label, still selects that row.
+- With int options the add field accepts only a whole number written plainly — `42` or `-5`, not `007`, `+5` or `1.5` — and shows a hint below the field for anything else. Text that matches an existing row still selects that row.
 - With dict options the added entry's `id` is the typed text, even when your own ids are ints, so `entry["id"] not in my_ids` tells added entries apart.
-- An unknown `default`, and a selected id that a keyed widget keeps after you remove it from `options`, follow the same rule.
+- An unknown `default`, and a selected id that a keyed widget keeps after you remove it from `options`, follow the same rule. Such an entry is built from the id alone: a removed dict option comes back as `{"id": ..., "label": ...}`, with its id as the label and without its other fields.
 - One exception: an entry added while the options had another type — `"abc"`, added before int options arrived — still shows as a row, so it comes back as the typed string.
+
+The add field trims the text, then looks for a row it names in three passes; the first pass that finds one decides:
+
+1. a row whose id, written as text, is exactly the text;
+2. a row whose visible label is the text, ignoring case as the search does;
+3. a row whose id is the text, ignoring case.
+
+Within a pass, the row higher in the list wins. With the options `{"id": "Paris", "label": "Berlin"}` and `{"id": "other", "label": "Paris"}`, the text `Paris` therefore selects the row that reads Berlin. Text that names no row becomes a new entry.
+
+An added entry is a row of the widget only: `listview()` never adds it to your `options`. It stays in the list after the user deselects it, for as long as the widget keeps its state. A move between `st.sidebar` and the main body keeps only the entries still selected. A new `key`, or a parameter change on a widget without one, starts again from your `options` and `default`. To keep an entry, add the returned value to options you store yourself, such as a list in `st.session_state`; from then on its row is that option.
 
 ### Changing `options`, `max_selections` or `selection_mode` later
 
@@ -258,18 +278,43 @@ On a **keyed** widget the selection survives a rerun (an unkeyed one remounts an
 - everything past a freshly lowered `max_selections` — the earliest-selected survive;
 - everything past the first entry when `selection_mode` flips from `"multi"` to `"single"`.
 
-A selected option that merely became `disabled` is **not** dropped — a disabled selection is locked, not removed.
+A selected option that merely became `disabled` is **not** dropped. The user cannot remove a disabled selection by clicking it, with Esc or with Deselect all. In single mode, though, selecting another row replaces it, as it replaces any selection. The corrections above apply to it as to any other row.
 
-Two consequences to plan for:
+Three consequences to plan for:
 
-- **`on_change` fires once** on that rerun. A correction is written back through the same channel a click uses, and Components V2 offers no second one for it, so the callback cannot tell them apart. If yours must run for real user input only, compare against the previous selection yourself.
-- **The returned value never shows the uncorrected selection.** The write-back triggers the rerun that carries the correction, so it arrives one rerun late. `listview()` therefore applies the same rules on the way out, and never returns more options than you allow, an option you removed, or one row twice:
+- **`on_change` fires once**, on the rerun after the one that changed the parameters: the widget receives the new parameters in that rerun, and its correction starts the next one. A correction is written back through the same channel a click uses, and Components V2 offers no second one, so the callback receives no sign of where a change came from. The returned value shows it; see the example below.
+- **The returned value never shows the uncorrected selection.** The write-back triggers the rerun that carries the correction, so it arrives one rerun late. `listview()` therefore applies the same rules on the way out. It never returns more options than you allow or one row twice, and it returns an option you removed only as a new entry, under `accept_new_options=True`:
   - it matches ids to options by their rendered `String(id)` identity;
   - it drops an id that matches no option, or keeps it as a new entry in the type of the other options when `accept_new_options=True`;
   - it collapses duplicate spellings of one row;
   - it truncates the multi list to `max_selections` and keeps the earliest-selected entries, as the widget does.
 
   Nothing lags: once you add the int `7` to `options`, a typed `"7"` comes back as that option on the same rerun.
+- **`default` must still fit.** A keyed widget applies `default` only at mount, but every call checks it against the current parameters, whatever the widget has selected. A `default` that names a removed option (without `accept_new_options`), holds more ids than a lowered `max_selections`, or is a list after a switch to `"single"` raises `ValueError`. Change `default` together with the parameters, or pass `None`.
+
+The rerun that changes the parameters already returns the corrected value. The rerun that a correction's callback belongs to therefore returns the same value again, while the rerun after a click returns a new one. To act on user input only, let the callback set a flag, and compare the value with the one the previous run returned:
+
+```python
+def mark_changed():
+    st.session_state.fruit_changed = True
+
+
+one_only = st.toggle("One fruit only")
+fruit = listview(
+    "Fruit",
+    ["Apple", "Banana", "Cherry"],
+    selection_mode="multi",
+    max_selections=1 if one_only else None,
+    on_change=mark_changed,
+    key="fruit",
+)
+changed = st.session_state.pop("fruit_changed", False)
+if changed and fruit != st.session_state.get("fruit_last"):
+    st.toast(f"You picked {fruit}")  # a click or a key, never a correction
+st.session_state.fruit_last = fruit
+```
+
+The flag matters: the rerun that changes the parameters calls no callback, yet its value can differ from the one before.
 
 ### Markdown (label & help)
 
@@ -280,19 +325,21 @@ Two consequences to plan for:
 
 > **Note:** Three Streamlit features are not supported. LaTeX/KaTeX (`$…$`) and the `rainbow` and `primary` colors (`:rainbow[…]`, `:primary-badge[…]` and the like) render as literal text. There is no `unsafe_allow_html`: raw HTML stays escaped.
 
+Only `label` and `help` render Markdown. Option labels, the labels `format_func` returns, group names and `ungrouped_label` render as plain text: the label `**Apple**` shows its asterisks.
+
 ### Keyboard
 
 Tab into the list, then:
 
-| Key           | Effect                                                                                                  |
-| ------------- | ------------------------------------------------------------------------------------------------------- |
-| ↑ / ↓         | Moves the focus to the previous or next row; disabled rows are skipped.                                 |
-| Home / End    | Moves the focus to the first or last row.                                                               |
-| Enter / Space | Selects the focused row, or deselects it when it is selected.                                           |
-| `/`           | Moves to the search field (with `enable_search=True`).                                                  |
-| Esc           | Clears the search text; with an empty search, clears the selection and calls `on_change`.               |
-| →             | With `collapsible_groups=True`: opens a closed group; on an open group, moves to the group's first row. |
-| ←             | With `collapsible_groups=True`: closes an open group; on a row, moves to the row's group header.        |
+| Key           | Effect                                                                                                           |
+| ------------- | ---------------------------------------------------------------------------------------------------------------- |
+| ↑ / ↓         | Moves the focus to the previous or next row; disabled rows are skipped.                                          |
+| Home / End    | Moves the focus to the first or last row.                                                                        |
+| Enter / Space | Selects the focused row, or deselects it when it is selected.                                                    |
+| `/`           | Moves to the search field (with `enable_search=True`).                                                           |
+| Esc           | Clears the search text; with an empty search, clears the selection, and calls `on_change` if that removed a row. |
+| →             | With `collapsible_groups=True`: opens a closed group; on an open group, moves to the group's first row.          |
+| ←             | With `collapsible_groups=True`: closes an open group; on a row, moves to the row's group header.                 |
 
 Esc works the same in the search field. A disabled row stays selected when Esc clears the selection.
 
@@ -312,33 +359,46 @@ The list itself looks like an open `st.selectbox` menu, and each state borrows t
 - **Search field** — filled like `st.text_input`.
 - **Frame** — turns the primary color only while the widget has focus, like every native input; hovering or scrolling leaves it alone. A click anywhere inside the frame, including the empty space below a short list, focuses the list.
 
-In `st.sidebar` the widget detects its container and adapts. Streamlit's sidebar theme swaps `--st-background-color` with `--st-secondary-background-color`; the list undoes that swap and stays on the menu's surface, which is what `st.selectbox` opens onto in either container (white in the light theme, `#0e1117` in the dark one). The search field swaps with it, so it still stands out from the list. Nothing to configure, and a custom `[theme.sidebar]` is respected — the colors are derived from the tokens, never hardcoded.
+In `st.sidebar` the widget detects its container and adapts. Streamlit's sidebar theme swaps `--st-background-color` with `--st-secondary-background-color`; the list undoes that swap and stays on the menu's surface, which is what `st.selectbox` opens onto in either container (white in the light theme, `#0e1117` in the dark one). The search field swaps with it and keeps the other of the two background colors, so it stands out from the list wherever your theme gives the two different values. Nothing to configure, and a custom `[theme.sidebar]` is respected — the colors are derived from the tokens, never hardcoded.
 
 The hover highlight uses CSS relative color syntax (Chrome/Edge 119+, Firefox 128+, Safari 18+). Older browsers show a close approximation instead.
 
 ### Keying
 
-`key` is **strongly recommended for any dynamic app.** With a `key`, Streamlit updates the existing element in place when other parameters change, so frontend-local UI state (collapse, search text, focus, scroll) **and** the selection survive. Without a `key`, *any* parameter change remounts the widget and resets that state — so changing the `key` is the deliberate way to reset the widget.
+`key` is **strongly recommended for any dynamic app.** With a `key`, Streamlit updates the existing element in place when other parameters change, so frontend-local UI state (collapse, search text, focus, scroll) **and** the selection survive. Without a `key`, *any* parameter change remounts the widget and resets that state — so changing the `key` is the deliberate way to reset the widget. A counter in the key resets it on demand:
+
+```python
+if st.button("Reset fruit"):
+    st.session_state.fruit_resets = st.session_state.get("fruit_resets", 0) + 1
+listview(
+    "Fruit",
+    ["Apple", "Banana", "Cherry"],
+    default="Apple",
+    key=f"fruit-{st.session_state.get('fruit_resets', 0)}",
+)
+```
 
 A keyed widget's selection also survives moving it between containers (say `st.sidebar` ↔ the main body): the move rebuilds the frontend, but the widget re-seeds its rows from the selection persisted in `st.session_state`, so the rows and the returned value both carry over — only frontend-local UI state (search text, scroll, collapse) resets. Keep data of your own under another key: a value in `st.session_state[key]` that is not the listview's state raises `ValueError`, because the rows could not show it while `listview()` returned it.
 
 The selection lasts as long as Streamlit keeps the widget's state. When a script run ends without calling `listview()` for a key, Streamlit deletes that widget's state, as it does for its own widgets, and the next call starts again from `default`. This happens when the call sits in a branch that a run skips, such as an `if` or a tab created with `on_change="rerun"`. To keep the selection, call `listview()` on every run; `st.tabs` without `on_change` runs the code of every tab.
 
-Because the selection survives, two parameters only take effect at mount: changing `default` on a keyed widget moves neither the displayed selection nor the returned value — it only scrolls the newly named row into view — and changing `collapsed_groups` never re-collapses a group that has already been shown ([Collapsible groups](#collapsible-groups)). Change the `key` to re-apply either. A keyed selection that no longer fits the current parameters is corrected instead — see [Changing `options`, `max_selections` or `selection_mode` later](#changing-options-max_selections-or-selection_mode-later).
+Because the selection survives, two parameters only take effect at mount: changing `default` on a keyed widget moves neither the displayed selection nor the returned value — it only scrolls the newly named row into view — and changing `collapsed_groups` never re-collapses a group that has already been shown ([Collapsible groups](#collapsible-groups)). Change the `key` to re-apply either. Every call still checks `default` against the current parameters. A keyed selection that no longer fits the current parameters is corrected instead — see [Changing `options`, `max_selections` or `selection_mode` later](#changing-options-max_selections-or-selection_mode-later).
 
 ### Large lists
 
-The widget creates every row, but the browser lays out and paints only the rows near the visible frame. Measured in Chromium on a laptop with a Core Ultra 7 155H, with 100,000 options in groups of 100:
+The widget creates every row, but the browser lays out and paints only the rows near the visible frame. The figures below come from the [reference run of the benchmark](https://github.com/LelandGrunt/streamlit-listview/blob/HEAD/BENCHMARKS.md#reference-run-100-to-100000-rows), which also describes its method: Chromium 153 and Streamlit 1.65 on a laptop with a Core Ultra 7 155H, server and browser on the same machine, and 100,000 options in groups of 100. Each figure is the median of three runs.
 
-| Measurement                       | Median |
-| --------------------------------- | ------ |
-| The list appears                  | 1.1 s  |
-| The app settles after a click     | 0.5 s  |
-| A scroll frame, 95th percentile   | 18 ms  |
+| Measurement                     | Median | Measured from … to …                                                                             |
+| ------------------------------- | ------ | ------------------------------------------------------------------------------------------------ |
+| The list appears                | 1.1 s  | a click that shows the list in a loaded page, to the first frame drawn after the last row exists |
+| The app settles after a click   | 0.5 s  | a click on a row, to the frame after the rerun, or to the end of a later task of 50 ms or more   |
+| A scroll frame, 95th percentile | 18 ms  | 60 scripted scroll steps; one frame at 60 Hz takes 17 ms                                         |
+
+The figures leave out loading the page and its scripts, and the network between server and browser.
 
 Firefox before 125 and Safari before 18 lay out and paint every row, so there a large list scrolls and reacts more slowly.
 
-Streamlit sends the whole option list to the browser again on every rerun that changes the listview's parameters and, for a listview with a `key`, its selection. At 100,000 options each such rerun sends 6.75 MB. Websocket compression cuts it to 0.48 MB on the network, for about 0.1 s more server CPU. Turn it on in your app's `.streamlit/config.toml`:
+Streamlit sends the whole option list to the browser again on every rerun that changes the listview's parameters and, for a listview with a `key`, its selection. The size grows with the number of options and the length of their ids, labels and group names: the benchmark's 100,000 options took 6.7 MB. In the demo app, whose 100,000 options make a 6.75 MB message, websocket compression cut it to 0.48 MB on the network, for about 0.1 s more server CPU. Turn it on in your app's `.streamlit/config.toml`:
 
 ```toml
 [server]
@@ -353,7 +413,7 @@ An interactive playground — the parameters as live controls, plus a generated 
 uv run streamlit run demo/app.py
 ```
 
-The demo needs the package **installed**. The first `uv run` installs it and compiles the frontend into `streamlit_listview/frontend/build/` (a generated, git-ignored artifact); that step needs Node.js ≥ 24 and npm. After an edit under `streamlit_listview/frontend/src/`, run `npm run build` again (see [Building from source](#building-from-source)). See [`demo/README.md`](https://github.com/LelandGrunt/streamlit-listview/blob/HEAD/demo/README.md) for details.
+The demo needs Streamlit ≥ 1.56 and the package **installed**. The first `uv run` installs both and compiles the frontend into `streamlit_listview/frontend/build/` (a generated, git-ignored artifact); that step needs Node.js ≥ 24 and npm. After an edit under `streamlit_listview/frontend/src/`, run `npm run build` again (see [Building from source](#building-from-source)). See [`demo/README.md`](https://github.com/LelandGrunt/streamlit-listview/blob/HEAD/demo/README.md) for details.
 
 ## Building from source
 
@@ -399,8 +459,8 @@ pre-commit install --allow-missing-config
 uv build
 ```
 
-The build backend compiles the frontend automatically (`npm ci` if needed, then
-`npm run build`) before packaging, so the wheel always bundles a fresh
+The build backend compiles the frontend from the current sources (`npm ci` if
+needed, then `npm run build`) before packaging, so the wheel bundles that
 `streamlit_listview/frontend/build` **and** the nested
 `streamlit_listview/pyproject.toml` component manifest (Streamlit reads it at
 runtime to resolve the asset globs). This produces `dist/`:
@@ -408,12 +468,21 @@ runtime to resolve the asset globs). This produces `dist/`:
 - `dist/streamlit_listview-1.0.1-py3-none-any.whl`
 - `dist/streamlit_listview-1.0.1.tar.gz` (sdist)
 
+Two builds reuse the bundle already in `streamlit_listview/frontend/build`
+instead of compiling it: a build with `LISTVIEW_SKIP_NPM_BUILD=1`, and a build
+from the sdist, which ships the bundle without the frontend sources. Both check
+only that the bundle holds one JS and one CSS file, not that it matches the
+sources. After a frontend edit, run `npm run build` before such a build.
+
 ### Requirements
 
-- Python ≥ 3.10
-- Streamlit ≥ 1.51
-- Node.js ≥ 24 (LTS) — only to build the frontend
-- [uv](https://docs.astral.sh/uv/) — used by the commands shown above
+- Python ≥ 3.10 and Streamlit ≥ 1.51 — to use the package
+- Streamlit ≥ 1.56 — to run the demo, which passes `required` to `st.pills`
+  and `st.segmented_control`
+- Node.js ≥ 24 (LTS) and npm — only to build the frontend from a checkout; a
+  wheel from PyPI ships it built
+- [uv](https://docs.astral.sh/uv/) — for the commands shown above; the package
+  does not need it
 
 ## License
 

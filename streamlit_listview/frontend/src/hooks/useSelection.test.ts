@@ -59,6 +59,18 @@ describe("useSelection (single)", () => {
     expect(setStateValue).toHaveBeenCalledWith("selection", ["b"]);
   });
 
+  it("replaces a disabled selection when another row is selected", () => {
+    // A disabled row cannot be deselected, yet single mode replaces whatever is
+    // selected, a disabled row included; the README states both. 'c' is
+    // disabled in `items`.
+    const { result, setStateValue } = renderSelection({
+      initialSelection: ["c"],
+    });
+    act(() => result.current.toggle("a"));
+    expect(result.current.selection).toEqual(["a"]);
+    expect(setStateValue).toHaveBeenCalledWith("selection", ["a"]);
+  });
+
   it("clicking the selected item deselects it", () => {
     const { result, setStateValue } = renderSelection({
       initialSelection: ["a"],
@@ -554,6 +566,19 @@ describe("useSelection (reconciliation)", () => {
     });
     expect(result.current.selection).toEqual(["a"]);
     expect(setStateValue).not.toHaveBeenCalled();
+  });
+
+  it("drops a disabled id past a lowered cap like any other", () => {
+    // Being disabled keeps a row selected, not its cap slot: the cap counts
+    // positions in selection order, as the README says.
+    const { result, rerender, setStateValue } = renderSelection({
+      items: [abc[0]!, { id: "b", label: "B", disabled: true }, abc[2]!],
+      selectionMode: "multi",
+      initialSelection: ["a", "b"],
+    });
+    rerender({ maxSelections: 1 });
+    expect(result.current.selection).toEqual(["a"]);
+    expect(setStateValue).toHaveBeenLastCalledWith("selection", ["a"]);
   });
 
   it("commits nothing while there is nothing to correct", () => {

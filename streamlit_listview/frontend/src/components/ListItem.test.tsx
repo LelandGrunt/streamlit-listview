@@ -28,6 +28,26 @@ describe("ListItem", () => {
     expect(opt.getAttribute("aria-selected")).toBe("false");
   });
 
+  it("renders the label as plain text, not Markdown", () => {
+    // Only the widget's label and help render Markdown (README, "Markdown").
+    render(
+      <ListItem
+        item={{ id: "a", label: "**Apple**" }}
+        domId="listview-opt-a"
+        posInSet={1}
+        setSize={1}
+        selected={false}
+        disabled={false}
+        focused={false}
+        muted={false}
+        onSelect={vi.fn()}
+      />,
+    );
+    const opt = screen.getByRole("option");
+    expect(opt).toHaveTextContent("**Apple**");
+    expect(opt.querySelector("strong")).toBeNull();
+  });
+
   it("reflects the selected state via aria-selected", () => {
     const { container } = render(
       <ListItem
