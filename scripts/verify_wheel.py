@@ -72,26 +72,27 @@ def project_version(pyproject_text: str) -> str:
 
 
 def _parse_toml(text: str) -> dict[str, Any]:
-    """Parse `text` as Streamlit does, with `toml`; without it, with `tomllib`.
+    """Parse `text` as Streamlit does: with `tomllib`, or `toml` on Python 3.10.
 
-    Streamlit reads the shipped manifest with `toml` when the server starts
-    (components/v2/manifest_scanner.py). scripts/push_gate.py imports this
-    module on the standard library alone, so `toml` is imported here, not at
-    the top, and the standard library's parser stands in when it is absent.
-    Both raise a ValueError for a document they cannot parse.
+    Streamlit reads the shipped manifest when the server starts
+    (components/v2/manifest_scanner.py). Streamlit 1.66 and later parse it with
+    `tomllib` and need Python 3.11, which brought it; earlier releases parse it
+    with `toml`, their own dependency, and only they install on Python 3.10.
+    On Python 3.11 and later with Streamlit 1.65 or earlier, the two parsers
+    differ; CI installs the newest Streamlit, which parses as this does.
+    scripts/push_gate.py imports this module on the standard library alone, so
+    both imports wait for the call. Both parsers raise a ValueError for a
+    document they cannot parse.
     """
-    try:
-        import toml
-    except ModuleNotFoundError:
-        # tomllib arrived in Python 3.11. ty checks against 3.10, the floor of
-        # requires-python, unless UV_PYTHON names a version, as in CI; an
-        # ignore comment on the import is unused under one of the two, while
-        # this check holds under both.
-        if sys.version_info < (3, 11):
-            raise
+    # ty checks one Python version: 3.10, the floor of requires-python, unless
+    # UV_PYTHON names another, as in CI. It reports an import the environment
+    # lacks even inside a `try`, but not in a branch that version never runs.
+    if sys.version_info >= (3, 11):
         import tomllib
 
         return tomllib.loads(text)
+    import toml
+
     return cast(dict[str, Any], toml.loads(text))
 
 

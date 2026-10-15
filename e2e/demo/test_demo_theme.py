@@ -14,17 +14,21 @@ so the assertions never depend on how a color happens to be spelled.
 """
 
 import json
+import sys
 from pathlib import Path
 from typing import cast
 
 import pytest
-import toml
 from playwright.sync_api import Page, expect
 
 from e2e.demo.test_demo_empty_pickers import generated_code
 from e2e.e2e_utils import StreamlitRunner
 
 ROOT = Path(__file__).parent.parent.parent.absolute()
+sys.path.insert(0, str(ROOT / "demo"))
+
+import themes
+
 THEME = "snowflake_brand"
 THEMES_DIR = ROOT / "demo" / ".streamlit"
 THEME_FILE = THEMES_DIR / f"config_theme_{THEME}.toml"
@@ -36,7 +40,11 @@ THEME_LABEL = {
     )["Themes"]
 }[THEME]
 # Playwright's browser reports a light OS scheme, so the light variant renders.
-THEME_PRIMARY = toml.load(THEME_FILE)["theme"]["light"]["primaryColor"]
+# The switcher's own parser reads it, so the test needs no `toml` package, which
+# Streamlit 1.66 no longer installs.
+THEME_PRIMARY = themes.flatten_theme(THEME_FILE.read_text(encoding="utf-8"))[
+    "theme.light.primaryColor"
+]
 
 # Pins the switcher on, whatever the calling shell exported (the runner hands
 # the server this process's whole environment), and keys a server of its own.

@@ -12,12 +12,10 @@ refuses theme options), which is why it is confined to this module.
 """
 
 import json
+import sys
 import threading
 from datetime import timedelta
 
-# The parser Streamlit itself reads config.toml with, so a theme file overlays
-# exactly as it would load from disk.
-import toml
 from streamlit import config
 from streamlit.config_option import ConfigOption
 
@@ -73,6 +71,26 @@ def theme_labels(directory):
     return {entry["Name"]: entry["DisplayName"] for entry in manifest["Themes"]}
 
 
+def _parse_toml(text):
+    """Parse *text* as TOML: with ``tomllib`` on Python 3.11 and later, else ``toml``.
+
+    Streamlit 1.66 and later read ``config.toml`` with ``tomllib`` and need
+    Python 3.11, which brought it; they no longer install the ``toml`` package.
+    Earlier releases read it with ``toml``, their own dependency, and only they
+    install on Python 3.10. So each import resolves wherever its branch runs.
+    On Python 3.11 and later with Streamlit 1.65 or earlier, the demo and
+    Streamlit use different parsers; the shipped theme files read the same
+    under both.
+    """
+    if sys.version_info >= (3, 11):
+        import tomllib
+
+        return tomllib.loads(text)
+    import toml
+
+    return toml.loads(text)
+
+
 def flatten_theme(text):
     """Spell a theme file's ``[theme]`` table as Streamlit option keys.
 
@@ -90,7 +108,7 @@ def flatten_theme(text):
             else:
                 options[f"{prefix}.{key}"] = value
 
-    walk("theme", toml.loads(text).get("theme", {}))
+    walk("theme", _parse_toml(text).get("theme", {}))
     return options
 
 

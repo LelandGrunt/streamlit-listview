@@ -11,6 +11,7 @@ import runpy
 import sys
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -323,6 +324,15 @@ def test_verify_wheel_parses_the_manifest_without_toml(monkeypatch):
     problems = verify_wheel.manifest_problems("[project", EXPECTED_VERSION)
     assert len(problems) == 1
     assert problems[0].startswith(f"{verify_wheel.MANIFEST} is not valid TOML")
+
+
+def test_verify_wheel_parses_with_toml_on_python_3_10(monkeypatch):
+    # On 3.10 only Streamlit 1.65 and earlier install, and each of them reads
+    # the manifest with `toml`, its own dependency.
+    monkeypatch.setattr(sys, "version_info", (3, 10, 0))
+    fake = SimpleNamespace(loads=lambda text: {"parsed": text})
+    monkeypatch.setitem(sys.modules, "toml", fake)
+    assert verify_wheel._parse_toml("x = 1") == {"parsed": "x = 1"}
 
 
 def test_verify_wheel_needs_toml_on_python_3_10(monkeypatch):
