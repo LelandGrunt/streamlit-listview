@@ -1194,6 +1194,17 @@ def test_every_workflow_sets_up_uv_with_the_gates_python(workflow):
     assert set(versions) == {push_gate.CI_PYTHON}
 
 
+def test_ty_checks_against_the_gates_python_without_uv_python():
+    """Drift guard: the commit hook sets no UV_PYTHON, so ty takes its version
+    from [tool.ty.environment]; under the floor of requires-python it would
+    read packages that uv.lock pins for newer Pythons only."""
+    text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    table = re.search(r"(?ms)^\[tool\.ty\.environment\]$(.*?)(?=^\[|\Z)", text)
+    assert table is not None
+    versions = re.findall(r'(?m)^python-version = "([^"]+)"$', table.group(1))
+    assert versions == [push_gate.CI_PYTHON]
+
+
 def test_ci_runs_the_browser_suite_that_the_gate_runs():
     """Drift guard: the gate's e2e step and CI's e2e job run the same suite."""
     ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")

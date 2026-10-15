@@ -35,11 +35,11 @@ repos:
       # test code; --no-install-project skips the editable install, which would
       # build the frontend bundle; --frozen leaves uv.lock alone. ty checks
       # against the Python version UV_PYTHON names (3.12 in CI and in the push
-      # gate), else against the floor of requires-python (3.10), and
-      # [tool.ty.environment] python-version does not override it. Guard an
-      # import that exists only in some versions with `sys.version_info`, not
-      # with an ignore comment: the comment is unused under one of the two
-      # versions, and ty fails.
+      # gate), else against python-version under [tool.ty.environment] in
+      # pyproject.toml (CI's Python), whatever Python the .venv runs. Guard
+      # code for one Python version with `sys.version_info`: ty skips a branch
+      # that its version never runs. An ignore comment there fails as unused
+      # once the checked version changes.
       - id: ty
         args: [--extra, devel, --no-install-project, --frozen]
 

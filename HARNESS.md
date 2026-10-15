@@ -118,7 +118,7 @@ flowchart LR
 
 ### Type checkers
 
-- **ty** checks the whole project on every commit: the package, the demo, the scripts and the tests. `python-platform = "all"` makes Windows and Linux report the same diagnostics. The hook runs against the locked environment (`--frozen`) without installing the project, so it never builds the frontend. Two rules beyond ty's defaults close two ways for `Any` to enter typed code: `missing-type-argument` forbids a bare `dict` or `list`, and `unsound-return-statement` forbids returning `Any` from a typed function. A written `Any` stays allowed; `listview()` takes a caller's options as `Any`.
+- **ty** checks the whole project on every commit: the package, the demo, the scripts and the tests. `python-platform = "all"` makes Windows and Linux report the same diagnostics. ty checks against CI's Python, 3.12, on every machine: `UV_PYTHON` names it in CI and in the push gate, and `python-version` under `[tool.ty.environment]` names it in the commit hook, whatever Python the checkout's `.venv` runs. The floor of `requires-python`, 3.10, would pair 3.10 with the packages that `uv.lock` pins for newer Pythons, such as Streamlit 1.66, which needs 3.11. The hook runs against the locked environment (`--frozen`) without installing the project, so it never builds the frontend. Two rules beyond ty's defaults close two ways for `Any` to enter typed code: `missing-type-argument` forbids a bare `dict` or `list`, and `unsound-return-statement` forbids returning `Any` from a typed function. A written `Any` stays allowed; `listview()` takes a caller's options as `Any`.
 - **tsc** checks the frontend in `strict` mode twice: the app code (`npm run typecheck`, also the first step of `npm run build`) and the tests (`tsconfig.test.json`). The app configuration omits the Node types, so production code cannot call a Node API. `src/__tests__/types.test.ts` pins the wire types with `expectTypeOf`. Five flags go beyond `strict`:
   - `noUncheckedIndexedAccess` types every `array[i]` as possibly undefined. The code checks the element or calls `elementAt` (`utils/arrays.ts`), which throws when the index leaves the array. oxlint forbids `!` in production code, so no assertion silences the check.
   - `exactOptionalPropertyTypes` lets an optional property hold `undefined` only when its type names `undefined`.
@@ -214,7 +214,7 @@ The confirmation `git -c listview.pushGithub=<version>` counts only on the comma
 
 Stage 4 runs once per commit. The push gate records each commit whose suite passed and skips the suite, the audits included, when that commit is pushed again. An advisory published since then surfaces in the GitHub run.
 
-Stage 4 runs on CI's Python version, 3.12, because ty checks against the version that `UV_PYTHON` names, else against 3.10, the floor of `requires-python`. An ignore comment on `import tomllib`, for example, is needed under 3.10 and unused under 3.12, where ty fails on it. The suite keeps its own project environment in `.git/push-gate/venv`, so the checkout's `.venv` keeps its Python version.
+Stage 4 runs on CI's Python version, 3.12, because `uv.lock` pins different packages for different Python versions: Streamlit 1.65 for 3.10, and 1.66 for 3.11 and later. On 3.12 the suite reads the locked packages that CI's `lint` job reads. The suite keeps its own project environment in `.git/push-gate/venv`, so the checkout's `.venv` keeps its Python version.
 
 ### On GitHub
 

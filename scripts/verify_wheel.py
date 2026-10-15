@@ -84,9 +84,9 @@ def _parse_toml(text: str) -> dict[str, Any]:
     both imports wait for the call. Both parsers raise a ValueError for a
     document they cannot parse.
     """
-    # ty checks one Python version: 3.10, the floor of requires-python, unless
-    # UV_PYTHON names another, as in CI. It reports an import the environment
-    # lacks even inside a `try`, but not in a branch that version never runs.
+    # ty checks one Python version, CI's 3.12 ([tool.ty.environment] in
+    # pyproject.toml). It reports an import the environment lacks even inside
+    # a `try`, but not in a branch that version never runs.
     if sys.version_info >= (3, 11):
         import tomllib
 

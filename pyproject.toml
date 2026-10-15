@@ -120,6 +120,13 @@ extra-paths = ["demo", "scripts", "scripts/gif"]
 # Check every platform's branches, so the hook on Windows and CI on Linux
 # report the same diagnostics.
 python-platform = "all"
+# Check against CI's Python (CI_PYTHON in scripts/push_gate.py; a test keeps the
+# two equal), on every machine. Without it, ty takes the floor of
+# requires-python, 3.10, but reads the packages that uv.lock pins for the
+# environment's Python, such as Streamlit 1.66 on 3.11 and later, which no
+# Python 3.10 can install. UV_PYTHON, which CI and the push gate set, overrides
+# it.
+python-version = "3.12"
 
 [tool.ty.rules]
 # Two rules beyond ty's defaults keep Any out of typed code: a bare generic

@@ -49,9 +49,10 @@ FRONTEND = "streamlit_listview/frontend"
 
 # The Python version of CI: every job in .github/workflows/ci.yml sets up uv with
 # this python-version, which setup-uv exports to the job as UV_PYTHON. ty checks
-# against the version UV_PYTHON names, else against the floor of
-# requires-python, so the suite runs with it too. tests/test_push_gate.py pins
-# it to the workflows.
+# against the version UV_PYTHON names, else against python-version under
+# [tool.ty.environment] in pyproject.toml. The suite runs with it too, so it
+# reads the packages that uv.lock pins for CI's Python. tests/test_push_gate.py
+# pins it to the workflows and to that setting.
 CI_PYTHON = "3.12"
 
 # X.Y.Z, or X.Y.Z with a pre-release suffix: the spellings the release skill
