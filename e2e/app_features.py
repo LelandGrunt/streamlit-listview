@@ -139,7 +139,8 @@ st.text(f"groupednew_echo={grouped_new!r}")
 st.subheader("Narrow frame")
 # 180 px is narrower than the search field's minimum width without the fix:
 # the input's intrinsic width of about 20 characters makes the field about
-# 230 px wide. Each search field below must shrink to fit its frame instead.
+# 230 px wide. Each search field below must shrink to fit its frame instead,
+# and the Select all toggle must take its own line below the field.
 with st.container(width=180):
     listview(
         "Narrow in-flow",
@@ -167,4 +168,18 @@ with st.container(width=180):
         select_all=True,
         height=120,
         key="narrow_selectall",
+    )
+
+# 300 px, wider than Streamlit's default sidebar (a 240 px listview), keeps the
+# field and the Select all toggle on one line.
+with st.container(width=300):
+    listview(
+        "Wide pinned with Select all",
+        OPTIONS,
+        selection_mode="multi",
+        enable_search=True,
+        pin_search=True,
+        select_all=True,
+        height=120,
+        key="wide_selectall",
     )

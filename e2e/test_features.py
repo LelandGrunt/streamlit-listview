@@ -1,5 +1,6 @@
 # e2e/test_features.py
 from pathlib import Path
+from typing import Any
 
 import pytest
 from playwright.sync_api import Page, expect
@@ -25,6 +26,7 @@ _INSTANCE_NAME = {
     "narrow_inflow": "Narrow in-flow",
     "narrow_pinned": "Narrow pinned",
     "narrow_selectall": "Narrow pinned with Select all",
+    "wide_selectall": "Wide pinned with Select all",
 }
 
 
@@ -93,29 +95,78 @@ def test_pinned_header_seam_stays_a_divider_while_the_frame_lights(page: Page):
     assert edges["topWidth"] == "0px"
 
 
+def _search_layout(root) -> dict[str, Any]:
+    """The boxes of the search field and the Select all toggle, measured once
+    the stylesheet applies: before it arrives the field is no flex container,
+    and an unstyled input fits a narrow frame, so a measurement taken then
+    would pass even with a broken layout."""
+    expect(root.locator(".listview-search")).to_have_css("display", "flex")
+    return root.get_by_test_id("stListviewSearch").evaluate(
+        """input => {
+            const part = input.closest('.listview-header, .listview-body');
+            const box = input.getBoundingClientRect();
+            const style = getComputedStyle(input);
+            const toggle = part.querySelector('.listview-select-all');
+            const t = toggle && toggle.getBoundingClientRect();
+            return {
+                frame: part.getBoundingClientRect().right,
+                part_height: part.getBoundingClientRect().height,
+                input: {right: box.right, bottom: box.bottom},
+                // the width the typed text gets: the box minus the room the
+                // padding keeps for the glyph and the clear button
+                text_room: input.clientWidth
+                    - parseFloat(style.paddingLeft)
+                    - parseFloat(style.paddingRight),
+                toggle: t && {left: t.left, top: t.top, right: t.right},
+            };
+        }"""
+    )
+
+
 @pytest.mark.parametrize(
     "instance", ["narrow_inflow", "narrow_pinned", "narrow_selectall"]
 )
 def test_the_search_field_fits_a_narrow_frame(page: Page, instance: str):
     # The harness puts each list in a 180 px container, narrower than the
     # search input's intrinsic width. The field and the Select all toggle must
-    # shrink into the part of the frame that holds them: the pinned header or
-    # the scroll body. A pinned field once kept about 230 px and ran out past
-    # the frame's right border.
-    search = _root(page, instance).get_by_test_id("stListviewSearch")
-    edges = search.evaluate(
-        """input => {
-            const part = input.closest('.listview-header, .listview-body');
-            return {
-                frame: part.getBoundingClientRect().right,
-                controls: [...part.querySelectorAll(
-                    '.listview-search__input, .listview-select-all'
-                )].map(el => el.getBoundingClientRect().right),
-            };
-        }"""
-    )
-    assert len(edges["controls"]) == (2 if instance == "narrow_selectall" else 1)
-    assert all(right <= edges["frame"] for right in edges["controls"]), edges
+    # shrink into the part of the frame that holds them, the pinned header or
+    # the scroll body, and the field must keep room for text. A pinned field
+    # once kept about 230 px and ran out past the frame's right border.
+    layout = _search_layout(_root(page, instance))
+    controls = [layout["input"]] + ([layout["toggle"]] if layout["toggle"] else [])
+    assert len(controls) == (2 if instance == "narrow_selectall" else 1)
+    assert all(c["right"] <= layout["frame"] for c in controls), layout
+    assert layout["text_room"] >= 48, layout  # 3rem
+
+
+@pytest.mark.parametrize(
+    ("instance", "wrapped"),
+    [("narrow_selectall", True), ("wide_selectall", False)],
+)
+def test_the_select_all_toggle_moves_below_a_narrow_search_field(
+    page: Page, instance: str, wrapped: bool
+):
+    # Beside the toggle, a 180 px frame leaves the field no room for text, so
+    # the toggle takes its own line below the field there; a 300 px frame keeps
+    # both on one line. The frame's width alone decides: the wider label that a
+    # click brings, "Deselect all", must not move the toggle to another line,
+    # or the list would shift under the pointer.
+    root = _root(page, instance)
+    toggle = root.get_by_test_id("stListviewSelectAllToggle")
+    before = _search_layout(root)
+    toggle.click()
+    expect(toggle).to_have_text("Deselect all")
+    after = _search_layout(root)
+
+    assert after["part_height"] == before["part_height"], (before, after)
+    for layout in (before, after):
+        field, tog = layout["input"], layout["toggle"]
+        below = tog["top"] >= field["bottom"]
+        assert below == wrapped, layout
+        # on one line the input ends where the toggle starts, never under it
+        assert below or field["right"] <= tog["left"], layout
+        assert tog["right"] <= layout["frame"], layout
+        assert layout["text_room"] >= 48, layout  # 3rem
 
 
 def test_collapsible_group_toggles(page: Page):

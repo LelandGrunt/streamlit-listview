@@ -844,7 +844,19 @@ describe("Milestone C feature styling", () => {
     // A flex item keeps min-width: auto, so without the reset the pinned field
     // stays about 230 px wide and runs out of a narrow frame.
     expect(css).toMatch(
-      /\.listview-header\s*>\s*\.listview-search\s*\{[^}]*min-width:\s*0/,
+      /\.listview-header\s*>\s*\.listview-search\s*\{[^}]*min-width:\s*0(?:px)?\s*[;}]/,
+    );
+  });
+
+  it("moves the Select all toggle below the search field by the header's width alone", () => {
+    // The header is the size container, and only its width decides: a flex
+    // wrap that followed the toggle's label would move "Deselect all" onto a
+    // line of its own after a click, and the list would shift under the pointer.
+    const header = css.match(/\.listview-header\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(header).toMatch(/container:\s*listview-header\s*\/\s*inline-size/);
+    expect(header).toMatch(/flex-wrap:\s*wrap/);
+    expect(css).toMatch(
+      /@container\s+listview-header\s*\(\s*max-width:\s*13\.5rem\s*\)\s*\{\s*\.listview-header\s*>\s*\.listview-search\s*\{[^}]*flex-basis:\s*100%/,
     );
   });
 

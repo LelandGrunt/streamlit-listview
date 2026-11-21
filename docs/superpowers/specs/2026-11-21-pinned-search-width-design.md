@@ -19,7 +19,8 @@ Measured with the shipped stylesheet on a bare page in Chromium and Firefox, wit
 ## Goals and non-goals
 
 - Goal: the pinned search field and the Select all toggle stay inside the frame at every width the sidebar allows.
-- Non-goal: a new layout for very narrow frames, such as the toggle wrapping below the field.
+- Goal, added after the review: the field keeps 3rem of room for text from the sidebar's minimum width up (see *Follow-up: the toggle wraps*).
+- Non-goal at first: a new layout for very narrow frames, such as the toggle wrapping below the field. The user made it a goal after the review.
 
 ## Approaches
 
@@ -38,3 +39,14 @@ Measured with the shipped stylesheet on a bare page in Chromium and Firefox, wit
 ## Left to the builder
 
 - The harness and the width for the e2e test.
+
+## Follow-up: the toggle wraps
+
+The review found a floor that `min-width: 0` cannot lower: the input's padding keeps 56 px for the glyph and the clear button, and its border 2 px. Beside the toggle (69 px as "Select all", 83 px as "Deselect all"), a field in a frame below about 170 px kept no room for text, and the input ran under the toggle. Streamlit's sidebar is 200 px wide at least, which leaves a listview about 140 px; its default of 300 px leaves 240 px.
+
+Approaches:
+
+1. **A container query on the header (chosen).** The header becomes the size container `listview-header`, wraps its flex line, and below 13.5rem of content width (a frame of about 234 px) the field takes `flex-basis: 100%`, so the toggle drops to a line of its own. The width alone decides.
+2. `flex-wrap: wrap` with a flex basis on the field. The label would decide the line break: in a band of frame widths as wide as the two labels differ (14 px), a click on "Select all" would bring the wider "Deselect all", move the toggle to a second line and shift the list under the pointer.
+
+13.5rem keeps 3rem of text room beside "Deselect all" just above the threshold. Below it the field takes the whole line, which at the sidebar's minimum also leaves 3rem. Streamlit's default sidebar keeps one line. The wrapped toggle sits at the left, as it does in a header without a pinned search field.

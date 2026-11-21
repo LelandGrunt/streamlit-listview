@@ -935,10 +935,13 @@
   border-top-right-radius: var(--st-base-radius, 0.5rem);
   transition: border-color 0.15s ease;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
+  /* The size container for the toggle's line break below. */
+  container: listview-header / inline-size;
 }
-/* Search grows to fill; the toggle shrinks to fit and sits at the right edge.
+/* Search grows to fill; the toggle keeps its label's width at the right edge.
    A flex item keeps min-width: auto and so never shrinks below its content: the
    input's intrinsic width of about 20 characters held the field near 230 px,
    and in a narrow sidebar it ran out past the frame. min-width: 0 lets it
@@ -946,6 +949,17 @@
 .listview-header > .listview-search {
   flex: 1;
   min-width: 0;
+}
+/* The input's padding keeps 3.5rem for the glyph and the clear button, so a
+   narrow field beside the toggle leaves no room for text. Below 13.5rem of
+   header width the field takes the whole line and the toggle wraps to a line
+   of its own; above it, the field keeps 3rem for text even beside the wider
+   label, "Deselect all". The header's width decides, never the label's, so a
+   click that changes the label never moves the toggle to another line. */
+@container listview-header (max-width: 13.5rem) {
+  .listview-header > .listview-search {
+    flex-basis: 100%;
+  }
 }
 /* The seam between header and body is a divider INSIDE the one control, not
    part of its outline, so it must not light up when focus paints the outline
