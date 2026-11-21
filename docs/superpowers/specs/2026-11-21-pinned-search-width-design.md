@@ -6,9 +6,9 @@ A listview with `pin_search=True` in a narrow sidebar shows its search field wid
 
 ## Cause
 
-`.listview-header` is a flex container, and `.listview-header > .listview-search` takes `flex: 1` only. A flex item keeps `min-width: auto`, so it never shrinks below its content's minimum width. The search input's intrinsic width is about 20 characters, which makes the search field about 252 px wide at least. Below a frame width of about 270 px the field overflows the header; with `select_all`, the toggle leaves the frame below about 360 px.
+`.listview-header` is a flex container, and `.listview-header > .listview-search` takes `flex: 1` only. A flex item keeps `min-width: auto`, so it never shrinks below its content's minimum width. The search input's intrinsic width is about 20 characters, which makes the search field about 232 px wide at least in Streamlit's default theme. Below a frame width of about 240 px the field overflows the header; with `select_all`, the toggle leaves the frame below about 320 px.
 
-Measured with the shipped stylesheet in Chromium and Firefox, at a frame width of 170 px:
+Measured with the shipped stylesheet on a bare page in Chromium and Firefox, with the browser's default font (a field of 252 px), at a frame width of 170 px:
 
 | Layout | Overflow now | Overflow with `min-width: 0` |
 | --- | --- | --- |

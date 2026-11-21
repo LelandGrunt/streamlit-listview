@@ -1,6 +1,7 @@
 # e2e/test_features.py
 from pathlib import Path
 
+import pytest
 from playwright.sync_api import Page, expect
 
 from e2e.conftest import echo, stext
@@ -21,6 +22,9 @@ _INSTANCE_NAME = {
     "selectall": "Bulk select",
     "sorted": "Sorted",
     "groupednew": "Grouped adds",
+    "narrow_inflow": "Narrow in-flow",
+    "narrow_pinned": "Narrow pinned",
+    "narrow_selectall": "Narrow pinned with Select all",
 }
 
 
@@ -87,6 +91,31 @@ def test_pinned_header_seam_stays_a_divider_while_the_frame_lights(page: Page):
     # ...while the seam kept the resting divider color, as the only line there
     assert seam == rest
     assert edges["topWidth"] == "0px"
+
+
+@pytest.mark.parametrize(
+    "instance", ["narrow_inflow", "narrow_pinned", "narrow_selectall"]
+)
+def test_the_search_field_fits_a_narrow_frame(page: Page, instance: str):
+    # The harness puts each list in a 180 px container, narrower than the
+    # search input's intrinsic width. The field and the Select all toggle must
+    # shrink into the part of the frame that holds them: the pinned header or
+    # the scroll body. A pinned field once kept about 230 px and ran out past
+    # the frame's right border.
+    search = _root(page, instance).get_by_test_id("stListviewSearch")
+    edges = search.evaluate(
+        """input => {
+            const part = input.closest('.listview-header, .listview-body');
+            return {
+                frame: part.getBoundingClientRect().right,
+                controls: [...part.querySelectorAll(
+                    '.listview-search__input, .listview-select-all'
+                )].map(el => el.getBoundingClientRect().right),
+            };
+        }"""
+    )
+    assert len(edges["controls"]) == (2 if instance == "narrow_selectall" else 1)
+    assert all(right <= edges["frame"] for right in edges["controls"]), edges
 
 
 def test_collapsible_group_toggles(page: Page):

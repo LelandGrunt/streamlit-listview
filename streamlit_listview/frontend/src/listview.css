@@ -938,9 +938,14 @@
   align-items: center;
   gap: 0.5rem;
 }
-/* Search grows to fill; the toggle shrinks to fit and sits at the right edge. */
+/* Search grows to fill; the toggle shrinks to fit and sits at the right edge.
+   A flex item keeps min-width: auto and so never shrinks below its content: the
+   input's intrinsic width of about 20 characters held the field near 230 px,
+   and in a narrow sidebar it ran out past the frame. min-width: 0 lets it
+   shrink; the input inside carries min-width: 0 too. */
 .listview-header > .listview-search {
   flex: 1;
+  min-width: 0;
 }
 /* The seam between header and body is a divider INSIDE the one control, not
    part of its outline, so it must not light up when focus paints the outline

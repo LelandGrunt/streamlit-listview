@@ -840,6 +840,14 @@ describe("Milestone C feature styling", () => {
     expect(css).toContain(".listview-new-option__input");
   });
 
+  it("lets the pinned search field shrink below its input's intrinsic width", () => {
+    // A flex item keeps min-width: auto, so without the reset the pinned field
+    // stays about 230 px wide and runs out of a narrow frame.
+    expect(css).toMatch(
+      /\.listview-header\s*>\s*\.listview-search\s*\{[^}]*min-width:\s*0/,
+    );
+  });
+
   it("styles the add row's refusal hint like st.caption, with no box while empty", () => {
     // st.caption: fadedText60 at the small size. No red and no frame change —
     // st.text_input has no error state.
