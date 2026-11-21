@@ -8,9 +8,9 @@ import sys
 import time
 from contextlib import closing
 from tempfile import TemporaryFile
+from typing import Self
 
 import requests
-from typing_extensions import Self
 
 LOGGER = logging.getLogger(__name__)
 

@@ -7,7 +7,7 @@
 
 [![Open in Streamlit](https://img.shields.io/badge/Open_in_Streamlit-FF4B4B?logo=streamlit&logoColor=white)](https://st-listview-demo.streamlit.app/)
 [![PyPI](https://img.shields.io/pypi/v/streamlit-listview?logo=pypi&logoColor=white&color=3775A9)](https://pypi.org/project/streamlit-listview/)
-![Python](https://img.shields.io/badge/python-%E2%89%A5_3.10-3776AB?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/python-%E2%89%A5_3.11-3776AB?logo=python&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-%E2%89%A5_1.51-FF4B4B?logo=streamlit&logoColor=white)
 ![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
 [![License](https://img.shields.io/badge/license-Apache_2.0-green)](https://github.com/LelandGrunt/streamlit-listview/blob/HEAD/LICENSE)
@@ -54,7 +54,7 @@ uv pip install streamlit-listview
 uv add streamlit-listview
 ```
 
-Requires **Python ≥ 3.10** and **Streamlit ≥ 1.51**. The [changelog](https://github.com/LelandGrunt/streamlit-listview/blob/HEAD/CHANGELOG.md) lists the changes of each release.
+Requires **Python ≥ 3.11** and **Streamlit ≥ 1.51**. The [changelog](https://github.com/LelandGrunt/streamlit-listview/blob/HEAD/CHANGELOG.md) lists the changes of each release.
 
 ## Quickstart
 
@@ -476,7 +476,7 @@ sources. After a frontend edit, run `npm run build` before such a build.
 
 ### Requirements
 
-- Python ≥ 3.10 and Streamlit ≥ 1.51 — to use the package
+- Python ≥ 3.11 and Streamlit ≥ 1.51 — to use the package
 - Streamlit ≥ 1.56 — to run the demo, which passes `required` to `st.pills`
   and `st.segmented_control`
 - Node.js ≥ 24 (LTS) and npm — only to build the frontend from a checkout; a

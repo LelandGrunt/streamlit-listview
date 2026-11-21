@@ -782,7 +782,7 @@ def is_github(url: str) -> bool:
 
 
 def utc_today() -> date:
-    return datetime.now(timezone.utc).date()
+    return datetime.now(timezone.utc).date()  # noqa: UP017 -- datetime.UTC needs Python 3.11; this script supports 3.10
 
 
 def hook(

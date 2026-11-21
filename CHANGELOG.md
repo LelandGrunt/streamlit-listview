@@ -4,6 +4,10 @@ Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+### Removed
+
+- **The package requires Python 3.11 or later.** Python 3.10 reached its end of life in October 2026, and Streamlit 1.66 and later need Python 3.11. On Python 3.10, pip keeps installing `streamlit-listview` 1.1.0.
+
 ### Fixed
 
 - **A pinned search field shrinks with a narrow listview.** With `pin_search=True`, the search field kept a width of about 230 px. In a listview narrower than about 240 px, such as one in a narrowed sidebar, the field ran out past the right border. With `select_all=True` as well, the Select all toggle left the frame below about 320 px, which includes Streamlit's default sidebar. The field now shrinks with the listview, as the unpinned search field does. In a listview narrower than about 234 px, the toggle moves to its own line below the field, so the field keeps room for text down to the sidebar's minimum width.

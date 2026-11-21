@@ -19,7 +19,7 @@ import subprocess
 import sys
 import tempfile
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -285,7 +285,7 @@ def write_meta(root: Path, scenarios: list[str], chromium: str) -> None:
         "streamlit": importlib.metadata.version("streamlit"),
         "python": platform.python_version(),
         "platform": platform.platform(),
-        "recorded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "recorded_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "scenarios": scenarios,
     }
     (root / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
