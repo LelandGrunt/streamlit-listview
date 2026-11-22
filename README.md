@@ -417,12 +417,13 @@ assert at.markdown[0].value == "Selected: Orders"
 - an id names a disabled option that the selection does not hold yet;
 - single mode gets more than one id, or multi mode more ids than `max_selections`.
 
-The helper has five limits:
+The helper has six limits:
 
 - It reaches only a listview with a `key`, because it writes the selection to `at.session_state[key]`.
 - **`on_change` does not fire**, unlike `set_value()` on Streamlit's own widgets. Test a callback in a browser, for example with Playwright.
 - It adds no new entries, even with `accept_new_options`.
 - The browser keeps a disabled option that the selection holds; a test can drop it.
+- It sets the selection only. Search, collapsing groups, scrolling and the keyboard run in the browser; test them in a browser test.
 - It needs Streamlit 1.66 or later, and so Python 3.11 or later. Under an older Streamlit, importing `streamlit_listview.testing` raises `ImportError`.
 
 ### Large lists
@@ -518,6 +519,8 @@ sources. After a frontend edit, run `npm run build` before such a build.
 ### Requirements
 
 - Python ≥ 3.10 and Streamlit ≥ 1.51 — to use the package
+- Python ≥ 3.11 and Streamlit ≥ 1.66 — to use `streamlit_listview.testing`,
+  and to run the test suite of a checkout
 - Streamlit ≥ 1.56 — to run the demo, which passes `required` to `st.pills`
   and `st.segmented_control`
 - Node.js ≥ 24 (LTS) and npm — only to build the frontend from a checkout; a

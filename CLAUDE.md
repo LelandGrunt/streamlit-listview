@@ -61,7 +61,7 @@ These hooks need the network or their own browser, so no commit, CI run or push 
 
 ### Tests
 
-Python, gated at 100 % coverage over `streamlit_listview`, `demo`, `scripts/push_gate.py`, `scripts/verify_wheel.py`, `scripts/smoke_wheel.py` and `_build_backend.py` (except `demo/app.py`, which the e2e suite and the `AppTest` runs in `tests/test_demo_app.py` exercise):
+Python. The suite needs Python 3.11 or later, because `streamlit_listview.testing` needs Streamlit 1.66. Under Python 3.10 its tests skip, and the coverage gate and `smoke_wheel.py` fail; CI and the push gate run 3.12. The suite is gated at 100 % coverage over `streamlit_listview`, `demo`, `scripts/push_gate.py`, `scripts/verify_wheel.py`, `scripts/smoke_wheel.py` and `_build_backend.py` (except `demo/app.py`, which the e2e suite and the `AppTest` runs in `tests/test_demo_app.py` exercise):
 
 ```sh
 uv run --extra devel pytest tests/                                   # the unit suite

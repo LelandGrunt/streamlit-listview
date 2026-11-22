@@ -10,7 +10,7 @@ Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](h
 
 ### Fixed
 
-- **`import streamlit_listview` works outside a running Streamlit app,** such as in pytest, a type checker or a plain script. Before, it raised `StreamlitAPIException: Component 'streamlit_listview.listview' must be declared in pyproject.toml with asset_dir to use file-backed css.`, because the package declared its component when Python imported it. An app's tests import their modules before any `AppTest` runs, so they could not test a page with a listview. The package now declares the component on the first call of `listview()`.
+- **`import streamlit_listview` works outside a running Streamlit app,** such as in pytest or a plain script. Before, it raised `StreamlitAPIException: Component 'streamlit_listview.listview' must be declared in pyproject.toml with asset_dir to use file-backed css.`, because the package declared its component when Python imported it. An app's tests import their modules before any `AppTest` runs, so they could not test a page with a listview. The package now declares the component on the first call of `listview()`.
 
 ## [1.1.0] - 2026-10-14
 
