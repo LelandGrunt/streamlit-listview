@@ -71,7 +71,6 @@ def test_a_listview_from_the_new_environment_passes(tmp_path):
                 "environment"
             ),
         ),
-        ({"module": None}, "Python found no streamlit_listview in the new environment"),
         ({"exceptions": ["boom"]}, "the app raised: boom"),
         ({"js": [], "css": []}, "the app rendered 0 listviews, expected 1"),
         (
@@ -96,10 +95,10 @@ def test_a_problem_is_named(tmp_path, changes, expected):
 
 class Runner:
     """Records each command; makes the new environment's interpreter and
-    answers the check with a canned report."""
+    answers the check with a report of a listview from it, with `changes`."""
 
-    def __init__(self, report=None):
-        self.report = report
+    def __init__(self, changes=None):
+        self.changes = changes or {}
         self.calls: list[tuple[list[str], Path]] = []
         self.venv: Path | None = None
 
@@ -118,7 +117,7 @@ class Runner:
             return ""
         if "-I" in args:
             assert self.venv is not None, "the check ran before uv venv"
-            report = self.report or _report(self.venv)
+            report = _report(self.venv, **self.changes)
             return "a warning\n" + json.dumps(report) + "\n"
         return ""
 
@@ -139,9 +138,9 @@ def test_smoke_installs_the_wheel_in_a_new_environment(tmp_path):
 
 
 def test_smoke_reports_what_the_check_found(tmp_path):
-    runner = Runner(report={"module": None, "exceptions": [], "js": [JS], "css": [CSS]})
+    runner = Runner(changes={"exceptions": ["boom"]})
     found = smoke_wheel.smoke(_wheel(tmp_path, GOOD), runner)
-    assert found == ["Python found no streamlit_listview in the new environment"]
+    assert found == ["the app raised: boom"]
 
 
 @pytest.mark.parametrize("output", ["", "a warning\n"])

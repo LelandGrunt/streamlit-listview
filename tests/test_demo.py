@@ -1049,9 +1049,8 @@ def test_app_no_longer_stacks_config_expanders():
 # below ast-parse all three sources rather than importing them — demo/app.py has
 # a Streamlit script's side effects, and reading the reference as *text* is the
 # only way to compare hand-written prose against the real function anyway.
-# (codegen imports listview to derive its defaults; that works here only because
-# conftest patches st.components.v2.component at import time — a bare
-# `import streamlit_listview` raises without a built frontend.)
+# (codegen imports listview to derive its defaults; the import declares no
+# component, so it needs neither a runtime nor a built frontend.)
 
 
 def _kwonly_func(source, func_name):

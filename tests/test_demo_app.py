@@ -20,6 +20,9 @@ sys.path.insert(0, str(ROOT / "demo"))
 
 import themes
 
+# The demo renders the real listview, so AppTest needs the built bundle.
+pytestmark = pytest.mark.usefixtures("built_bundle")
+
 _THEME_FILES = themes.discover_themes(ROOT / "demo" / ".streamlit")
 _APPLIED, _OTHER = list(_THEME_FILES)[:2]
 

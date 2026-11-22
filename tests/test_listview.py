@@ -1,10 +1,13 @@
 import datetime
 import enum
 import re
+import threading
+import time
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
+import streamlit as st
 
 ROOT = Path(__file__).resolve().parent.parent
 TYPES_TS = ROOT / "streamlit_listview" / "frontend" / "src" / "types.ts"
@@ -25,12 +28,54 @@ def call(mod, **overrides):
 # --------------------------------------------------------------------------
 
 
-def test_component_declared_with_globs_and_root_html(listview_mod):
+def test_import_declares_nothing(listview_mod):
     _mod, fake = listview_mod
-    assert fake.declared["name"] == "streamlit_listview.listview"
-    assert fake.declared["js"] == "index-*.js"
-    assert fake.declared["css"] == "index-*.css"
-    assert fake.declared["html"] == '<div class="listview-root"></div>'
+    assert fake.declarations == 0
+
+
+def test_first_call_declares_with_globs_and_root_html(listview_mod):
+    mod, fake = listview_mod
+    call(mod)
+    assert fake.declared == {
+        "name": "streamlit_listview.listview",
+        "js": "index-*.js",
+        "css": "index-*.css",
+        "html": '<div class="listview-root"></div>',
+        "isolate_styles": True,
+    }
+
+
+def test_later_calls_reuse_the_declaration(listview_mod):
+    mod, fake = listview_mod
+    call(mod)
+    call(mod)
+    assert fake.declarations == 1
+    assert len(fake.calls) == 2
+
+
+def test_concurrent_first_calls_declare_once(listview_mod, monkeypatch):
+    mod, fake = listview_mod
+    entered, release = threading.Event(), threading.Event()
+    factory = st.components.v2.component  # the fixture's fake factory
+
+    def slow_factory(*args, **kwargs):
+        entered.set()
+        release.wait(5)
+        return factory(*args, **kwargs)
+
+    monkeypatch.setattr(st.components.v2, "component", slow_factory)
+    results = []
+    first = threading.Thread(target=lambda: results.append(mod._get_component()))
+    first.start()
+    assert entered.wait(5)
+    second = threading.Thread(target=lambda: results.append(mod._get_component()))
+    second.start()
+    time.sleep(0.1)  # let the second thread reach the lock
+    release.set()
+    first.join(5)
+    second.join(5)
+    assert fake.declarations == 1
+    assert results == [fake, fake]
 
 
 # --------------------------------------------------------------------------

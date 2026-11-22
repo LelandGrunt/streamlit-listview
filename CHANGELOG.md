@@ -2,6 +2,12 @@
 
 Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version numbers follow [Semantic Versioning](https://semver.org/) with one exception: a release that breaks compatibility raises the minor version, not the major one, so the package stays on 1.x. Such a release says so at the top of its notes.
 
+## [Unreleased]
+
+### Fixed
+
+- **`import streamlit_listview` works outside a running Streamlit app,** such as in pytest, a type checker or a plain script. Before, it raised `StreamlitAPIException: Component 'streamlit_listview.listview' must be declared in pyproject.toml with asset_dir to use file-backed css.`, because the package declared its component when Python imported it. An app's tests import their modules before any `AppTest` runs, so they could not test a page with a listview. The package now declares the component on the first call of `listview()`.
+
 ## [1.1.0] - 2026-10-14
 
 **This release breaks compatibility within 1.x.** Three changes to `accept_new_options` with int or dict options can break code that relied on the old behavior. The entries marked **Breaking** under *Changed* say what to change.
@@ -106,6 +112,7 @@ The first render, scrolling, and the data sent per rerun are unchanged. A rerun 
 
 First stable release.
 
+[Unreleased]: https://github.com/LelandGrunt/streamlit-listview/compare/v1.1.0...HEAD
 [1.1.0]: https://github.com/LelandGrunt/streamlit-listview/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/LelandGrunt/streamlit-listview/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/LelandGrunt/streamlit-listview/releases/tag/v1.0.0

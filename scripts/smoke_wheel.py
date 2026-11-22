@@ -31,16 +31,15 @@ import verify_wheel
 
 BUILD = "streamlit_listview/frontend/build/"
 
-# Runs in the new environment and prints one JSON line last. It locates the
-# package without importing it: outside a Streamlit runtime, the import fails
-# to declare the component.
+# Runs in the new environment and prints one JSON line last. It imports the
+# package before AppTest runs, outside a Streamlit runtime, as an app's test
+# suite does; a failed import fails the check's process.
 CHECK = """
-import importlib.util
 import json
 
+import streamlit_listview
 from streamlit.testing.v1 import AppTest
 
-spec = importlib.util.find_spec("streamlit_listview")
 # A new environment imports Streamlit cold. The first run took 5.1 s on
 # Windows, against AppTest's default timeout of 3 s.
 app = AppTest.from_string(
@@ -49,7 +48,7 @@ app = AppTest.from_string(
 ).run(timeout=60)
 listviews = app.get("bidi_component")
 print(json.dumps({
-    "module": spec.origin if spec else None,
+    "module": streamlit_listview.__file__,
     "exceptions": [str(exception.value) for exception in app.exception],
     "js": [listview.proto.js_source_path for listview in listviews],
     "css": [listview.proto.css_source_path for listview in listviews],
@@ -88,9 +87,7 @@ def problems(report: dict[str, Any], venv: Path, js: str, css: str) -> list[str]
     """What keeps the check's report from showing a listview of this wheel."""
     found: list[str] = []
     module = report["module"]
-    if module is None:
-        found.append("Python found no streamlit_listview in the new environment")
-    elif not Path(module).resolve().is_relative_to(venv.resolve()):
+    if not Path(module).resolve().is_relative_to(venv.resolve()):
         found.append(
             f"Python imported streamlit_listview from {module}, outside the new "
             f"environment {venv}"
