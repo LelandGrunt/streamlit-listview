@@ -35,7 +35,13 @@ def _wheel(tmp_path: Path, entries: list[str]) -> Path:
 def _report(venv: Path, **changes):
     """What the check prints for a listview rendered from `venv`."""
     module = venv / "Lib" / "site-packages" / "streamlit_listview" / "__init__.py"
-    report = {"module": str(module), "exceptions": [], "js": [JS], "css": [CSS]}
+    report = {
+        "module": str(module),
+        "exceptions": [],
+        "js": [JS],
+        "css": [CSS],
+        "selected": ["'b'"],
+    }
     return {**report, **changes}
 
 
@@ -83,6 +89,10 @@ def test_a_listview_from_the_new_environment_passes(tmp_path):
                 "Streamlit resolved the CSS to index-old.css; the wheel ships "
                 "index-def.css"
             ),
+        ),
+        (
+            {"selected": ["None"]},
+            "the helper selected 'b', but the app returned ['None']",
         ),
     ],
 )
@@ -172,6 +182,7 @@ def test_the_check_reports_what_streamlit_resolved(tmp_path):
     assert report["js"] == [next(build.glob("index-*.js")).name]
     assert report["css"] == [next(build.glob("index-*.css")).name]
     assert Path(report["module"]).is_relative_to(ROOT / "streamlit_listview")
+    assert report["selected"] == ["'b'"]
 
 
 def test_the_check_gives_a_cold_start_more_than_apptests_default():

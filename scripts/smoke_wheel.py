@@ -9,8 +9,10 @@ wheel and the newest Streamlit it admits from PyPI, and runs a listview there
 through Streamlit's AppTest. AppTest finds the component through the installed
 manifest and resolves the bundle's `index-*.js` and `index-*.css` globs as a
 Streamlit server does, so a wheel whose manifest or bundle Streamlit cannot
-use fails here. An editable install, as the test suites use, finds both in
-the source tree instead. Needs uv on PATH and access to PyPI. Standard library
+use fails here. The check then sets a selection through the wheel's
+`streamlit_listview.testing` and reads it back from the app. An editable
+install, as the test suites use, finds the manifest and the bundle in the
+source tree instead. Needs uv on PATH and access to PyPI. Standard library
 only, like scripts/push_gate.py, which runs it.
 """
 
@@ -39,20 +41,25 @@ import json
 
 import streamlit_listview
 from streamlit.testing.v1 import AppTest
+from streamlit_listview.testing import get_listview
 
 # A new environment imports Streamlit cold. The first run took 5.1 s on
 # Windows, against AppTest's default timeout of 3 s.
 app = AppTest.from_string(
+    "import streamlit as st\\n"
     "from streamlit_listview import listview\\n"
-    "listview('Smoke test', ['a', 'b'], key='smoke')\\n"
+    "st.write(repr(listview('Smoke test', ['a', 'b'], key='smoke')))\\n"
 ).run(timeout=60)
 listviews = app.get("bidi_component")
-print(json.dumps({
+report = {
     "module": streamlit_listview.__file__,
     "exceptions": [str(exception.value) for exception in app.exception],
     "js": [listview.proto.js_source_path for listview in listviews],
     "css": [listview.proto.css_source_path for listview in listviews],
-}))
+}
+get_listview(app, "smoke").set_selection("b").run(timeout=60)
+report["selected"] = [markdown.value for markdown in app.markdown]
+print(json.dumps(report))
 """
 
 # Runs a command in a directory and returns its output; raises SmokeError
@@ -104,6 +111,10 @@ def problems(report: dict[str, Any], venv: Path, js: str, css: str) -> list[str]
             found.append(
                 f"Streamlit resolved the {kind} to {resolved}; the wheel ships {shipped}"
             )
+    if report["selected"] != ["'b'"]:
+        found.append(
+            f"the helper selected 'b', but the app returned {report['selected']}"
+        )
     return found
 
 

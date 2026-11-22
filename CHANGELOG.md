@@ -4,6 +4,10 @@ Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](h
 
 ## [Unreleased]
 
+### Added
+
+- **`streamlit_listview.testing` lets your tests read and set a listview through Streamlit's `AppTest`.** `get_listview(at, key)` returns the listview with that key after a run, with its options and its stored selection. `set_selection(ids)` stores a selection for the next run and refuses one that no user could make. A selection set this way fires no `on_change`. The module needs Streamlit 1.66 or later, and so Python 3.11 or later. See [Testing with AppTest](README.md#testing-with-apptest).
+
 ### Fixed
 
 - **`import streamlit_listview` works outside a running Streamlit app,** such as in pytest, a type checker or a plain script. Before, it raised `StreamlitAPIException: Component 'streamlit_listview.listview' must be declared in pyproject.toml with asset_dir to use file-backed css.`, because the package declared its component when Python imported it. An app's tests import their modules before any `AppTest` runs, so they could not test a page with a listview. The package now declares the component on the first call of `listview()`.
