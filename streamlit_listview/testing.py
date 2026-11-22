@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import json
 import re
+import reprlib
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
 
@@ -41,10 +43,10 @@ if _streamlit_version(streamlit.__version__) < _MIN_STREAMLIT:
     )
 
 from streamlit.testing.v1 import AppTestError
-from streamlit.testing.v1.element_tree import UnknownElement
 
 if TYPE_CHECKING:
     from streamlit.testing.v1 import AppTest
+    from streamlit.testing.v1.element_tree import UnknownElement
 
 
 class _Payload(TypedDict):
@@ -126,7 +128,14 @@ class ListviewElement:
         return list(self._at.session_state[self.key]["selection"])
 
     def set_selection(
-        self, ids: str | int | list[str | int] | tuple[str | int, ...] | None
+        self,
+        ids: str
+        | int
+        | list[str]
+        | list[int]
+        | list[str | int]
+        | tuple[str | int, ...]
+        | None,
     ) -> ListviewElement:
         """Store a selection that a browser user could make, for the next run.
 
@@ -164,6 +173,8 @@ class ListviewElement:
         held = {_id_key(item_id) for item_id in self.selection}
         chosen: list[Option] = []
         for item_id in ids:
+            if isinstance(item_id, dict):
+                raise ValueError(_option_hint(item_id))
             _validate_id(item_id, kind="selected")
             option = by_key.get(_id_key(item_id))
             if option is None:
@@ -218,21 +229,43 @@ def _options_of(payload: _Payload) -> list[Option]:
 
 
 def _as_ids(ids: Any) -> list[Any]:
-    """``ids`` as a list: ``None`` is empty, a list or a tuple is its items."""
+    """``ids`` as a list: ``None`` is empty, a list or a tuple is its items.
+
+    A dict or another container raises ValueError with the fix, because the
+    id gate would only say that it is not a str or an int.
+    """
     if ids is None:
         return []
     if isinstance(ids, (list, tuple)):
         return list(ids)
+    if isinstance(ids, dict):
+        raise ValueError(_option_hint(ids))
+    if isinstance(ids, Iterable) and not isinstance(ids, str):
+        raise ValueError(
+            "set_selection takes one id, a list or a tuple of ids, or None, not "
+            f"a {type(ids).__name__}. Pass list(...), in the order the user "
+            "picks the ids."
+        )
     return [ids]
+
+
+def _option_hint(option: dict[Any, Any]) -> str:
+    """The message for an option dict passed where an id belongs."""
+    return (
+        f"set_selection takes ids, not options: got {reprlib.repr(option)}. "
+        "Pass the option's id, its 'id' value, not the dict listview() returns."
+    )
 
 
 def _find(at: AppTest, key: str) -> UnknownElement:
     """The listview element with ``key`` in the latest run, or KeyError."""
+    # The component name identifies a listview, whatever element class AppTest
+    # gives a Components V2 element.
     listviews = [
-        element
+        cast("UnknownElement", element)
         for element in at.get("bidi_component")
-        if isinstance(element, UnknownElement)
-        and element.proto.component_name == _COMPONENT_NAME
+        if getattr(getattr(element, "proto", None), "component_name", None)
+        == _COMPONENT_NAME
     ]
     for element in listviews:
         if element.key == key:

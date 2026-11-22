@@ -2,13 +2,14 @@
 
 Each test renders an app through AppTest, so the module needs the built bundle.
 A Python 3.10 environment, where only Streamlit 1.65 installs, skips it: the
-helper needs Streamlit 1.66.
+helper needs Streamlit 1.66. The coverage gate therefore needs Python 3.11.
 """
 
 import enum
 import importlib
 import subprocess
 import sys
+from typing import TYPE_CHECKING
 
 import pytest
 import streamlit
@@ -16,6 +17,9 @@ from streamlit.testing.v1 import AppTest, AppTestError
 
 pytestmark = pytest.mark.usefixtures("built_bundle")
 testing = pytest.importorskip("streamlit_listview.testing", exc_type=ImportError)
+
+if TYPE_CHECKING:
+    from streamlit_listview.testing import ListviewElement
 
 OPTIONS = [
     {"id": "dbo.Orders", "label": "Orders", "group": "dbo"},
@@ -311,3 +315,43 @@ def test_a_reused_element_names_the_keys_of_the_latest_run():
     at.run()
     with pytest.raises(KeyError, match=r"'pick-0'.*'pick-1'"):
         _ = lv.selection
+
+
+def test_a_list_of_str_is_a_valid_argument():
+    """ty checks this call against set_selection's hint: a list is invariant."""
+    ids: list[str] = ["dbo.Customers"]
+    lv: ListviewElement = testing.get_listview(_run(**BASE), "tables")
+    lv.set_selection(ids)
+    assert lv.selection == ["dbo.Customers"]
+
+
+@pytest.mark.parametrize(
+    "ids",
+    [{"dbo.Orders"}, (i for i in ["dbo.Orders"]), {"dbo.Orders": 1}.keys()],
+    ids=["set", "generator", "dict_keys"],
+)
+def test_another_container_is_named(ids):
+    lv = testing.get_listview(_run(**BASE), "tables")
+    with pytest.raises(ValueError, match="one id, a list or a tuple of ids, or None"):
+        lv.set_selection(ids)
+
+
+@pytest.mark.parametrize("ids", [OPTIONS[1], [OPTIONS[1]]], ids=["alone", "in_a_list"])
+def test_an_option_dict_is_named(ids):
+    lv = testing.get_listview(_run(**BASE), "tables")
+    with pytest.raises(ValueError, match="Pass the option's id"):
+        lv.set_selection(ids)
+
+
+def test_a_listview_under_another_element_class_is_found(monkeypatch):
+    """A later Streamlit may give V2 components a class of their own."""
+    at = _run(**BASE)
+
+    class FutureElement:
+        def __init__(self, element):
+            self.proto = element.proto
+            self.key = element.key
+
+    found = [FutureElement(element) for element in at.get("bidi_component")]
+    monkeypatch.setattr(at, "get", lambda element_type: found)
+    assert testing.get_listview(at, "tables").label == "**Tables**"
