@@ -7,7 +7,9 @@ real, against the editable install and the built bundle.
 
 import ast
 import json
+import os
 import runpy
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
@@ -251,3 +253,57 @@ def test_smoke_wheel_runs_main_as_a_script(tmp_path, monkeypatch, capsys):
         runpy.run_path(str(ROOT / "scripts" / "smoke_wheel.py"), run_name="__main__")
     assert exc.value.code == 1
     assert "FAIL: cannot open" in capsys.readouterr().out
+
+
+def test_the_check_imports_the_package_before_apptest_runs():
+    """An app's test suite imports the package outside a runtime first."""
+    tree = ast.parse(smoke_wheel.CHECK)
+    imported = next(
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        and any(alias.name == "streamlit_listview" for alias in node.names)
+    )
+    rendered = next(
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "from_string"
+    )
+    assert imported < rendered
+
+
+def test_the_check_reports_an_app_that_raised(tmp_path):
+    """A failed render must still reach problems(), which names it."""
+    package = tmp_path / "streamlit_listview"
+    package.mkdir()
+    (package / "__init__.py").write_text(
+        "def listview(*args, **kwargs):\n    raise ValueError('broken')\n",
+        encoding="utf-8",
+    )
+    (package / "testing.py").write_text(
+        "def get_listview(at, key):\n    raise KeyError(key)\n", encoding="utf-8"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", smoke_wheel.CHECK],
+        cwd=tmp_path,
+        env={**os.environ, "PYTHONPATH": str(tmp_path)},
+        capture_output=True,
+        encoding="utf-8",
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    report = json.loads(result.stdout.splitlines()[-1])
+    assert (report["exceptions"], report["js"], report["selected"]) == (
+        ["broken"],
+        [],
+        None,
+    )
+
+
+def test_a_skipped_selection_adds_no_problem(tmp_path):
+    """The helper does not run after a failed render; the render's problems
+    already name the cause."""
+    report = _report(tmp_path, exceptions=["boom"], selected=None)
+    assert smoke_wheel.problems(report, tmp_path, JS, CSS) == ["the app raised: boom"]

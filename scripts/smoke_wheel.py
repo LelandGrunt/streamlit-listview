@@ -57,8 +57,12 @@ report = {
     "js": [listview.proto.js_source_path for listview in listviews],
     "css": [listview.proto.css_source_path for listview in listviews],
 }
-get_listview(app, "smoke").set_selection("b").run(timeout=60)
-report["selected"] = [markdown.value for markdown in app.markdown]
+# The helper runs only on a good render, so a failed one still prints the
+# report that names its cause.
+report["selected"] = None
+if len(listviews) == 1 and not app.exception:
+    get_listview(app, "smoke").set_selection("b").run(timeout=60)
+    report["selected"] = [markdown.value for markdown in app.markdown]
 print(json.dumps(report))
 """
 
@@ -111,7 +115,8 @@ def problems(report: dict[str, Any], venv: Path, js: str, css: str) -> list[str]
             found.append(
                 f"Streamlit resolved the {kind} to {resolved}; the wheel ships {shipped}"
             )
-    if report["selected"] != ["'b'"]:
+    # None: the render failed, and the problems above name the cause.
+    if report["selected"] not in (None, ["'b'"]):
         found.append(
             f"the helper selected 'b', but the app returned {report['selected']}"
         )
