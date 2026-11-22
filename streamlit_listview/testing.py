@@ -19,9 +19,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import streamlit
+from streamlit.testing.v1 import AppTestError
 from streamlit.testing.v1.element_tree import UnknownElement
 
 from . import _COMPONENT_NAME
+from ._options import _id_key, _validate_id
 
 if TYPE_CHECKING:
     from streamlit.testing.v1 import AppTest
@@ -82,6 +84,91 @@ class ListviewElement:
         the options and corrects them against the current parameters.
         """
         return list(self._at.session_state[self.key]["selection"])
+
+    def set_selection(
+        self, ids: str | int | list[str | int] | tuple[str | int, ...] | None
+    ) -> ListviewElement:
+        """Store a selection that a browser user could make, for the next run.
+
+        ``ids`` is one id, a list or a tuple of ids, or ``None`` to clear the
+        selection. Each id is written in its option's own spelling. Raises
+        ``AppTestError`` for a selection no browser user can make, and
+        ``ValueError`` for an id that is not a ``str`` or an ``int``. Call
+        ``run()`` next; the stored selection fires no ``on_change``.
+        """
+        if self.disabled:
+            raise AppTestError(
+                f"Cannot change the disabled listview {self.key!r}: a browser "
+                "user cannot interact with it."
+            )
+        chosen = self._options_for(_as_ids(ids))
+        self._check_count(len(chosen))
+        self._at.session_state[self.key] = {
+            "selection": [option.id for option in chosen]
+        }
+        return self
+
+    def run(self, *, timeout: float | None = None) -> AppTest:
+        """Run the app again, as ``at.run()`` does, and return the AppTest."""
+        return self._at.run(timeout=timeout)
+
+    def _options_for(self, ids: list[Any]) -> list[Option]:
+        """The option of each id, or AppTestError for an id no user can pick.
+
+        Ids match options by ``_id_key``, the row identity of the frontend. A
+        disabled option may stay when the stored selection holds it: the
+        browser locks such a row instead of dropping it.
+        """
+        by_key = {_id_key(option.id): option for option in self.options}
+        held = {_id_key(item_id) for item_id in self.selection}
+        chosen: list[Option] = []
+        for item_id in ids:
+            _validate_id(item_id, kind="selected")
+            option = by_key.get(_id_key(item_id))
+            if option is None:
+                raise AppTestError(self._unknown(item_id))
+            if option in chosen:
+                raise AppTestError(
+                    f"Listview {self.key!r} got the option {item_id!r} twice."
+                )
+            if option.disabled and _id_key(option.id) not in held:
+                raise AppTestError(
+                    f"Cannot select the disabled option {item_id!r} in listview "
+                    f"{self.key!r}: a browser user cannot pick it."
+                )
+            chosen.append(option)
+        return chosen
+
+    def _unknown(self, item_id: Any) -> str:
+        """The message for an id that names no option."""
+        message = f"Listview {self.key!r} has no option {item_id!r}."
+        if self.accept_new_options:
+            message += (
+                " set_selection adds no new entries, even with accept_new_options."
+            )
+        return message
+
+    def _check_count(self, count: int) -> None:
+        """Raise AppTestError when the mode allows fewer ids than ``count``."""
+        if self.selection_mode == "single" and count > 1:
+            raise AppTestError(
+                f"Listview {self.key!r} has selection_mode='single' and takes one "
+                f"id, got {count}."
+            )
+        if self.max_selections is not None and count > self.max_selections:
+            raise AppTestError(
+                f"Listview {self.key!r} allows max_selections={self.max_selections} "
+                f"ids, got {count}."
+            )
+
+
+def _as_ids(ids: Any) -> list[Any]:
+    """``ids`` as a list: ``None`` is empty, a list or a tuple is its items."""
+    if ids is None:
+        return []
+    if isinstance(ids, (list, tuple)):
+        return list(ids)
+    return [ids]
 
 
 def get_listview(at: AppTest, key: str) -> ListviewElement:
