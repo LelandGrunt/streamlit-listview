@@ -2,7 +2,8 @@
 
 ``AppTest`` shows a listview as a generic element without ``set_value()``.
 ``get_listview(at, key)`` finds a keyed listview after ``at.run()`` and returns a
-``ListviewElement``, which reads the listview's options and its selection.
+``ListviewElement``, which reads the listview's options and its selection from
+the latest run of ``at``.
 
 The helper uses public Streamlit API only. It reaches keyed listviews only,
 because it works through ``at.session_state[key]``. A selection it sets fires no
@@ -16,17 +17,12 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
 
 import streamlit
-from streamlit.testing.v1 import AppTestError
-from streamlit.testing.v1.element_tree import UnknownElement
 
 from . import _COMPONENT_NAME
 from ._options import _id_key, _validate_id
-
-if TYPE_CHECKING:
-    from streamlit.testing.v1 import AppTest
 
 _MIN_STREAMLIT = (1, 66)
 
@@ -36,11 +32,30 @@ def _streamlit_version(version: str) -> tuple[int, ...]:
     return tuple(int(number) for number in re.findall(r"\d+", version)[:2])
 
 
+# The guard runs before the streamlit.testing imports below: Streamlit before
+# 1.63 has no AppTestError, and its ImportError would not name the minimum.
 if _streamlit_version(streamlit.__version__) < _MIN_STREAMLIT:
     raise ImportError(
         "streamlit_listview.testing needs Streamlit 1.66 or later; found "
         f"{streamlit.__version__}."
     )
+
+from streamlit.testing.v1 import AppTestError
+from streamlit.testing.v1.element_tree import UnknownElement
+
+if TYPE_CHECKING:
+    from streamlit.testing.v1 import AppTest
+
+
+class _Payload(TypedDict):
+    """The keys of the data a listview ships that the helper reads."""
+
+    label: str
+    disabled: bool
+    selection_mode: Literal["single", "multi"]
+    max_selections: int | None
+    accept_new_options: bool
+    items: list[dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -54,35 +69,60 @@ class Option:
 
 
 class ListviewElement:
-    """A keyed listview in an AppTest, as the last run rendered it."""
+    """A keyed listview in an AppTest.
+
+    Every attribute reads the latest run of the AppTest, so an element stays
+    current across ``run()`` calls. When the latest run rendered no listview
+    with this key, an attribute raises ``KeyError``, as ``get_listview`` does.
+    """
 
     def __init__(self, at: AppTest, element: UnknownElement) -> None:
-        payload = json.loads(element.proto.json)
         self._at = at
         # get_listview passes keyed elements only.
         self.key: str = cast("str", element.key)
-        self.label: str = payload["label"]
-        self.disabled: bool = payload["disabled"]
-        self.selection_mode: Literal["single", "multi"] = payload["selection_mode"]
-        self.max_selections: int | None = payload["max_selections"]
-        self.accept_new_options: bool = payload["accept_new_options"]
-        self.options: list[Option] = [
-            Option(
-                id=item["id"],
-                label=item["label"],
-                group=item.get("group"),
-                disabled=item.get("disabled", False),
-            )
-            for item in payload["items"]
-        ]
+
+    def _payload(self) -> _Payload:
+        """The data the latest run shipped to the browser for this listview."""
+        return cast("_Payload", json.loads(_find(self._at, self.key).proto.json))
+
+    @property
+    def label(self) -> str:
+        """The label, as Markdown source."""
+        return self._payload()["label"]
+
+    @property
+    def disabled(self) -> bool:
+        """True when the whole listview is disabled."""
+        return self._payload()["disabled"]
+
+    @property
+    def selection_mode(self) -> Literal["single", "multi"]:
+        """``"single"`` or ``"multi"``."""
+        return self._payload()["selection_mode"]
+
+    @property
+    def max_selections(self) -> int | None:
+        """The most ids a multi selection may hold, or None."""
+        return self._payload()["max_selections"]
+
+    @property
+    def accept_new_options(self) -> bool:
+        """True when a browser user may add entries."""
+        return self._payload()["accept_new_options"]
+
+    @property
+    def options(self) -> list[Option]:
+        """The options in the payload's order, as ``sort`` ordered them."""
+        return _options_of(self._payload())
 
     @property
     def selection(self) -> list[Any]:
-        """The ids stored in ``at.session_state[key]``, read on each access.
+        """The ids stored in ``at.session_state[key]``.
 
         The value ``listview()`` returns can differ: it maps the stored ids to
         the options and corrects them against the current parameters.
         """
+        _find(self._at, self.key)
         return list(self._at.session_state[self.key]["selection"])
 
     def set_selection(
@@ -96,13 +136,14 @@ class ListviewElement:
         ``ValueError`` for an id that is not a ``str`` or an ``int``. Call
         ``run()`` next; the stored selection fires no ``on_change``.
         """
-        if self.disabled:
+        payload = self._payload()
+        if payload["disabled"]:
             raise AppTestError(
                 f"Cannot change the disabled listview {self.key!r}: a browser "
                 "user cannot interact with it."
             )
-        chosen = self._options_for(_as_ids(ids))
-        self._check_count(len(chosen))
+        chosen = self._options_for(_as_ids(ids), payload)
+        self._check_count(len(chosen), payload)
         self._at.session_state[self.key] = {
             "selection": [option.id for option in chosen]
         }
@@ -112,21 +153,21 @@ class ListviewElement:
         """Run the app again, as ``at.run()`` does, and return the AppTest."""
         return self._at.run(timeout=timeout)
 
-    def _options_for(self, ids: list[Any]) -> list[Option]:
+    def _options_for(self, ids: list[Any], payload: _Payload) -> list[Option]:
         """The option of each id, or AppTestError for an id no user can pick.
 
         Ids match options by ``_id_key``, the row identity of the frontend. A
         disabled option may stay when the stored selection holds it: the
         browser locks such a row instead of dropping it.
         """
-        by_key = {_id_key(option.id): option for option in self.options}
+        by_key = {_id_key(option.id): option for option in _options_of(payload)}
         held = {_id_key(item_id) for item_id in self.selection}
         chosen: list[Option] = []
         for item_id in ids:
             _validate_id(item_id, kind="selected")
             option = by_key.get(_id_key(item_id))
             if option is None:
-                raise AppTestError(self._unknown(item_id))
+                raise AppTestError(self._unknown(item_id, payload))
             if option in chosen:
                 raise AppTestError(
                     f"Listview {self.key!r} got the option {item_id!r} twice."
@@ -139,27 +180,41 @@ class ListviewElement:
             chosen.append(option)
         return chosen
 
-    def _unknown(self, item_id: Any) -> str:
+    def _unknown(self, item_id: Any, payload: _Payload) -> str:
         """The message for an id that names no option."""
         message = f"Listview {self.key!r} has no option {item_id!r}."
-        if self.accept_new_options:
+        if payload["accept_new_options"]:
             message += (
                 " set_selection adds no new entries, even with accept_new_options."
             )
         return message
 
-    def _check_count(self, count: int) -> None:
+    def _check_count(self, count: int, payload: _Payload) -> None:
         """Raise AppTestError when the mode allows fewer ids than ``count``."""
-        if self.selection_mode == "single" and count > 1:
+        if payload["selection_mode"] == "single" and count > 1:
             raise AppTestError(
                 f"Listview {self.key!r} has selection_mode='single' and takes one "
                 f"id, got {count}."
             )
-        if self.max_selections is not None and count > self.max_selections:
+        maximum = payload["max_selections"]
+        if maximum is not None and count > maximum:
             raise AppTestError(
-                f"Listview {self.key!r} allows max_selections={self.max_selections} "
-                f"ids, got {count}."
+                f"Listview {self.key!r} allows max_selections={maximum} ids, "
+                f"got {count}."
             )
+
+
+def _options_of(payload: _Payload) -> list[Option]:
+    """The payload's items as Options."""
+    return [
+        Option(
+            id=item["id"],
+            label=item["label"],
+            group=item.get("group"),
+            disabled=item.get("disabled", False),
+        )
+        for item in payload["items"]
+    ]
 
 
 def _as_ids(ids: Any) -> list[Any]:
@@ -171,11 +226,8 @@ def _as_ids(ids: Any) -> list[Any]:
     return [ids]
 
 
-def get_listview(at: AppTest, key: str) -> ListviewElement:
-    """The listview with ``key`` in the last run of ``at``.
-
-    Raises ``KeyError`` when the last run rendered no listview with that key.
-    """
+def _find(at: AppTest, key: str) -> UnknownElement:
+    """The listview element with ``key`` in the latest run, or KeyError."""
     listviews = [
         element
         for element in at.get("bidi_component")
@@ -184,9 +236,28 @@ def get_listview(at: AppTest, key: str) -> ListviewElement:
     ]
     for element in listviews:
         if element.key == key:
-            return ListviewElement(at, element)
+            return element
     keys = sorted(element.key for element in listviews if element.key is not None)
     message = f"No listview with key {key!r}; the keyed listviews are {keys}."
-    if not listviews:
+    if at.exception:
+        raised = "; ".join(str(exception.value) for exception in at.exception)
+        message += f" The last run raised: {raised}"
+    elif not _has_run(at):
         message += " Call at.run() before get_listview()."
     raise KeyError(message)
+
+
+def _has_run(at: AppTest) -> bool:
+    """True once ``at`` has run: before that, its tree has no main block."""
+    try:
+        return at.main is not None
+    except KeyError:
+        return False
+
+
+def get_listview(at: AppTest, key: str) -> ListviewElement:
+    """The listview with ``key`` in the latest run of ``at``.
+
+    Raises ``KeyError`` when the latest run rendered no listview with that key.
+    """
+    return ListviewElement(at, _find(at, key))

@@ -399,7 +399,7 @@ tables.set_selection("dbo.Orders").run()
 assert at.markdown[0].value == "Selected: Orders"
 ```
 
-`get_listview(at, key)` returns the listview with that `key` from the last run, or raises `KeyError`. Call it after `at.run()`. The element it returns reads its payload once, so call `get_listview` again after a run that changes the listview's parameters.
+`get_listview(at, key)` returns the listview with that `key` from the last run, or raises `KeyError`. Call it after `at.run()`. When the last run raised, the `KeyError` names the exception. The element reads the latest run on every access, so it stays current across runs; it raises the same `KeyError` once a run renders no listview with its key.
 
 | Attribute | Value |
 | --- | --- |

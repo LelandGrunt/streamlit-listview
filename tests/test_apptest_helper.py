@@ -237,3 +237,77 @@ def test_an_id_of_another_type_raises_valueerror():
     lv = testing.get_listview(_run(**BASE), "tables")
     with pytest.raises(ValueError, match="selected id must be a str or int"):
         lv.set_selection([1.5])
+
+
+def _raising_app():
+    raise ValueError("boom")
+
+
+def _no_listview_app():
+    import streamlit as st
+
+    st.write("nothing here")
+
+
+def _changing_app():
+    import streamlit as st
+
+    from streamlit_listview import listview
+
+    options = ["c"] if st.session_state.get("narrow", False) else ["a", "b"]
+    listview("Pick", options, key="pick", selection_mode="multi")
+
+
+def _counting_app():
+    import streamlit as st
+
+    from streamlit_listview import listview
+
+    listview("Pick", ["a"], key=f"pick-{st.session_state.get('count', 0)}")
+
+
+def test_import_names_the_version_before_streamlit_has_apptesterror(monkeypatch):
+    """Streamlit before 1.63 has no AppTestError; the guard must speak first."""
+    import streamlit.testing.v1 as apptest
+
+    monkeypatch.setattr(streamlit, "__version__", "1.62.0")
+    monkeypatch.delattr(apptest, "AppTestError")
+    monkeypatch.delitem(sys.modules, "streamlit_listview.testing")
+    with pytest.raises(
+        ImportError, match=r"needs Streamlit 1\.66 or later; found 1\.62\.0"
+    ):
+        importlib.import_module("streamlit_listview.testing")
+
+
+def test_a_run_that_raised_names_the_exception():
+    at = AppTest.from_function(_raising_app, default_timeout=60).run()
+    with pytest.raises(KeyError) as raised:
+        testing.get_listview(at, "tables")
+    assert "boom" in str(raised.value)
+    assert "at.run()" not in str(raised.value)
+
+
+def test_a_run_without_a_listview_does_not_say_to_run_first():
+    at = AppTest.from_function(_no_listview_app, default_timeout=60).run()
+    with pytest.raises(KeyError) as raised:
+        testing.get_listview(at, "tables")
+    assert "at.run()" not in str(raised.value)
+
+
+def test_a_reused_element_checks_the_latest_run():
+    at = AppTest.from_function(_changing_app, default_timeout=60).run()
+    lv = testing.get_listview(at, "pick")
+    at.session_state["narrow"] = True
+    at.run()
+    assert lv.options == [testing.Option("c", "c", None, False)]
+    with pytest.raises(AppTestError, match="no option 'b'"):
+        lv.set_selection(["b"])
+
+
+def test_a_reused_element_names_the_keys_of_the_latest_run():
+    at = AppTest.from_function(_counting_app, default_timeout=60).run()
+    lv = testing.get_listview(at, "pick-0")
+    at.session_state["count"] = 1
+    at.run()
+    with pytest.raises(KeyError, match=r"'pick-0'.*'pick-1'"):
+        _ = lv.selection

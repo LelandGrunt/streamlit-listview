@@ -95,7 +95,7 @@ tables.set_selection("dbo.Orders").run()
 assert at.markdown[0].value == "Selected: Orders"
 ```
 
-**Find.** `get_listview(at, key)` returns a `ListviewElement`. It filters `at.get("bidi_component")` by the component name `streamlit_listview.listview` and by `key`. Without a match it raises `KeyError`, as `at.get_by_key()` does. It needs a finished run, because no element exists before the first `at.run()`.
+**Find.** `get_listview(at, key)` returns a `ListviewElement`. It filters `at.get("bidi_component")` by the component name `streamlit_listview.listview` and by `key`. Without a match it raises `KeyError`, as `at.get_by_key()` does. The message names the keys that exist, and the exception of the last run when it raised. It needs a finished run, because no element exists before the first `at.run()`.
 
 **Read.** Each attribute comes from the element's payload, `json.loads(element.proto.json)`, except `selection`.
 
@@ -112,7 +112,7 @@ assert at.markdown[0].value == "Selected: Orders"
 
 The payload holds the options as `sort` ordered them. The frontend then draws each group as a block, so the screen can show another order. `Option.group` is `None` for an option without a group. `Option.disabled` is `False` when the payload row omits the key. `selection` holds the ids as stored. The value `listview()` returns can differ, because `map_selection` corrects the stored ids against the current options. A test therefore asserts on what the app does with the returned value.
 
-**Set.** `set_selection(ids)` takes what `default` takes: one id, a list of ids, or `None` to clear. It writes `{"selection": [...]}` to `at.session_state[key]` and returns the element, so `.run()` can follow. `run()` calls `at.run()` and returns the `AppTest`. The element does not refresh itself; the test calls `get_listview` again after a run.
+**Set.** `set_selection(ids)` takes what `default` takes: one id, a list of ids, or `None` to clear. It writes `{"selection": [...]}` to `at.session_state[key]` and returns the element, so `.run()` can follow. `run()` calls `at.run()` and returns the `AppTest`. Every attribute reads the latest run, so `set_selection` checks against the parameters the app rendered last, and a reused element stays current. When the latest run rendered no listview with the key, an attribute raises the `KeyError` of `get_listview`.
 
 Before it writes, `set_selection` raises `AppTestError`, as `AppTest` does for a disabled widget, when:
 
