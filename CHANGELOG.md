@@ -2,7 +2,7 @@
 
 Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version numbers follow [Semantic Versioning](https://semver.org/) with one exception: a release that breaks compatibility raises the minor version, not the major one, so the package stays on 1.x. Such a release says so at the top of its notes.
 
-## [Unreleased]
+## [1.2.0] - 2026-11-23
 
 ### Removed
 
@@ -117,7 +117,7 @@ The first render, scrolling, and the data sent per rerun are unchanged. A rerun 
 
 First stable release.
 
-[Unreleased]: https://github.com/LelandGrunt/streamlit-listview/compare/v1.1.0...HEAD
+[1.2.0]: https://github.com/LelandGrunt/streamlit-listview/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/LelandGrunt/streamlit-listview/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/LelandGrunt/streamlit-listview/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/LelandGrunt/streamlit-listview/releases/tag/v1.0.0
