@@ -41,7 +41,7 @@ _STALE_PACKAGE = (
 
 def _backend():
     """Return setuptools' build backend (imported lazily; present at build time)."""
-    from setuptools import build_meta  # ty: ignore[unresolved-import]
+    from setuptools import build_meta  # ty: ignore[import-not-found]
 
     return build_meta
 

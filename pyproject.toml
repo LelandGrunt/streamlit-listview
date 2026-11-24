@@ -133,7 +133,7 @@ python-version = "3.12"
 # truthiness-test-of-none-union (`if name:` on `str | None` is idiomatic) and
 # missing-override-decorator (@override needs typing_extensions on 3.11).
 missing-type-argument = "error"
-unsound-return-statement = "error"
+unsound-return = "error"
 
 # typos (a pre-commit hook) checks the spelling of every text file and fixes
 # what it can. Accept a word here only when it is right. A public name with a

@@ -21,7 +21,7 @@
 import { visit } from "unist-util-visit";
 import { findAndReplace } from "mdast-util-find-and-replace";
 import { elementAt } from "../utils/arrays";
-import type { Nodes, PhrasingContent, Root, Text } from "mdast";
+import type { Emphasis, Nodes, PhrasingContent, Root, Text } from "mdast";
 // Importing from mdast-util-directive also loads its module augmentation, so
 // TextDirective (and siblings) are recognised by the production tsc program.
 // Without it the production tsconfig has nothing in src/ importing directive
@@ -318,6 +318,18 @@ export function materialIconPreprocess(src: string): string {
     .replace(STREAMLIT_LOGO_REWRITE_RE, STREAMLIT_MARK);
 }
 
+/**
+ * An inline node that mdast-util-to-hast renders as the element `data.hName`
+ * names. It must not be a `text` node: mdast-util-find-and-replace (3.0.5 and
+ * later) merges a returned text node with the text beside it, which drops the
+ * `data` fields and swallows the neighbouring words. `emphasis` is a phrasing
+ * node whose hast handler applies the `data.h*` fields; Streamlit builds its
+ * icon and logo the same way.
+ */
+function inlineElement(data: NonNullable<Emphasis["data"]>): Emphasis {
+  return { type: "emphasis", children: [], data };
+}
+
 /** Inline-style string for a Material Symbols Rounded ligature icon span. */
 const MATERIAL_ICON_STYLE =
   "display: inline-block;" +
@@ -341,23 +353,19 @@ const MATERIAL_ICON_STYLE =
  */
 export function createRemarkMaterialIcons() {
   return () => (tree: Root) => {
-    function replace(_fullMatch: string, iconName: string): Text {
-      return {
-        type: "text",
-        value: iconName,
-        data: {
-          hName: "span",
-          hProperties: {
-            role: "img",
-            ariaLabel: `${iconName} icon`,
-            translate: "no",
-            style: MATERIAL_ICON_STYLE,
-          },
-          hChildren: [{ type: "text", value: iconName }],
+    function replace(_fullMatch: string, iconName: string): Emphasis {
+      return inlineElement({
+        hName: "span",
+        hProperties: {
+          role: "img",
+          ariaLabel: `${iconName} icon`,
+          translate: "no",
+          style: MATERIAL_ICON_STYLE,
         },
-      } as Text;
+        hChildren: [{ type: "text", value: iconName }],
+      });
     }
-    findAndReplace(tree, [[/\uE000([\w-]+)\uE001/g, replace as () => Text]]);
+    findAndReplace(tree, [[/\uE000([\w-]+)\uE001/g, replace]]);
     return tree;
   };
 }
@@ -375,23 +383,19 @@ const STREAMLIT_LOGO_SRC =
 /** The streamlit sentinel (STREAMLIT_MARK) -> inline streamlit-logo image, baseline-aligned. */
 export function createRemarkStreamlitLogo() {
   return () => (tree: Root) => {
-    function replaceStreamlit(): Text {
-      return {
-        type: "text",
-        value: "",
-        data: {
-          hName: "img",
-          hProperties: {
-            src: STREAMLIT_LOGO_SRC,
-            alt: "Streamlit logo",
-            style:
-              "display: inline-block; user-select: none; height: 0.75em;" +
-              " vertical-align: baseline; margin-bottom: -0.05ex;",
-          },
+    function replaceStreamlit(): Emphasis {
+      return inlineElement({
+        hName: "img",
+        hProperties: {
+          src: STREAMLIT_LOGO_SRC,
+          alt: "Streamlit logo",
+          style:
+            "display: inline-block; user-select: none; height: 0.75em;" +
+            " vertical-align: baseline; margin-bottom: -0.05ex;",
         },
-      } as Text;
+      });
     }
-    findAndReplace(tree, [[/\uE002/g, replaceStreamlit as () => Text]]);
+    findAndReplace(tree, [[/\uE002/g, replaceStreamlit]]);
     return tree;
   };
 }

@@ -304,6 +304,6 @@ def test_the_backend_is_setuptools_build_meta(monkeypatch):
     # which backend the hooks delegate to.
     build_meta = object()
     setuptools = types.ModuleType("setuptools")
-    setuptools.build_meta = build_meta  # ty: ignore[unresolved-attribute]
+    setuptools.build_meta = build_meta  # ty: ignore[missing-attribute]
     monkeypatch.setitem(sys.modules, "setuptools", setuptools)
     assert bb._backend() is build_meta
