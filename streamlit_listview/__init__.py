@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import reprlib
+import threading
 from collections.abc import Callable, Iterable
 from typing import Any, Literal, TypeGuard
 
@@ -17,12 +18,34 @@ from ._options import (
     sort_items,
 )
 
-_component = st.components.v2.component(
-    "streamlit_listview.listview",
-    js="index-*.js",
-    css="index-*.css",
-    html='<div class="listview-root"></div>',
-)
+_COMPONENT_NAME = "streamlit_listview.listview"
+
+_component: Callable[..., Any] | None = None
+_component_lock = threading.Lock()
+
+
+def _get_component() -> Callable[..., Any]:
+    """The component callable, declared on the first call.
+
+    The declaration resolves the js= and css= globs through the component
+    manifests, which only a Streamlit runtime (a server or an AppTest run) has
+    read. Outside one it raises StreamlitAPIException, and an app's tests import
+    their modules, and with them this package, before any AppTest runs. So the
+    declaration waits for the first listview() call, which runs inside a
+    script. The lock keeps two sessions that render their first listview at the
+    same moment from declaring the name twice.
+    """
+    global _component
+    with _component_lock:
+        if _component is None:
+            _component = st.components.v2.component(
+                _COMPONENT_NAME,
+                js="index-*.js",
+                css="index-*.css",
+                html='<div class="listview-root"></div>',
+            )
+        return _component
+
 
 _SELECTION_MODES = ("single", "multi")
 _LABEL_VISIBILITIES = ("visible", "hidden", "collapsed")
@@ -882,7 +905,7 @@ def listview(
         def on_selection_change() -> None:
             on_change(*cb_args, **cb_kwargs)
 
-    result = _component(
+    result = _get_component()(
         data=data,
         default={"selection": default_ids},
         on_selection_change=on_selection_change,

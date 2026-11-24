@@ -112,9 +112,14 @@ def test_the_search_field_is_filled_like_st_text_input(page: Page):
     native = _style(page.get_by_test_id("stTextInputRootElement"))
     search = _style(page.get_by_test_id("stListviewSearch"))
     assert _close(search["bg"], native["bg"])
-    # ...and, like the native field, its 1px edge is its own fill colour.
-    assert _close(native["border"], native["bg"])
-    assert _close(search["border"], search["bg"])
+    # ...and its 1px edge looks like the native field's: the theme's widget
+    # border colour. A theme without widget borders gives that token as
+    # transparent; Streamlit then draws its edge in the fill, and the
+    # listview's transparent edge shows its own fill.
+    if search["border"][3] == 0:
+        assert _close(native["border"], native["bg"])
+    else:
+        assert _close(search["border"], native["border"])
 
 
 def test_a_click_below_the_last_row_focuses_the_list(page: Page):

@@ -9,8 +9,10 @@ wheel and the newest Streamlit it admits from PyPI, and runs a listview there
 through Streamlit's AppTest. AppTest finds the component through the installed
 manifest and resolves the bundle's `index-*.js` and `index-*.css` globs as a
 Streamlit server does, so a wheel whose manifest or bundle Streamlit cannot
-use fails here. An editable install, as the test suites use, finds both in
-the source tree instead. Needs uv on PATH and access to PyPI. Standard library
+use fails here. The check then sets a selection through the wheel's
+`streamlit_listview.testing` and reads it back from the app. An editable
+install, as the test suites use, finds the manifest and the bundle in the
+source tree instead. Needs uv on PATH and access to PyPI. Standard library
 only, like scripts/push_gate.py, which runs it.
 """
 
@@ -31,29 +33,37 @@ import verify_wheel
 
 BUILD = "streamlit_listview/frontend/build/"
 
-# Runs in the new environment and prints one JSON line last. It locates the
-# package without importing it: outside a Streamlit runtime, the import fails
-# to declare the component.
+# Runs in the new environment and prints one JSON line last. It imports the
+# package before AppTest runs, outside a Streamlit runtime, as an app's test
+# suite does; a failed import fails the check's process.
 CHECK = """
-import importlib.util
 import json
 
+import streamlit_listview
 from streamlit.testing.v1 import AppTest
+from streamlit_listview.testing import get_listview
 
-spec = importlib.util.find_spec("streamlit_listview")
 # A new environment imports Streamlit cold. The first run took 5.1 s on
 # Windows, against AppTest's default timeout of 3 s.
 app = AppTest.from_string(
+    "import streamlit as st\\n"
     "from streamlit_listview import listview\\n"
-    "listview('Smoke test', ['a', 'b'], key='smoke')\\n"
+    "st.write(repr(listview('Smoke test', ['a', 'b'], key='smoke')))\\n"
 ).run(timeout=60)
 listviews = app.get("bidi_component")
-print(json.dumps({
-    "module": spec.origin if spec else None,
+report = {
+    "module": streamlit_listview.__file__,
     "exceptions": [str(exception.value) for exception in app.exception],
     "js": [listview.proto.js_source_path for listview in listviews],
     "css": [listview.proto.css_source_path for listview in listviews],
-}))
+}
+# The helper runs only on a good render, so a failed one still prints the
+# report that names its cause.
+report["selected"] = None
+if len(listviews) == 1 and not app.exception:
+    get_listview(app, "smoke").set_selection("b").run(timeout=60)
+    report["selected"] = [markdown.value for markdown in app.markdown]
+print(json.dumps(report))
 """
 
 # Runs a command in a directory and returns its output; raises SmokeError
@@ -88,9 +98,7 @@ def problems(report: dict[str, Any], venv: Path, js: str, css: str) -> list[str]
     """What keeps the check's report from showing a listview of this wheel."""
     found: list[str] = []
     module = report["module"]
-    if module is None:
-        found.append("Python found no streamlit_listview in the new environment")
-    elif not Path(module).resolve().is_relative_to(venv.resolve()):
+    if not Path(module).resolve().is_relative_to(venv.resolve()):
         found.append(
             f"Python imported streamlit_listview from {module}, outside the new "
             f"environment {venv}"
@@ -107,6 +115,11 @@ def problems(report: dict[str, Any], venv: Path, js: str, css: str) -> list[str]
             found.append(
                 f"Streamlit resolved the {kind} to {resolved}; the wheel ships {shipped}"
             )
+    # None: the render failed, and the problems above name the cause.
+    if report["selected"] not in (None, ["'b'"]):
+        found.append(
+            f"the helper selected 'b', but the app returned {report['selected']}"
+        )
     return found
 
 

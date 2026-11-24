@@ -1,33 +1,9 @@
-import atexit
 import importlib
 import sys
-from unittest.mock import MagicMock, patch
+from pathlib import Path
 
 import pytest
 import streamlit as st
-
-# ---------------------------------------------------------------------------
-# Module-level patch: st.components.v2.component is called at import time in
-# streamlit_listview/__init__.py (the declaration line). When test_options.py does
-#   from streamlit_listview._options import ...
-# Python processes the streamlit_listview package, executing __init__.py, which calls
-# st.components.v2.component(js="index-*.js", css="index-*.css", ...). Without
-# a built frontend, the js=/css= globs match nothing and this raises
-# StreamlitComponentRegistryError — which derives straight from streamlit's Error,
-# NOT from StreamlitAPIException, so it cannot be caught as one. Patching the
-# factory here (conftest.py is loaded BEFORE test modules are imported) makes the
-# package importable in all tests regardless of whether they use listview_mod.
-# The per-test listview_mod fixture replaces the module-cached _component with
-# a fresh FakeComponent and does a clean re-import, so these tests are unaffected.
-# ---------------------------------------------------------------------------
-_import_time_fake = MagicMock(return_value=MagicMock(return_value={"selection": []}))
-_import_time_patcher = patch.object(st.components.v2, "component", _import_time_fake)
-_import_time_patcher.start()
-# Pair the import-time start() with a stop() so this global patch does not leak
-# past the test session: without it, st.components.v2.component would stay
-# replaced by the fake for the entire process (even for code outside the
-# listview_mod fixture). atexit restores the real factory when pytest exits.
-atexit.register(_import_time_patcher.stop)
 
 
 class FakeComponent:
@@ -46,7 +22,8 @@ class FakeComponent:
 
     def __init__(self):
         self.calls = []
-        self.declared = None  # the factory kwargs, recorded at import
+        self.declared = None  # the factory kwargs, recorded at the first call
+        self.declarations = 0  # how often the wrapper declared the component
         self._return_value = self._UNSET
 
     @property
@@ -78,12 +55,13 @@ class FakeComponent:
 def listview_mod(monkeypatch):
     """Import listview with st.components.v2.component patched to a FakeComponent.
 
-    Yields (module, fake) where fake.last is the kwargs of the last _component
-    call and fake.return_value can be set to drive the wrapper's return mapping.
+    Yields (module, fake) where fake.last is the kwargs of the last mount call
+    and fake.return_value can be set to drive the wrapper's return mapping.
     """
     fake = FakeComponent()
 
     def fake_factory(name, *, js=None, css=None, html=None, isolate_styles=True):
+        fake.declarations += 1
         fake.declared = {
             "name": name,
             "js": js,
@@ -95,8 +73,8 @@ def listview_mod(monkeypatch):
 
     monkeypatch.setattr(st.components.v2, "component", fake_factory)
 
-    # Ensure a fresh import so the patched factory is used for the
-    # module-level declaration.
+    # A fresh import starts without a declared component, so the first
+    # listview() call declares it through the patched factory.
     sys.modules.pop("streamlit_listview", None)
     sys.modules.pop("streamlit_listview._options", None)
     mod = importlib.import_module("streamlit_listview")
@@ -105,3 +83,23 @@ def listview_mod(monkeypatch):
 
     # Clean up so other tests re-import against their own patch.
     sys.modules.pop("streamlit_listview", None)
+
+
+BUILD = (
+    Path(__file__).resolve().parent.parent / "streamlit_listview" / "frontend" / "build"
+)
+
+
+@pytest.fixture
+def built_bundle():
+    """Fail a test that renders the real listview when no bundle is built.
+
+    AppTest resolves the component's index-*.js and index-*.css globs as a server
+    does, so without a build the render fails with an error that names neither
+    the build nor the command that makes it.
+    """
+    if not any(BUILD.glob("index-*.js")):
+        pytest.fail(
+            "This test renders the listview through AppTest and needs the built "
+            "bundle: run npm run build in streamlit_listview/frontend."
+        )

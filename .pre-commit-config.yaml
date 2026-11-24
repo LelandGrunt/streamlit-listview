@@ -21,14 +21,14 @@
 minimum_pre_commit_version: "4.4.0" # `language: unsupported`
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.10
+    rev: v0.17.6
     hooks:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
 
   - repo: https://github.com/astral-sh/ty-pre-commit
-    rev: v0.0.85
+    rev: v0.0.109
     hooks:
       # ty checks the whole project on every commit, against the project
       # environment (uv check). --extra devel adds pytest and Playwright for the
@@ -44,7 +44,7 @@ repos:
         args: [--extra, devel, --no-install-project, --frozen]
 
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.12.23
+    rev: 0.13.9
     hooks:
       # Runs only when uv.lock or pyproject.toml changes. --locked also fails
       # when uv.lock is out of date with pyproject.toml.
@@ -67,14 +67,14 @@ repos:
         always_run: true
 
   - repo: https://github.com/crate-ci/typos
-    rev: v1.50.3
+    rev: v1.52.2
     hooks:
       # Fixes what it can (--write-changes): stage the file and commit again.
       # Its exceptions live under [tool.typos] in pyproject.toml.
       - id: typos
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.23.3
+    rev: v0.24.2
     hooks:
       # Checks only: fix the document by hand. The rules live in
       # .markdownlint-cli2.jsonc.
@@ -139,7 +139,7 @@ repos:
         name: mermaid diagrams render (manual)
         entry: node scripts/check_mermaid.mjs
         language: node
-        additional_dependencies: ["@mermaid-js/mermaid-cli@12.0.0"]
+        additional_dependencies: ["@mermaid-js/mermaid-cli@12.2.0"]
         types: [markdown]
         stages: [manual]
       # The e2e suite in Firefox and WebKit, by hand. Install the two browsers

@@ -235,9 +235,9 @@ def test_build_gif_refuses_a_scale_that_leaves_no_pixel(tmp_path):
 
 
 def test_generate_imports_outside_a_streamlit_server():
-    """generate.py imports the catalogue in a plain process, where declaring the
-    component fails, so no scenario may import streamlit_listview at import time.
-    conftest.py patches the declaration for this process, hence the subprocess."""
+    """generate.py imports the catalogue in a plain process, outside a Streamlit
+    server. A new process runs the import, so no module this suite has already
+    imported can hide a failure."""
     code = "import sys; sys.path.insert(0, sys.argv[1]); import generate"
     result = subprocess.run(
         [sys.executable, "-c", code, str(ROOT / "scripts" / "gif")],

@@ -184,6 +184,24 @@ describe("Markdown icon/logo adjacency (token glued to a following word)", () =>
     expect(container.textContent).toContain("5 stars");
   });
 
+  it("keeps the words on both sides of an icon and the logo", () => {
+    // mdast-util-find-and-replace 3.0.5 merges a returned text node into the
+    // text beside it, so an icon or logo built as a text node lost its element.
+    const { container } = render(
+      <Markdown
+        tier="label"
+        source="Go :material/check: now :streamlit: app"
+      />,
+    );
+    expect(container.querySelector('span[role="img"]')?.textContent).toBe(
+      "check",
+    );
+    const logo = container.querySelector('img[alt="Streamlit logo"]');
+    expect(logo).not.toBeNull();
+    expect(logo?.childNodes).toHaveLength(0);
+    expect(container.textContent).toBe("Go check now  app");
+  });
+
   it("renders a hyphenated material icon name", () => {
     const { container } = render(
       <Markdown tier="label" source=":material/foo-bar:" />,

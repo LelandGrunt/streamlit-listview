@@ -7,7 +7,9 @@ real, against the editable install and the built bundle.
 
 import ast
 import json
+import os
 import runpy
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
@@ -35,7 +37,13 @@ def _wheel(tmp_path: Path, entries: list[str]) -> Path:
 def _report(venv: Path, **changes):
     """What the check prints for a listview rendered from `venv`."""
     module = venv / "Lib" / "site-packages" / "streamlit_listview" / "__init__.py"
-    report = {"module": str(module), "exceptions": [], "js": [JS], "css": [CSS]}
+    report = {
+        "module": str(module),
+        "exceptions": [],
+        "js": [JS],
+        "css": [CSS],
+        "selected": ["'b'"],
+    }
     return {**report, **changes}
 
 
@@ -71,7 +79,6 @@ def test_a_listview_from_the_new_environment_passes(tmp_path):
                 "environment"
             ),
         ),
-        ({"module": None}, "Python found no streamlit_listview in the new environment"),
         ({"exceptions": ["boom"]}, "the app raised: boom"),
         ({"js": [], "css": []}, "the app rendered 0 listviews, expected 1"),
         (
@@ -85,6 +92,10 @@ def test_a_listview_from_the_new_environment_passes(tmp_path):
                 "index-def.css"
             ),
         ),
+        (
+            {"selected": ["None"]},
+            "the helper selected 'b', but the app returned ['None']",
+        ),
     ],
 )
 def test_a_problem_is_named(tmp_path, changes, expected):
@@ -96,10 +107,10 @@ def test_a_problem_is_named(tmp_path, changes, expected):
 
 class Runner:
     """Records each command; makes the new environment's interpreter and
-    answers the check with a canned report."""
+    answers the check with a report of a listview from it, with `changes`."""
 
-    def __init__(self, report=None):
-        self.report = report
+    def __init__(self, changes=None):
+        self.changes = changes or {}
         self.calls: list[tuple[list[str], Path]] = []
         self.venv: Path | None = None
 
@@ -118,7 +129,7 @@ class Runner:
             return ""
         if "-I" in args:
             assert self.venv is not None, "the check ran before uv venv"
-            report = self.report or _report(self.venv)
+            report = _report(self.venv, **self.changes)
             return "a warning\n" + json.dumps(report) + "\n"
         return ""
 
@@ -139,9 +150,9 @@ def test_smoke_installs_the_wheel_in_a_new_environment(tmp_path):
 
 
 def test_smoke_reports_what_the_check_found(tmp_path):
-    runner = Runner(report={"module": None, "exceptions": [], "js": [JS], "css": [CSS]})
+    runner = Runner(changes={"exceptions": ["boom"]})
     found = smoke_wheel.smoke(_wheel(tmp_path, GOOD), runner)
-    assert found == ["Python found no streamlit_listview in the new environment"]
+    assert found == ["the app raised: boom"]
 
 
 @pytest.mark.parametrize("output", ["", "a warning\n"])
@@ -173,6 +184,7 @@ def test_the_check_reports_what_streamlit_resolved(tmp_path):
     assert report["js"] == [next(build.glob("index-*.js")).name]
     assert report["css"] == [next(build.glob("index-*.css")).name]
     assert Path(report["module"]).is_relative_to(ROOT / "streamlit_listview")
+    assert report["selected"] == ["'b'"]
 
 
 def test_the_check_gives_a_cold_start_more_than_apptests_default():
@@ -241,3 +253,57 @@ def test_smoke_wheel_runs_main_as_a_script(tmp_path, monkeypatch, capsys):
         runpy.run_path(str(ROOT / "scripts" / "smoke_wheel.py"), run_name="__main__")
     assert exc.value.code == 1
     assert "FAIL: cannot open" in capsys.readouterr().out
+
+
+def test_the_check_imports_the_package_before_apptest_runs():
+    """An app's test suite imports the package outside a runtime first."""
+    tree = ast.parse(smoke_wheel.CHECK)
+    imported = next(
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Import)
+        and any(alias.name == "streamlit_listview" for alias in node.names)
+    )
+    rendered = next(
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "from_string"
+    )
+    assert imported < rendered
+
+
+def test_the_check_reports_an_app_that_raised(tmp_path):
+    """A failed render must still reach problems(), which names it."""
+    package = tmp_path / "streamlit_listview"
+    package.mkdir()
+    (package / "__init__.py").write_text(
+        "def listview(*args, **kwargs):\n    raise ValueError('broken')\n",
+        encoding="utf-8",
+    )
+    (package / "testing.py").write_text(
+        "def get_listview(at, key):\n    raise KeyError(key)\n", encoding="utf-8"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", smoke_wheel.CHECK],
+        cwd=tmp_path,
+        env={**os.environ, "PYTHONPATH": str(tmp_path)},
+        capture_output=True,
+        encoding="utf-8",
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    report = json.loads(result.stdout.splitlines()[-1])
+    assert (report["exceptions"], report["js"], report["selected"]) == (
+        ["broken"],
+        [],
+        None,
+    )
+
+
+def test_a_skipped_selection_adds_no_problem(tmp_path):
+    """The helper does not run after a failed render; the render's problems
+    already name the cause."""
+    report = _report(tmp_path, exceptions=["boom"], selected=None)
+    assert smoke_wheel.problems(report, tmp_path, JS, CSS) == ["the app raised: boom"]

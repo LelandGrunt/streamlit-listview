@@ -7,7 +7,7 @@ this session's run.
 
 import sys
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -20,15 +20,16 @@ sys.path.insert(0, str(ROOT / "demo"))
 
 import themes
 
+# The demo renders the real listview, so AppTest needs the built bundle.
+pytestmark = pytest.mark.usefixtures("built_bundle")
+
 _THEME_FILES = themes.discover_themes(ROOT / "demo" / ".streamlit")
 _APPLIED, _OTHER = list(_THEME_FILES)[:2]
 
 
 def _apply(name):
     text = _THEME_FILES[name].read_text(encoding="utf-8")
-    themes.SERVER_THEME.apply(
-        name, themes.flatten_theme(text), now=datetime.now(timezone.utc)
-    )
+    themes.SERVER_THEME.apply(name, themes.flatten_theme(text), now=datetime.now(UTC))
 
 
 # What another session does to the server theme. Each one runs on a thread of
@@ -37,7 +38,7 @@ _OTHER_SESSION = {
     "reset": themes.SERVER_THEME.reset,
     "switch": lambda: _apply(_OTHER),
     "expire": lambda: themes.SERVER_THEME.expire(
-        now=datetime.now(timezone.utc) + 2 * themes.THEME_TTL
+        now=datetime.now(UTC) + 2 * themes.THEME_TTL
     ),
 }
 

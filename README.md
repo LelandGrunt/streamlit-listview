@@ -7,7 +7,7 @@
 
 [![Open in Streamlit](https://img.shields.io/badge/Open_in_Streamlit-FF4B4B?logo=streamlit&logoColor=white)](https://st-listview-demo.streamlit.app/)
 [![PyPI](https://img.shields.io/pypi/v/streamlit-listview?logo=pypi&logoColor=white&color=3775A9)](https://pypi.org/project/streamlit-listview/)
-![Python](https://img.shields.io/badge/python-%E2%89%A5_3.10-3776AB?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/python-%E2%89%A5_3.11-3776AB?logo=python&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-%E2%89%A5_1.51-FF4B4B?logo=streamlit&logoColor=white)
 ![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
 [![License](https://img.shields.io/badge/license-Apache_2.0-green)](https://github.com/LelandGrunt/streamlit-listview/blob/HEAD/LICENSE)
@@ -54,7 +54,7 @@ uv pip install streamlit-listview
 uv add streamlit-listview
 ```
 
-Requires **Python ≥ 3.10** and **Streamlit ≥ 1.51**. The [changelog](https://github.com/LelandGrunt/streamlit-listview/blob/HEAD/CHANGELOG.md) lists the changes of each release.
+Requires **Python ≥ 3.11** and **Streamlit ≥ 1.51**. The [changelog](https://github.com/LelandGrunt/streamlit-listview/blob/HEAD/CHANGELOG.md) lists the changes of each release.
 
 ## Quickstart
 
@@ -384,6 +384,48 @@ The selection lasts as long as Streamlit keeps the widget's state. When a script
 
 Because the selection survives, two parameters only take effect at mount: changing `default` on a keyed widget moves neither the displayed selection nor the returned value — it only scrolls the newly named row into view — and changing `collapsed_groups` never re-collapses a group that has already been shown ([Collapsible groups](#collapsible-groups)). Change the `key` to re-apply either. Every call still checks `default` against the current parameters. A keyed selection that no longer fits the current parameters is corrected instead — see [Changing `options`, `max_selections` or `selection_mode` later](#changing-options-max_selections-or-selection_mode-later).
 
+### Testing with AppTest
+
+`streamlit_listview.testing` reads and sets a keyed listview in a test that runs your app through Streamlit's [`AppTest`](https://docs.streamlit.io/develop/api-reference/app-testing). `AppTest` shows a listview as a generic element without `set_value()`, so the helper does that part. `import streamlit_listview` works outside a running app, so pytest can import your app's modules before `AppTest` runs.
+
+```python
+from streamlit.testing.v1 import AppTest
+from streamlit_listview.testing import get_listview
+
+at = AppTest.from_file("app.py").run()
+tables = get_listview(at, "tables")
+assert [option.id for option in tables.options] == ["dbo.Customers", "dbo.Orders"]
+tables.set_selection("dbo.Orders").run()
+assert at.markdown[0].value == "Selected: Orders"
+```
+
+`get_listview(at, key)` returns the listview with that `key` from the last run, or raises `KeyError`. Call it after `at.run()`. When the last run raised, the `KeyError` names the exception. The element reads the latest run on every access, so it stays current across runs; it raises the same `KeyError` once a run renders no listview with its key.
+
+| Attribute | Value |
+| --- | --- |
+| `key`, `label`, `disabled`, `selection_mode`, `max_selections`, `accept_new_options` | the listview's parameters |
+| `options` | a list of `Option(id, label, group, disabled)`, in the order `sort` gave them |
+| `selection` | the ids stored for the listview, read on each access |
+
+`set_selection(ids)` takes one id, a list or a tuple of ids, or `None` to clear the selection. `run()` then reruns the app. Ids match options as rows do, so `"7"` selects the int option `7`. `selection` holds ids, while your app gets what `listview()` returns, such as the whole dict of a dict option.
+
+`set_selection` raises `AppTestError` (from `streamlit.testing.v1`) for a selection that no user can make:
+
+- the listview is disabled;
+- an id names no option;
+- two ids name the same option;
+- an id names a disabled option that the selection does not hold yet;
+- single mode gets more than one id, or multi mode more ids than `max_selections`.
+
+The helper has six limits:
+
+- It reaches only a listview with a `key`, because it writes the selection to `at.session_state[key]`.
+- **`on_change` does not fire**, unlike `set_value()` on Streamlit's own widgets. Test a callback in a browser, for example with Playwright.
+- It adds no new entries, even with `accept_new_options`.
+- The browser keeps a disabled option that the selection holds; a test can drop it.
+- It sets the selection only. Search, collapsing groups, scrolling and the keyboard run in the browser; test them in a browser test.
+- It needs Streamlit 1.66 or later. Under an older Streamlit, importing `streamlit_listview.testing` raises `ImportError`.
+
 ### Large lists
 
 The widget creates every row, but the browser lays out and paints only the rows near the visible frame. The figures below come from the [reference run of the benchmark](https://github.com/LelandGrunt/streamlit-listview/blob/HEAD/BENCHMARKS.md#reference-run-100-to-100000-rows), which also describes its method: Chromium 153 and Streamlit 1.65 on a laptop with a Core Ultra 7 155H, server and browser on the same machine, and 100,000 options in groups of 100. Each figure is the median of three runs.
@@ -465,8 +507,8 @@ needed, then `npm run build`) before packaging, so the wheel bundles that
 `streamlit_listview/pyproject.toml` component manifest (Streamlit reads it at
 runtime to resolve the asset globs). This produces `dist/`:
 
-- `dist/streamlit_listview-1.1.0-py3-none-any.whl`
-- `dist/streamlit_listview-1.1.0.tar.gz` (sdist)
+- `dist/streamlit_listview-1.2.0-py3-none-any.whl`
+- `dist/streamlit_listview-1.2.0.tar.gz` (sdist)
 
 Two builds reuse the bundle already in `streamlit_listview/frontend/build`
 instead of compiling it: a build with `LISTVIEW_SKIP_NPM_BUILD=1`, and a build
@@ -476,7 +518,9 @@ sources. After a frontend edit, run `npm run build` before such a build.
 
 ### Requirements
 
-- Python ≥ 3.10 and Streamlit ≥ 1.51 — to use the package
+- Python ≥ 3.11 and Streamlit ≥ 1.51 — to use the package
+- Streamlit ≥ 1.66 — to use `streamlit_listview.testing`, and to run the
+  test suite of a checkout
 - Streamlit ≥ 1.56 — to run the demo, which passes `required` to `st.pills`
   and `st.segmented_control`
 - Node.js ≥ 24 (LTS) and npm — only to build the frontend from a checkout; a

@@ -72,28 +72,19 @@ def project_version(pyproject_text: str) -> str:
 
 
 def _parse_toml(text: str) -> dict[str, Any]:
-    """Parse `text` as Streamlit does: with `tomllib`, or `toml` on Python 3.10.
+    """Parse `text` as Streamlit does, with the standard library's `tomllib`.
 
     Streamlit reads the shipped manifest when the server starts
     (components/v2/manifest_scanner.py). Streamlit 1.66 and later parse it with
-    `tomllib` and need Python 3.11, which brought it; earlier releases parse it
-    with `toml`, their own dependency, and only they install on Python 3.10.
-    On Python 3.11 and later with Streamlit 1.65 or earlier, the two parsers
-    differ; CI installs the newest Streamlit, which parses as this does.
-    scripts/push_gate.py imports this module on the standard library alone, so
-    both imports wait for the call. Both parsers raise a ValueError for a
-    document they cannot parse.
+    `tomllib`; earlier releases parse it with `toml`, their own dependency, and
+    the two parsers differ. CI installs the newest Streamlit, which parses as
+    this does. scripts/push_gate.py imports this module and supports Python
+    3.10, which lacks `tomllib`, so the import waits for the call. `tomllib`
+    raises a ValueError for a document it cannot parse.
     """
-    # ty checks one Python version, CI's 3.12 ([tool.ty.environment] in
-    # pyproject.toml). It reports an import the environment lacks even inside
-    # a `try`, but not in a branch that version never runs.
-    if sys.version_info >= (3, 11):
-        import tomllib
+    import tomllib
 
-        return tomllib.loads(text)
-    import toml
-
-    return cast(dict[str, Any], toml.loads(text))
+    return tomllib.loads(text)
 
 
 def _table(data: Any, *keys: str) -> dict[str, Any]:
