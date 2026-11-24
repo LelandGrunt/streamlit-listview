@@ -5,12 +5,12 @@ backend-path = ["."]
 
 [project]
 name = "streamlit-listview"
-version = "1.1.0"
+version = "1.2.0"
 description = "Streamlit Components V2 selectable list widget with search, groups, and theming"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [{ name = "Leland Grunt", email = "33732585+LelandGrunt@users.noreply.github.com" }]
 keywords = [
   "streamlit",
@@ -27,7 +27,6 @@ classifiers = [
   "Intended Audience :: Developers",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
@@ -122,9 +121,9 @@ extra-paths = ["demo", "scripts", "scripts/gif"]
 python-platform = "all"
 # Check against CI's Python (CI_PYTHON in scripts/push_gate.py; a test keeps the
 # two equal), on every machine. Without it, ty takes the floor of
-# requires-python, 3.10, but reads the packages that uv.lock pins for the
-# environment's Python, such as Streamlit 1.66 on 3.11 and later, which no
-# Python 3.10 can install. UV_PYTHON, which CI and the push gate set, overrides
+# requires-python, 3.11, but reads the packages that uv.lock pins for the
+# environment's Python, such as numpy 2.5 on 3.12 and later, which no
+# Python 3.11 can install. UV_PYTHON, which CI and the push gate set, overrides
 # it.
 python-version = "3.12"
 
@@ -132,7 +131,7 @@ python-version = "3.12"
 # Two rules beyond ty's defaults keep Any out of typed code: a bare generic
 # (`dict`, `list`) and a typed function that returns Any. Two more stay off:
 # truthiness-test-of-none-union (`if name:` on `str | None` is idiomatic) and
-# missing-override-decorator (@override needs typing_extensions on 3.10).
+# missing-override-decorator (@override needs typing_extensions on 3.11).
 missing-type-argument = "error"
 unsound-return-statement = "error"
 

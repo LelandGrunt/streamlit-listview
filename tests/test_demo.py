@@ -4,9 +4,8 @@ import ast
 import json
 import math
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -1233,7 +1232,7 @@ def test_api_reference_documents_the_real_defaults():
 # --- themes: the server-wide theme switcher ----------------------------------
 
 _SHIPPED_THEMES = ROOT / "demo" / ".streamlit"
-_T0 = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
+_T0 = datetime(2026, 10, 1, 12, 0, tzinfo=UTC)
 
 
 @pytest.fixture
@@ -1349,15 +1348,6 @@ def test_flatten_theme_needs_no_toml_package(monkeypatch):
     # longer installs it. Python 3.11 and later parse with tomllib instead.
     monkeypatch.setitem(sys.modules, "toml", None)
     assert themes.flatten_theme('[theme]\nbase = "dark"\n') == {"theme.base": "dark"}
-
-
-def test_flatten_theme_parses_with_toml_on_python_3_10(monkeypatch):
-    # tomllib arrived in Python 3.11. On 3.10 only Streamlit 1.65 and earlier
-    # install, and each of them depends on `toml`.
-    monkeypatch.setattr(sys, "version_info", (3, 10, 0))
-    fake = SimpleNamespace(loads=lambda text: {"theme": {"base": text}})
-    monkeypatch.setitem(sys.modules, "toml", fake)
-    assert themes.flatten_theme("dark") == {"theme.base": "dark"}
 
 
 @pytest.mark.parametrize("name", list(themes.discover_themes(_SHIPPED_THEMES)))

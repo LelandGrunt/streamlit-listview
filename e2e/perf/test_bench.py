@@ -8,7 +8,7 @@ complete (a precondition or a timeout inside measure.py). Skipped unless
 ``--perf-sizes 1000,50000`` for a quick look.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -35,6 +35,6 @@ def test_cell(cell: Cell, browser, app, perf):
             bundle=perf.bundle,
             streamlit=perf.streamlit,
             browser=browser.version,
-            started=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            started=datetime.now(UTC).isoformat(timespec="seconds"),
         )
         append_record(perf.out, record)

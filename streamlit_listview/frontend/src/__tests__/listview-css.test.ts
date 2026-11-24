@@ -81,13 +81,13 @@ describe("listview.css base theming", () => {
     }
   });
 
-  // Streamlit's sidebar theme SWAPS --st-background-color with
-  // --st-secondary-background-color, and nothing else about the color palette.
-  // Consumed raw, that inverts the widget in the sidebar: rows land on the
-  // group-header surface and headers on the row surface. So the two surfaces
-  // are named once as tokens and the swap is undone in exactly one block —
-  // spelled per rule, the sidebar would need four more overrides that can drift
-  // apart, which is the same failure mode the faded shades above guard against.
+  // Streamlit paints its open selectbox menu from --st-background-color in the
+  // main body but from --st-secondary-background-color in the sidebar. Consumed
+  // raw, either token paints the wrong surface in one of the two containers. So
+  // the surfaces are named once as tokens and redefined for the sidebar in
+  // exactly one block — spelled per rule, the sidebar would need four more
+  // overrides that can drift apart, which is the same failure mode the faded
+  // shades above guard against.
   it("names every painted surface as a token instead of raw --st-* per rule", () => {
     const surfaces = [
       { token: "--listview-surface", source: "var\\(--st-background-color" },
@@ -97,7 +97,8 @@ describe("listview.css base theming", () => {
       },
       {
         token: "--listview-group-surface",
-        source: "var\\(--listview-bg-mix\\)",
+        source:
+          "var\\(\\s*--st-dataframe-header-background-color\\s*,\\s*var\\(--listview-bg-mix\\)",
       },
     ];
     for (const { token, source } of surfaces) {
@@ -164,16 +165,17 @@ describe("listview.css base theming", () => {
     expect(pairs.side.inset).toBe(pairs.main.ground);
   });
 
-  it("derives the group band from bgMix, which the sidebar swap cannot change", () => {
-    // Streamlit's theme mixes its two background tokens 50/50 (bgMix) for the
-    // st.dataframe header band and the menu highlight. The mix is symmetric in
-    // the two, so the sidebar — which only trades them — resolves it to the same
-    // colour: the band needs no sidebar override, exactly like Streamlit's own.
+  it("paints the group band from Streamlit's dataframe header token", () => {
+    // The band copies the st.dataframe header. Streamlit derives that token from
+    // bgMix, its 50/50 mix of the two background tokens, unless a theme sets it,
+    // and its built-in themes do. A Streamlit without the token falls back to
+    // bgMix, which the menu highlight also starts from.
     expect(css).toMatch(
       /\[data-testid="stListview"\]\s*\{[^}]*--listview-bg-mix:\s*color-mix\(\s*in srgb\s*,\s*var\(--st-background-color[^;]*?50%\s*,\s*var\(--st-secondary-background-color/,
     );
-    // Regression guard: a sidebar band override brings back a band that differs
-    // between the two containers, where the menu it mirrors never does.
+    // Regression guard: each container resolves the token for itself, as it
+    // does for Streamlit's own dataframe, so a sidebar band override would
+    // paint a band that no dataframe there shows.
     const side =
       css.match(
         /\[data-testid="stListview"\]\[data-in-sidebar="true"\]\s*\{[^}]*\}/,
@@ -187,22 +189,31 @@ describe("listview.css base theming", () => {
     // -30 points in a light theme, +60 in a dark one, at 15% alpha. A primary
     // tint (the previous hover) has no counterpart in any Streamlit menu, and
     // the dark branch is load-bearing: darkening a dark surface by 30 points
-    // leaves a pill darker than the list it sits on.
+    // leaves a pill darker than the list it sits on. Streamlit's colour library
+    // rounds the mix to whole 8-bit channels and the result to whole HSL units;
+    // near white the first rounding doubles the saturation, so both roundings
+    // stay. The mix lands on a half channel, and WebKit stores 251.5 as
+    // 251.49998 and rounds it down; a nudge of 0.001 before the first rounding
+    // takes every engine up, as color2k's Math.round does.
     expect(css).toMatch(
-      /\[data-testid="stListview"\]\s*\{[^}]*--listview-hover-base:\s*hsl\(\s*from\s+var\(--listview-bg-mix\)\s+h\s+s\s+calc\(\s*l\s*-\s*30\s*\)\s*\)/,
+      /\[data-testid="stListview"\]\s*\{[^}]*--listview-bg-mix-rounded:\s*rgb\(\s*from\s+var\(--listview-bg-mix\)\s+round\(calc\(\s*r\s*\+\s*0\.001\s*\),\s*1\)\s+round\(calc\(\s*g\s*\+\s*0\.001\s*\),\s*1\)\s+round\(calc\(\s*b\s*\+\s*0\.001\s*\),\s*1\)\s*\)/,
     );
     expect(css).toMatch(
-      /\[data-testid="stListview"\]\[data-color-scheme="dark"\]\s*\{[^}]*--listview-hover-base:\s*hsl\(\s*from\s+var\(--listview-bg-mix\)\s+h\s+s\s+calc\(\s*l\s*\+\s*60\s*\)\s*\)/,
+      /\[data-testid="stListview"\]\s*\{[^}]*--listview-hover-base:\s*hsl\(\s*from\s+var\(--listview-bg-mix-rounded\)\s+round\(h,\s*1\)\s+round\(s,\s*1\)\s+round\(calc\(\s*l\s*-\s*30\s*\),\s*1\)\s*\)/,
+    );
+    expect(css).toMatch(
+      /\[data-testid="stListview"\]\[data-color-scheme="dark"\]\s*\{[^}]*--listview-hover-base:\s*hsl\(\s*from\s+var\(--listview-bg-mix-rounded\)\s+round\(h,\s*1\)\s+round\(s,\s*1\)\s+round\(calc\(\s*l\s*\+\s*60\s*\),\s*1\)\s*\)/,
     );
     expect(css).toMatch(
       /--listview-hover-surface:\s*color-mix\(\s*in srgb\s*,\s*var\(--listview-hover-base\)\s*15%\s*,\s*transparent\s*\)/,
     );
     // An engine without relative colour syntax (Safari before 18 parses the old
-    // percentage form, so `calc(l - 30)` is invalid there) would otherwise drop
-    // the hover highlight altogether: the whole custom property goes invalid at
-    // computed-value time, and a var() fallback cannot catch that.
+    // percentage form, so `calc(l - 30)` is invalid there) or without round()
+    // would otherwise drop the hover highlight altogether: the whole custom
+    // property goes invalid at computed-value time, and a var() fallback cannot
+    // catch that.
     expect(css).toMatch(
-      /@supports\s+not\s+\(\s*color:\s*hsl\(\s*from\s+red\s+h\s+s\s+calc\(\s*l\s*-\s*30\s*\)\s*\)\s*\)\s*\{[\s\S]*?--listview-hover-surface:\s*color-mix\(\s*in srgb\s*,\s*var\(--st-text-color/,
+      /@supports\s+not\s+\(\s*color:\s*hsl\(\s*from\s+red\s+round\(h,\s*1\)\s+s\s+round\(calc\(\s*l\s*-\s*30\s*\),\s*1\)\s*\)\s*\)\s*\{[\s\S]*?--listview-hover-surface:\s*color-mix\(\s*in srgb\s*,\s*var\(--st-text-color/,
     );
   });
 
@@ -840,6 +851,26 @@ describe("Milestone C feature styling", () => {
     expect(css).toContain(".listview-new-option__input");
   });
 
+  it("lets the pinned search field shrink below its input's intrinsic width", () => {
+    // A flex item keeps min-width: auto, so without the reset the pinned field
+    // stays about 230 px wide and runs out of a narrow frame.
+    expect(css).toMatch(
+      /\.listview-header\s*>\s*\.listview-search\s*\{[^}]*min-width:\s*0(?:px)?\s*[;}]/,
+    );
+  });
+
+  it("moves the Select all toggle below the search field by the header's width alone", () => {
+    // The header is the size container, and only its width decides: a flex
+    // wrap that followed the toggle's label would move "Deselect all" onto a
+    // line of its own after a click, and the list would shift under the pointer.
+    const header = css.match(/\.listview-header\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(header).toMatch(/container:\s*listview-header\s*\/\s*inline-size/);
+    expect(header).toMatch(/flex-wrap:\s*wrap/);
+    expect(css).toMatch(
+      /@container\s+listview-header\s*\(\s*max-width:\s*13\.5rem\s*\)\s*\{\s*\.listview-header\s*>\s*\.listview-search\s*\{[^}]*flex-basis:\s*100%/,
+    );
+  });
+
   it("styles the add row's refusal hint like st.caption, with no box while empty", () => {
     // st.caption: fadedText60 at the small size. No red and no frame change —
     // st.text_input has no error state.
@@ -912,19 +943,22 @@ describe("Milestone C feature styling", () => {
     expect(css).not.toMatch(/\.listview-listbox\s*\{[^}]*border:/);
   });
 
-  it("fills the search field like st.text_input: no visible edge, 1px primary on focus", () => {
-    // st.text_input paints its border in its own fill colour, so the field reads
-    // as one filled shape, and focus turns that 1px border primary — no extra
-    // ring. A --st-border-color outline around a field inside the bordered list
-    // frame drew a second, unmatched edge.
+  it("fills the search field like st.text_input: a widget-border edge, 1px primary on focus", () => {
+    // st.text_input draws its 1px border in the theme's widget border colour,
+    // or in its own fill where the theme sets none, and focus turns that border
+    // primary — no extra ring. Streamlit gives the token as transparent when the
+    // theme sets none, and the fill then shows through the border here. The
+    // --st-border-color outline of an earlier version drew an edge in a colour
+    // no native field uses.
     const field =
       css.match(
         /\.listview-search__input\s*,\s*\.listview-new-option__input\s*\{[^}]*\}/,
       )?.[0] ?? "";
     expect(field).toMatch(/background:\s*var\(--listview-inset-surface\)/);
     expect(field).toMatch(
-      /border:\s*1px\s+solid\s+var\(--listview-inset-surface\)/,
+      /border:\s*1px\s+solid\s+var\(--st-widget-border-color,\s*transparent\)/,
     );
+    expect(field).not.toMatch(/background-clip/);
     const focus =
       css.match(
         /\.listview-search__input:focus-visible\s*,\s*\.listview-new-option__input:focus-visible\s*\{[^}]*\}/,

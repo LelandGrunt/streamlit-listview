@@ -7,7 +7,7 @@
 
 [![Open in Streamlit](https://img.shields.io/badge/Open_in_Streamlit-FF4B4B?logo=streamlit&logoColor=white)](https://st-listview-demo.streamlit.app/)
 [![PyPI](https://img.shields.io/pypi/v/streamlit-listview?logo=pypi&logoColor=white&color=3775A9)](https://pypi.org/project/streamlit-listview/)
-![Python](https://img.shields.io/badge/python-%E2%89%A5_3.10-3776AB?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/python-%E2%89%A5_3.11-3776AB?logo=python&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-%E2%89%A5_1.51-FF4B4B?logo=streamlit&logoColor=white)
 ![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
 [![License](https://img.shields.io/badge/license-Apache_2.0-green)](https://github.com/LelandGrunt/streamlit-listview/blob/HEAD/LICENSE)
@@ -54,7 +54,7 @@ uv pip install streamlit-listview
 uv add streamlit-listview
 ```
 
-Requires **Python ≥ 3.10** and **Streamlit ≥ 1.51**. The [changelog](https://github.com/LelandGrunt/streamlit-listview/blob/HEAD/CHANGELOG.md) lists the changes of each release.
+Requires **Python ≥ 3.11** and **Streamlit ≥ 1.51**. The [changelog](https://github.com/LelandGrunt/streamlit-listview/blob/HEAD/CHANGELOG.md) lists the changes of each release.
 
 ## Quickstart
 
@@ -424,7 +424,7 @@ The helper has six limits:
 - It adds no new entries, even with `accept_new_options`.
 - The browser keeps a disabled option that the selection holds; a test can drop it.
 - It sets the selection only. Search, collapsing groups, scrolling and the keyboard run in the browser; test them in a browser test.
-- It needs Streamlit 1.66 or later, and so Python 3.11 or later. Under an older Streamlit, importing `streamlit_listview.testing` raises `ImportError`.
+- It needs Streamlit 1.66 or later. Under an older Streamlit, importing `streamlit_listview.testing` raises `ImportError`.
 
 ### Large lists
 
@@ -507,8 +507,8 @@ needed, then `npm run build`) before packaging, so the wheel bundles that
 `streamlit_listview/pyproject.toml` component manifest (Streamlit reads it at
 runtime to resolve the asset globs). This produces `dist/`:
 
-- `dist/streamlit_listview-1.1.0-py3-none-any.whl`
-- `dist/streamlit_listview-1.1.0.tar.gz` (sdist)
+- `dist/streamlit_listview-1.2.0-py3-none-any.whl`
+- `dist/streamlit_listview-1.2.0.tar.gz` (sdist)
 
 Two builds reuse the bundle already in `streamlit_listview/frontend/build`
 instead of compiling it: a build with `LISTVIEW_SKIP_NPM_BUILD=1`, and a build
@@ -518,9 +518,9 @@ sources. After a frontend edit, run `npm run build` before such a build.
 
 ### Requirements
 
-- Python ≥ 3.10 and Streamlit ≥ 1.51 — to use the package
-- Python ≥ 3.11 and Streamlit ≥ 1.66 — to use `streamlit_listview.testing`,
-  and to run the test suite of a checkout
+- Python ≥ 3.11 and Streamlit ≥ 1.51 — to use the package
+- Streamlit ≥ 1.66 — to use `streamlit_listview.testing`, and to run the
+  test suite of a checkout
 - Streamlit ≥ 1.56 — to run the demo, which passes `required` to `st.pills`
   and `st.segmented_control`
 - Node.js ≥ 24 (LTS) and npm — only to build the frontend from a checkout; a

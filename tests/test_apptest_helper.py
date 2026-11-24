@@ -1,8 +1,8 @@
 """streamlit_listview.testing, run against the real listview through AppTest.
 
 Each test renders an app through AppTest, so the module needs the built bundle.
-A Python 3.10 environment, where only Streamlit 1.65 installs, skips it: the
-helper needs Streamlit 1.66. The coverage gate therefore needs Python 3.11.
+An environment with Streamlit before 1.66 skips it, because the helper needs
+1.66; the coverage gate then fails.
 """
 
 import enum

@@ -120,9 +120,10 @@ first only in a checkout without `streamlit_listview/frontend/node_modules`.
 
 ## Requirements
 
-- Python ≥ 3.10 and Streamlit ≥ 1.56. The demo uses the `required` parameter of
+- Python ≥ 3.11 and Streamlit ≥ 1.56. The demo uses the `required` parameter of
   `st.pills` and `st.segmented_control`, which Streamlit 1.56 added; the
-  package itself needs only Streamlit ≥ 1.51. The demo imports pandas and toml,
-  which Streamlit depends on, so it needs no other Python packages.
+  package itself needs only Streamlit ≥ 1.51. The demo imports pandas, which
+  Streamlit depends on, and reads its theme files with the standard library's
+  `tomllib`, so it needs no other Python packages.
 - Node.js ≥ 24 (LTS) and npm, to compile the frontend on the first `uv run`
 - [uv](https://docs.astral.sh/uv/)

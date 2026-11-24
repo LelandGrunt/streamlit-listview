@@ -1,32 +1,29 @@
 # e2e/test_sidebar_theme.py
 """The widget paints the right surfaces in st.sidebar.
 
-Streamlit's default sidebar theme swaps --st-background-color with
---st-secondary-background-color and changes no other color. Consumed raw that
-inverts the widget there: rows land on the group-header surface and the headers
-on the row surface, so the list stops matching the st.selectbox beside it.
+Streamlit gives the sidebar a theme of its own. A custom theme trades the main
+body's --st-background-color and --st-secondary-background-color there;
+Streamlit 1.67's built-in themes give the sidebar a pair of its own (light
+#f8f8f7 and #f1f0ee). Streamlit paints its open selectbox menu from the first
+token in the main body and from the second in the sidebar, so a widget that
+consumed either token raw would paint the wrong surface in one container.
 
 This is the only place the stylesheet is actually executed — the unit suite can
 assert what the sheet SAYS (src/__tests__/listview-css.test.ts) but not what a
-browser resolves it to, and the swap happens entirely outside this repo. Every
-expectation below is therefore a comparison between two elements measured on
-the same page, never a hardcoded hex: the point is that the widget tracks
-whatever Streamlit's theme resolves to. Only the default sidebar theme runs
-here; no test boots a custom [theme.sidebar].
-
-LIGHT THEME ONLY (this module deliberately sets no EXTRA_ARGS). The brightness
-assertion below encodes "the group band is DARKER than the rows", which is a
-light-theme fact: the band is Streamlit's bgMix, the midpoint of the two
-background tokens, so under a dark theme it is correctly LIGHTER than the rows
-(#1a1c24 on #0e1117). Adding `EXTRA_ARGS = ["--theme.base", "dark"]` here
-would fail it against a widget that is behaving exactly as designed — flip
-the comparison, don't "fix" the stylesheet.
+browser resolves it to, and the sidebar theme comes entirely from outside this
+repo. Every expectation below is therefore a comparison between two elements
+measured on the same page, never a hardcoded hex: the point is that the widget
+tracks whatever Streamlit's theme resolves to. Only the default themes run
+here, in light; no test boots a custom [theme.sidebar].
 """
 
+import io
+from collections import Counter
 from pathlib import Path
 from typing import cast
 
-from playwright.sync_api import Page
+from PIL import Image
+from playwright.sync_api import Page, expect
 
 APP_FILE = Path(__file__).with_name("app_sidebar_theme.py")
 
@@ -79,9 +76,31 @@ FOOTER = ".listview-footer"
 ADD_FIELD = ".listview-new-option__input"
 
 
-def _luma(rgb: list[float]) -> float:
-    r, g, b = rgb
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+def _dataframe_header_rgb(page: Page, *, sidebar: bool) -> list[float]:
+    """The fill of the st.dataframe header in one container, read from pixels.
+
+    The grid draws on a canvas, so no computed style carries the header colour.
+    The strip lies in the top part of the header row, above the column labels,
+    and inside the frame's border and rounded corners; its most common colour is
+    the fill.
+    """
+    container = "stSidebar" if sidebar else "stMain"
+    grid = page.get_by_test_id(container).get_by_test_id("stDataFrame")
+    expect(grid.locator("canvas").first).to_be_visible()
+    image = Image.open(io.BytesIO(grid.screenshot())).convert("RGB")
+    width = image.width
+    strip = [
+        image.getpixel((x, y))
+        for y in range(4, 9)
+        for x in range(width // 10, width - width // 10)
+    ]
+    fill = Counter(strip).most_common(1)[0][0]
+    return [float(channel) for channel in cast(tuple[int, int, int], fill)]
+
+
+def _near(a: list[float], b: list[float]) -> bool:
+    # The canvas and the CSS engine may round a colour a unit apart.
+    return all(abs(x - y) <= 2 for x, y in zip(a, b, strict=True))
 
 
 def test_sidebar_list_surface_matches_the_sidebar_selectbox(page: Page):
@@ -94,34 +113,56 @@ def test_sidebar_list_surface_matches_the_sidebar_selectbox(page: Page):
 
 def test_the_search_field_is_an_inset_that_never_matches_its_list(page: Page):
     # The search field is filled like st.text_input: an INSET on the list
-    # surface, painted from the other background token. The sidebar swaps the
-    # tokens, so an inset that did not swap with its ground would land on the
-    # list's own colour there and vanish. Swapped as a pair, it contrasts in both
-    # containers and keeps one colour across them, like the list itself.
+    # surface, painted from the other background token. The sidebar paints the
+    # list from the other token too, so an inset that did not swap with its
+    # ground would land on the list's own colour there and vanish. Swapped as a
+    # pair, it contrasts in both containers.
     for sidebar in (True, False):
         assert _rgb(page, SEARCH, sidebar=sidebar) != _rgb(page, BODY, sidebar=sidebar)
-    assert _rgb(page, SEARCH, sidebar=True) == _rgb(page, SEARCH, sidebar=False)
 
 
-def test_sidebar_group_header_is_a_darker_band_than_the_rows(page: Page):
-    # The headers must read as a band ON the list, not as holes in it. The bug
-    # this pins is the inversion: pre-fix the sidebar group header was #ffffff
-    # against #f0f2f6 rows, i.e. LIGHTER than the content it labels.
-    rows = _rgb(page, BODY, sidebar=True)
-    group = _rgb(page, GROUP, sidebar=True)
-    assert group != rows
-    assert _luma(group) < _luma(rows)
+def test_the_group_band_is_the_dataframe_header_in_both_containers(page: Page):
+    # The band copies the st.dataframe header, which each container resolves
+    # from its own theme. It must also differ from the rows it labels; in the
+    # built-in light sidebar the header (#f3f3f2) sits on rows painted like the
+    # sidebar menu (#f1f0ee), a step lighter than them.
+    for sidebar in (True, False):
+        group = _rgb(page, GROUP, sidebar=sidebar)
+        assert _near(group, _dataframe_header_rgb(page, sidebar=sidebar))
+        assert group != _rgb(page, BODY, sidebar=sidebar)
 
 
-def test_the_list_looks_the_same_in_both_containers(page: Page):
-    # Streamlit's own dropdown menu paints the app-level background wherever it
-    # opens, and the listview is an always-open menu. Equality across containers
-    # is the invariant the swap used to break; it is also what keeps a widget
-    # moved into the sidebar from changing color under the user. The group band
-    # is Streamlit's bgMix, the midpoint of the two swapped tokens — symmetric,
-    # so the swap cannot move it either.
-    assert _rgb(page, BODY, sidebar=True) == _rgb(page, BODY, sidebar=False)
-    assert _rgb(page, GROUP, sidebar=True) == _rgb(page, GROUP, sidebar=False)
+def _open_menu_rgb(page: Page, *, sidebar: bool) -> list[float]:
+    """The resolved background of the open st.selectbox menu in one container."""
+    container = "stSidebar" if sidebar else "stMain"
+    page.get_by_test_id(container).get_by_test_id("stSelectbox").locator(
+        "input"
+    ).click()
+    menu = page.get_by_test_id("stSelectboxVirtualDropdown")
+    expect(menu).to_have_count(1)
+    rgb = cast(
+        list[float],
+        menu.evaluate(
+            """(el) => getComputedStyle(el).backgroundColor
+                .match(/[\\d.]+/g).map(Number).slice(0, 3)"""
+        ),
+    )
+    page.keyboard.press("Escape")
+    expect(menu).to_have_count(0)
+    return rgb
+
+
+def test_the_list_surface_is_the_open_menu_in_both_containers(page: Page):
+    # The listview is an always-open st.selectbox menu, so its rows sit on the
+    # surface that menu paints where it opens. Streamlit paints the menu from
+    # --st-background-color in the main body and from
+    # --st-secondary-background-color in the sidebar (StyledPopover). Under the
+    # classic swap both resolve to one colour; Streamlit 1.67's built-in sidebar
+    # gives the sidebar a surface pair of its own, and the two menus differ.
+    for sidebar in (True, False):
+        assert _rgb(page, BODY, sidebar=sidebar) == _open_menu_rgb(
+            page, sidebar=sidebar
+        )
 
 
 def test_the_add_field_footer_paints_the_list_surface_in_both_containers(page: Page):

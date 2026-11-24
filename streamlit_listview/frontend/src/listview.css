@@ -51,14 +51,14 @@
   );
 
   /* The surfaces the widget paints, named once so the sidebar can redefine them
-     in a single place (see the [data-in-sidebar] block below). Streamlit's
-     default sidebar theme swaps --st-background-color with
-     --st-secondary-background-color and changes no other color, so a rule that
-     reaches for either token raw renders inverted there. Spelled out per rule,
-     un-swapping would take an override per rule, and copies of a rule drift
-     apart the way the faded shades above already did. The list is an
-     always-open st.selectbox menu, so every value mirrors that menu or the
-     native widget whose part it plays:
+     in a single place (see the [data-in-sidebar] block below). Streamlit
+     paints its open selectbox menu from --st-background-color in the main body
+     but from --st-secondary-background-color in the sidebar, so a rule that
+     reaches for either token raw paints the wrong surface in one of the two.
+     Spelled out per rule, the sidebar would take an override per rule, and
+     copies of a rule drift apart the way the faded shades above already did.
+     The list is an always-open st.selectbox menu, so every value mirrors that
+     menu or the native widget whose part it plays:
      --listview-surface        the scroll frame, its rows and the pinned header:
                                the open menu's surface.
      --listview-inset-surface  the search and add-option fields, an INSET on the
@@ -67,26 +67,48 @@
                                the sidebar, so the two can never resolve to one
                                colour (the same rule as the popover pair below).
      --listview-group-surface  the sticky group header band: the st.dataframe
-                               header, Streamlit's bgMix. */
+                               header. */
   --listview-surface: var(--st-background-color, #fff);
   --listview-inset-surface: var(--st-secondary-background-color, #f0f2f6);
   /* bgMix: Streamlit's 50/50 mix of its two background tokens, from which its
-     theme derives the dataframe header and the menu highlight. Symmetric in the
-     two, so the sidebar's swap resolves it to the same colour and the band needs
-     no sidebar override, exactly like Streamlit's own widgets. */
+     theme derives the menu highlight. */
   --listview-bg-mix: color-mix(
     in srgb,
     var(--st-background-color, #fff) 50%,
     var(--st-secondary-background-color, #f0f2f6)
   );
-  --listview-group-surface: var(--listview-bg-mix);
+  /* The band reads Streamlit's own dataframe header token, which each container
+     resolves for itself, so it needs no sidebar override. Streamlit derives the
+     token from bgMix unless a theme sets it; its built-in themes set it
+     (#f7f7f6 in the main body and #f3f3f2 in the light sidebar). A Streamlit
+     without the token falls back to bgMix. */
+  --listview-group-surface: var(
+    --st-dataframe-header-background-color,
+    var(--listview-bg-mix)
+  );
   /* Row highlight: the selectbox menu's darkenedBgMix15, reproduced from
      Streamlit's theme source — bgMix with its HSL lightness 30 points lower
      (60 points higher in a dark theme, see the [data-color-scheme] block
-     below), at 15% alpha. Relative colour syntax is the only way to take an
-     HSL step off a var(); see the @supports fallback below for engines that
-     cannot parse it. */
-  --listview-hover-base: hsl(from var(--listview-bg-mix) h s calc(l - 30));
+     below), at 15% alpha. Streamlit's colour library (color2k) rounds the mix
+     to whole 8-bit channels and the result to whole HSL units, so the formula
+     rounds at the same two steps. Near white the first rounding decides the
+     hue's saturation: Streamlit 1.67's #ffffff and #f8f8f7 mix to
+     (251.5, 251.5, 251), which rounds to (252, 252, 251) and doubles it.
+     WebKit stores that half channel as 251.49998 and rounds it down to a
+     neutral grey, so each channel gains 0.001 before the rounding, which takes
+     a half up in every engine, as color2k's Math.round does. A 50/50 mix of
+     two 8-bit colours lands only on whole and half channels, so the nudge
+     changes no other value.
+     Relative colour syntax is the only way to take an HSL step off a var();
+     see the @supports fallback below for engines that cannot parse it. */
+  --listview-bg-mix-rounded: rgb(
+    from var(--listview-bg-mix) round(calc(r + 0.001), 1)
+      round(calc(g + 0.001), 1) round(calc(b + 0.001), 1)
+  );
+  --listview-hover-base: hsl(
+    from var(--listview-bg-mix-rounded) round(h, 1) round(s, 1)
+      round(calc(l - 30), 1)
+  );
   --listview-hover-surface: color-mix(
     in srgb,
     var(--listview-hover-base) 15%,
@@ -121,14 +143,15 @@
 
 /*
  * Sidebar-mounted instance (data-in-sidebar set by Listview.tsx from the
- * container lookup in utils/container.ts). Streamlit's sidebar ThemeProvider
- * trades the two background tokens — light #ffffff/#f0f2f6 become
- * #f0f2f6/#ffffff, dark #0e1117/#262730 become #262730/#0e1117 — so undoing the
- * swap here keeps the list on the open selectbox menu's surface, which is the
- * app-level background in BOTH containers. The inset is the other half of the
- * pair and is swapped with it, so the search field still contrasts with the list
- * it sits in. The group band (bgMix) and the row highlight are symmetric in the
- * two tokens and need no override.
+ * container lookup in utils/container.ts). Streamlit gives the sidebar its own
+ * theme and paints the open selectbox menu there from
+ * --st-secondary-background-color (StyledPopover), so the list takes that token.
+ * The sidebar theme either trades the main body's two background tokens (a
+ * custom theme) or uses a pair of its own (Streamlit 1.67's built-in themes,
+ * light #f8f8f7/#f1f0ee); either way the token is the sidebar menu's surface.
+ * The inset is the other half of the pair and is swapped with it, so the search
+ * field still contrasts with the list it sits in. The group band and the row
+ * highlight read the sidebar's own tokens and need no override.
  */
 [data-testid="stListview"][data-in-sidebar="true"] {
   --listview-surface: var(--st-secondary-background-color, #fff);
@@ -142,17 +165,21 @@
  * would leave the pill darker than the list it sits on.
  */
 [data-testid="stListview"][data-color-scheme="dark"] {
-  --listview-hover-base: hsl(from var(--listview-bg-mix) h s calc(l + 60));
+  --listview-hover-base: hsl(
+    from var(--listview-bg-mix-rounded) round(h, 1) round(s, 1)
+      round(calc(l + 60), 1)
+  );
 }
 
 /*
  * Engines without relative colour syntax — or with the pre-2024 form, where the
  * channel keywords are percentages and `calc(l - 30)` is invalid (Safari before
- * 18) — cannot resolve --listview-hover-base. The whole custom property then
- * goes invalid at computed-value time, which no var() fallback catches, and the
- * hover highlight would vanish. A faint text-color mix stands in for the pill.
+ * 18) — or without round() cannot resolve --listview-hover-base. The whole
+ * custom property then goes invalid at computed-value time, which no var()
+ * fallback catches, and the hover highlight would vanish. A faint text-color mix
+ * stands in for the pill.
  */
-@supports not (color: hsl(from red h s calc(l - 30))) {
+@supports not (color: hsl(from red round(h, 1) s round(calc(l - 30), 1))) {
   [data-testid="stListview"] {
     --listview-hover-surface: color-mix(
       in srgb,
@@ -935,12 +962,31 @@
   border-top-right-radius: var(--st-base-radius, 0.5rem);
   transition: border-color 0.15s ease;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
+  /* The size container for the toggle's line break below. */
+  container: listview-header / inline-size;
 }
-/* Search grows to fill; the toggle shrinks to fit and sits at the right edge. */
+/* Search grows to fill; the toggle keeps its label's width at the right edge.
+   A flex item keeps min-width: auto and so never shrinks below its content: the
+   input's intrinsic width of about 20 characters held the field near 230 px,
+   and in a narrow sidebar it ran out past the frame. min-width: 0 lets it
+   shrink; the input inside carries min-width: 0 too. */
 .listview-header > .listview-search {
   flex: 1;
+  min-width: 0;
+}
+/* The input's padding keeps 3.5rem for the glyph and the clear button, so a
+   narrow field beside the toggle leaves no room for text. Below 13.5rem of
+   header width the field takes the whole line and the toggle wraps to a line
+   of its own; above it, the field keeps 3rem for text even beside the wider
+   label, "Deselect all". The header's width decides, never the label's, so a
+   click that changes the label never moves the toggle to another line. */
+@container listview-header (max-width: 13.5rem) {
+  .listview-header > .listview-search {
+    flex-basis: 100%;
+  }
 }
 /* The seam between header and body is a divider INSIDE the one control, not
    part of its outline, so it must not light up when focus paints the outline
@@ -1046,10 +1092,13 @@
   /* replicates fontSizes.sm — no --st-* token */
   font-size: calc(var(--st-base-font-size, 1rem) * 0.875);
   color: var(--st-text-color, inherit);
-  /* st.text_input: a filled field whose 1px border is its own fill colour, so it
-     reads as one shape; focus turns that border primary (below). */
+  /* st.text_input: a filled field with a 1px border in the theme's widget border
+     colour; focus turns that border primary (below). A theme without widget
+     borders sets the token to transparent, Streamlit then draws the edge in the
+     fill, and here the fill shows through the transparent border: either way
+     the field reads as one shape. */
   background: var(--listview-inset-surface);
-  border: 1px solid var(--listview-inset-surface);
+  border: 1px solid var(--st-widget-border-color, transparent);
   border-radius: var(--st-base-radius, 0.5rem);
 }
 /* Only the search box overlays a clear (×) button on its right edge, so only it

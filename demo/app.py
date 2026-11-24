@@ -4,7 +4,7 @@ import os
 import re
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
@@ -146,7 +146,7 @@ THEME_SWITCHER = themes.switcher_enabled(os.environ)
 # next one: either this session's own pick (_switch_theme) or the server theme
 # falling back to the default, THEME_TTL after the last switch or at once when
 # the picker was switched off.
-if themes.SERVER_THEME.expire(now=datetime.now(timezone.utc), enabled=THEME_SWITCHER):
+if themes.SERVER_THEME.expire(now=datetime.now(UTC), enabled=THEME_SWITCHER):
     st.rerun()
 if st.session_state.pop("demo_theme_switched", False):
     st.rerun()
@@ -444,7 +444,7 @@ def _switch_theme():
         themes.SERVER_THEME.reset()
     else:
         options = themes.flatten_theme(THEMES[name].read_text(encoding="utf-8"))
-        themes.SERVER_THEME.apply(name, options, now=datetime.now(timezone.utc))
+        themes.SERVER_THEME.apply(name, options, now=datetime.now(UTC))
     st.session_state["demo_theme_switched"] = True
 
 
