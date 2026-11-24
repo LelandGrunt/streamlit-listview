@@ -112,9 +112,13 @@ def _search_layout(root) -> dict[str, Any]:
                 frame: part.getBoundingClientRect().right,
                 part_height: part.getBoundingClientRect().height,
                 input: {right: box.right, bottom: box.bottom},
-                // the width the typed text gets: the box minus the room the
-                // padding keeps for the glyph and the clear button
-                text_room: input.clientWidth
+                // the width the typed text gets: the box minus its border and
+                // the room the padding keeps for the glyph and the clear
+                // button. Not clientWidth: Firefox's leaves an input's padding
+                // out, Chromium's keeps it in.
+                text_room: box.width
+                    - parseFloat(style.borderLeftWidth)
+                    - parseFloat(style.borderRightWidth)
                     - parseFloat(style.paddingLeft)
                     - parseFloat(style.paddingRight),
                 toggle: t && {left: t.left, top: t.top, right: t.right},
