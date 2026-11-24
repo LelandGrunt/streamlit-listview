@@ -2,6 +2,12 @@
 
 Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version numbers follow [Semantic Versioning](https://semver.org/) with one exception: a release that breaks compatibility raises the minor version, not the major one, so the package stays on 1.x. Such a release says so at the top of its notes.
 
+## [Unreleased]
+
+### Added
+
+- **The docstring of `listview()` documents every parameter.** Your editor's hover help and `help(listview)` give each of the 29 parameters its type, its default and what it does. The docstring follows the layout of `st.multiselect` and `st.selectbox`. It also describes the return value and each case in which `listview()` raises `ValueError`, and it gives four examples. Before, it described seven parameters and referred to a design spec that the package does not include.
+
 ## [1.1.0] - 2026-10-14
 
 **This release breaks compatibility within 1.x.** Three changes to `accept_new_options` with int or dict options can break code that relied on the old behavior. The entries marked **Breaking** under *Changed* say what to change.
@@ -106,6 +112,7 @@ The first render, scrolling, and the data sent per rerun are unchanged. A rerun 
 
 First stable release.
 
+[Unreleased]: https://github.com/LelandGrunt/streamlit-listview/compare/v1.1.0...HEAD
 [1.1.0]: https://github.com/LelandGrunt/streamlit-listview/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/LelandGrunt/streamlit-listview/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/LelandGrunt/streamlit-listview/releases/tag/v1.0.0

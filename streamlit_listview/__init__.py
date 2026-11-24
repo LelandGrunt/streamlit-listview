@@ -441,57 +441,354 @@ def listview(
     kwargs: dict[str, Any] | None = None,
     key: str | None = None,
 ) -> dict[str, Any] | str | int | list[Any] | None:
-    """Display a scrollable, selectable listview widget.
+    """Display a listview widget.
 
-    See the design spec for full behavior. `key` is strongly recommended for
-    any dynamic app so that frontend-local UI state and the selection survive
-    parameter changes (an unkeyed instance is remounted and reset).
+    The listview shows the options as the rows of a scrollable list, which can
+    group them under headers. The user selects one row or several, depending on
+    ``selection_mode``.
 
-    `item_height` is a *minimum* row height in pixels (CSS ``min-height``), not a
-    fixed height: a row always grows to fit its content, so labels are never
-    clipped at any value. ``None`` (the default) lets each row size to its
-    content. Because it is only a floor, values below a row's natural one-line
-    height have no visible effect — the content height wins — so it is mainly
-    useful to make rows *taller* (e.g. roomier touch targets). The natural floor
-    is computed by the browser at layout time and tracks the active theme's font
-    size, which is why no fixed minimum is enforced here beyond ``>= 1``.
+    Parameters
+    ----------
+    label : str
+        A short label that tells the user what the list is for. The label can
+        contain GitHub-flavored Markdown of these inline types: bold, italics,
+        strikethrough, inline code, links and images. It also renders
+        Streamlit's colored text (``:red[...]``), background colors
+        (``:red-background[...]``), badges (``:red-badge[...]``),
+        ``:small[...]``, Material icons (``:material/thumb_up:``) and emoji
+        shortcodes. Headings, lists and blockquotes display as literal text.
+        LaTeX and the ``rainbow`` and ``primary`` colors display as literal text
+        too, and raw HTML stays escaped.
 
-    ``content_font_size`` sets the font size (px) of the list *content* — the
-    option rows and the group headers — which in turn lowers each row's natural
-    height for a more compact list. ``None`` (the default) keeps the theme size
-    (``base × 0.875``, theme-tracked). It does **not** change the widget label,
-    search box, add-option input, or placeholder (those stay at the native
-    theme size), and it composes with ``item_height``: the font sets the natural
-    height, while ``item_height`` remains a floor that wins when larger.
+        For accessibility, never set an empty label; hide it with
+        ``label_visibility`` instead.
 
-    ``show_grid_lines`` (default ``True``) draws divider lines between option
-    rows; set it ``False`` for a more compact, line-free list (group headers
-    keep their own separator).
+    options : Iterable of str, int, or dict, or None
+        The options to list, in order. Each option is one of the following:
 
-    ``format_func`` maps an option to its display label and receives **the option
-    as passed** — the dict for dict options, the scalar itself for ``str``/``int``
-    options — so a label can be built from fields the option carries (e.g.
-    ``lambda o: f"{o['text']} ({o['type']})"``). It is consulted only for options
-    without a *usable* ``label``; an explicit one wins outright. Mind that
-    ``{"label": None}`` and ``{"label": nan}`` count as unusable and do reach the
-    formatter — that is the ``df.to_dict("records")`` NULL-cell shape. ``None``
-    (the default) means no formatter: the label is ``str(id)``. The option handed
-    over is your own object, not a copy; treat it as read-only.
+        - A ``str`` or an ``int``: the value is both the id and the label.
+        - A dict with the key ``"id"`` and these optional keys:
 
-    ``accept_new_options`` lets the user add an entry that is not in
-    ``options``. The entry comes back in the type of the other options: a
-    ``{"id": text, "label": text}`` dict when every option is a dict, an int
-    when every option is an int — the add field then accepts only whole numbers
-    such as ``42`` — and the typed string otherwise (str, mixed or no options).
-    An unknown ``default`` follows the same rule; with int options it must be a
-    whole number.
+          - ``"label"``: the text of the row. If the key is missing, ``None``
+            or NaN, ``format_func`` supplies the label.
+          - ``"group"``: a ``str``. Options with the same group render under
+            one header.
+          - ``"disabled"``: a ``bool``. The row of a disabled option shows but
+            takes no selection.
 
-    ``ungrouped_label`` (default ``"Other"``) heads the options without a
-    group. Once any option has a ``group``, those options render last, below
-    every group, under this header; the entries added via
-    ``accept_new_options`` join them. A list without groups shows no header.
-    The options of a group named like ``ungrouped_label`` share that block, so
-    no two headers read the same; set another label to keep that group apart.
+          Other keys, such as a payload of your own, never render and come
+          back with the option in the selection.
+
+        An id is a ``str`` or an ``int``, an enum member of either included;
+        ``bool``, ``float`` and other types raise ``ValueError``. An ``int`` id
+        must satisfy ``abs(id) <= 2**53 - 1``; pass larger keys as strings. Ids
+        must be unique as rendered: ``1`` and ``"1"`` collide. Labels and group
+        names display as plain text, not Markdown.
+
+        Pass a list or another iterable; a bare ``str`` or ``dict`` raises
+        ``ValueError``. If this is ``None`` (default) or empty, the list has no
+        rows (see ``placeholder``).
+
+    selection_mode : "single" or "multi"
+        How many options the user can select. If this is ``"single"``
+        (default), a click on a row selects it in place of the earlier
+        selection, and a click on the selected row clears it. If this is
+        ``"multi"``, each click adds or removes one row.
+
+    default : str, int, list of str or int, or None
+        The ids of the options selected at mount: one id in single mode, a list
+        of ids in multi mode. Pass an option's id, not the dict option. Each id
+        must name an option, unless ``accept_new_options=True``. If this is
+        ``None`` (default), the widget starts with no selection.
+
+        The widget applies ``default`` once, at mount, and calls no
+        ``on_change`` for it. On a keyed widget, a new ``default`` only scrolls
+        its row into view; change ``key`` to apply it. Every call still checks
+        ``default`` against ``options``, ``selection_mode`` and
+        ``max_selections``.
+
+    format_func : callable or None
+        A function that returns the label of an option. It receives the option
+        as passed (the dict, or the ``str`` or ``int`` itself), so it can build
+        the label from any key of a dict option. The widget calls it only for
+        an option without a usable ``"label"``; an explicit label wins. A
+        ``"label"`` of ``None`` or NaN, as ``df.to_dict("records")`` yields for
+        a NULL cell, reaches the function too. If this is ``None`` (default),
+        the label is ``str(id)``. Avoid ``str``: it would show the repr of a
+        dict option.
+
+        The function has no effect on the return value. It receives your own
+        object, not a copy, so treat the option as read-only. If it raises,
+        ``listview()`` raises ``ValueError`` and names the option.
+
+    enable_search : bool
+        Whether a search field filters the rows. The list keeps the rows whose
+        label contains the search text, ignoring case. The ``/`` key moves the
+        focus to the field. The default is ``False``.
+
+    pin_search : bool
+        Whether the search field stays in view while the list scrolls. It
+        requires ``enable_search=True``. The default is ``False``.
+
+    search_placeholder : str
+        The text of the empty search field. The default is ``"Search"``.
+
+    collapsible_groups : bool
+        Whether a click on a group header, or the right and left arrow keys,
+        opens and closes the group. The default is ``False``.
+
+    collapsed_groups : list of str, "all", or None
+        The groups that start collapsed while ``collapsible_groups=True``: a
+        list of group names, or ``"all"``. A name equal to ``ungrouped_label``
+        collapses the options without a group. If this is ``None`` (default),
+        every group starts open.
+
+        The widget applies this value to each group once, when the group first
+        appears; from then on the user opens and closes it. With ``"all"``, a
+        group that first appears after mount starts collapsed too. Change
+        ``key`` to apply a new value to the groups already shown.
+
+    ungrouped_label : str
+        The header of the options without a group. The header shows once any
+        option has a ``"group"``. The options without a group then render
+        last, below every group, followed by the entries added through
+        ``accept_new_options``. The options of a group with this name share the
+        block. The default is ``"Other"``.
+
+    sort : "items", "groups", "both", or None
+        How the list orders its rows, by label and group name, ignoring case:
+
+        - ``None`` (default): the order of ``options``. Each group appears
+          where its first option stands and holds its options in their order.
+        - ``"items"``: sort the options within each group.
+        - ``"groups"``: sort the groups.
+        - ``"both"``: sort the groups and the options within each group.
+
+        The options without a group render last in every case, and added
+        entries follow them unsorted.
+
+    sort_ascending : bool
+        Whether ``sort`` orders the rows from A to Z (``True``, default) or from
+        Z to A (``False``). It has no effect while ``sort`` is ``None``.
+
+    accept_new_options : bool
+        Whether the user can add an entry that is not in ``options``. If this
+        is ``True``, an input field below the list takes the new entry. If this
+        is ``False`` (default), the user selects only from ``options``.
+
+        Text that names a row selects that row: its id written as text, its
+        label ignoring case, or its id ignoring case, in this order. Other text
+        becomes a new entry, which comes back in the type of the other options:
+
+        - All options are dicts: ``{"id": text, "label": text}``.
+        - All options are ``int``: an ``int``. The field then accepts only a
+          whole number, such as ``42`` or ``-5``.
+        - All options are ``str``, mixed, or absent: the text as a ``str``.
+
+        An unknown ``default`` follows the same rule; with ``int`` options, it
+        must be a whole number. The entry stays a row of the widget while the
+        widget keeps its state; ``listview()`` never adds it to ``options``.
+        ``max_selections`` still applies.
+
+    max_selections : int or None
+        The most options the user can select at a time in multi mode. If this
+        is ``None`` (default), the selection has no limit. At the limit, the
+        unselected rows are muted until the user deselects one. Single mode
+        accepts only ``None`` or ``1``. A ``default`` with more ids raises
+        ``ValueError``.
+
+    select_all : bool
+        Whether multi mode shows a "Select all" toggle above the list. It
+        selects the rows that match the search, rows of collapsed groups
+        included and disabled rows excluded, from the top down until
+        ``max_selections`` is reached. Once those rows are selected or the
+        limit is reached, it reads "Deselect all" and clears them. Single mode
+        raises ``ValueError`` for ``True``. The default is ``False``.
+
+    placeholder : str or None
+        The text shown in place of the rows while the list has none. Without
+        options and with ``accept_new_options=False``, the widget is disabled,
+        and ``None`` (default) shows "No options to select". In every other
+        case, ``None`` shows an empty list.
+
+    height : int
+        The height of the scrolling list in pixels, at least ``100``. A pinned
+        search field, the "Select all" toggle and the input field of
+        ``accept_new_options`` add their own height. The default is ``300``.
+
+    item_height : int or None
+        The minimum height of a row in pixels, at least ``1``. A row grows to
+        fit its content, so a label never clips, and a value below the row's
+        natural height has no effect. Use it to make rows taller, such as for
+        touch targets. If this is ``None`` (default), each row takes the height
+        of its content.
+
+    content_font_size : int or None
+        The font size of the rows and group headers in pixels, at least ``1``.
+        A smaller font lowers the natural height of each row, which makes the
+        list more compact; ``item_height`` still sets the minimum. The label,
+        the search field, the input field and the placeholder keep the theme's
+        size. If this is ``None`` (default), the rows take 0.875 times the
+        theme's base font size.
+
+    width : "stretch" or int
+        The width of the widget. This can be one of the following:
+
+        - ``"stretch"`` (default): the width of the parent container.
+        - An ``int``: a fixed width in pixels, at least ``1``.
+
+    show_grid_lines : bool
+        Whether lines divide the rows. Set it to ``False`` for a compact list;
+        group headers keep their own separator. The default is ``True``.
+
+    help : str or None
+        A tooltip next to the label. It shows only while
+        ``label_visibility="visible"``. If this is ``None`` (default), no
+        tooltip shows. The tooltip renders GitHub-flavored Markdown, headings,
+        lists, tables and code blocks included, with the extras that ``label``
+        lists.
+
+    disabled : bool
+        Whether the whole widget is disabled. The default is ``False``. Without
+        options and with ``accept_new_options=False``, the widget is always
+        disabled.
+
+    label_visibility : "visible", "hidden", or "collapsed"
+        The visibility of the label. If this is ``"visible"`` (default), the
+        label shows above the list. If this is ``"hidden"``, an empty spacer
+        takes the label's place and keeps the widget aligned with others. If
+        this is ``"collapsed"``, neither label nor spacer shows.
+
+    on_change : callable or None
+        A function to call when the selection changes. Streamlit calls it as
+        ``on_change(*args, **kwargs)`` at the start of the rerun that the change
+        triggers, before the rest of the script. If this is ``None`` (default),
+        the change only reruns the app.
+
+        It also runs once when the widget corrects a keyed selection that no
+        longer fits a change of ``options``, ``max_selections`` or
+        ``selection_mode``. That call comes one rerun after the change. The
+        README shows how to tell such a correction from user input.
+
+    args : list, tuple, or None
+        The positional arguments for ``on_change``.
+
+    kwargs : dict or None
+        The keyword arguments for ``on_change``, with ``str`` keys.
+
+    key : str or None
+        A unique key for the widget; no two widgets may share one. Set it in
+        any app that changes the parameters between runs. With a key, the
+        selection and the state of the list (open groups, search text, scroll
+        position) survive a change of the other parameters. Without one, any
+        parameter change remounts the widget and resets both. Change the key
+        to reset the widget on purpose.
+
+        ``st.session_state[key]`` holds the widget's state: a dict whose
+        ``"selection"`` lists the selected ids. Keep data of your own under
+        another key; any other value under this one raises ``ValueError``. If a
+        run of the script does not call ``listview()`` for the key, Streamlit
+        deletes the state, and the next call starts again from ``default``.
+
+    Returns
+    -------
+    any, list, or None
+        In single mode, the selected option, or ``None`` if nothing is
+        selected. In multi mode, a list of the selected options in the order
+        the user selected them, or ``[]``.
+
+        Each option comes back as you passed it: the dict, or the ``str`` or
+        ``int`` itself. It is the object from ``options``, not a copy. A new
+        entry comes back as ``accept_new_options`` describes.
+
+    Raises
+    ------
+    ValueError
+        If an argument is invalid, a wrong type included; if ``format_func``
+        raises for an option; or if ``st.session_state[key]`` holds a value
+        that is not the state of a listview.
+
+    Examples
+    --------
+    **Example 1: Select one option**
+
+    >>> import streamlit as st
+    >>> from streamlit_listview import listview
+    >>>
+    >>> fruit = listview(
+    ...     "Pick a fruit",
+    ...     ["Apple", "Banana", "Cherry"],
+    ...     key="fruit",
+    ... )
+    >>>
+    >>> st.write("You picked:", fruit)
+
+    **Example 2: Select several options in groups**
+
+    Dict options carry a group, and a disabled option shows but takes no
+    selection. ``max_selections`` limits the selection, and ``enable_search``
+    adds a search field.
+
+    >>> import streamlit as st
+    >>> from streamlit_listview import listview
+    >>>
+    >>> ingredients = listview(
+    ...     "Pick ingredients",
+    ...     [
+    ...         {"id": "apple", "label": "Apple", "group": "Fruit"},
+    ...         {"id": "carrot", "label": "Carrot", "group": "Vegetable"},
+    ...         {"id": "salmon", "label": "Salmon", "group": "Fish", "disabled": True},
+    ...     ],
+    ...     selection_mode="multi",
+    ...     default=["apple"],
+    ...     max_selections=2,
+    ...     enable_search=True,
+    ...     collapsible_groups=True,
+    ...     key="ingredients",
+    ... )
+    >>>
+    >>> st.write("You picked:", ingredients)
+
+    **Example 3: Build the labels from the options**
+
+    ``format_func`` receives the whole option, so the label can use keys that
+    the widget never renders.
+
+    >>> import streamlit as st
+    >>> from streamlit_listview import listview
+    >>>
+    >>> table = listview(
+    ...     "Pick a table",
+    ...     [
+    ...         {"id": 1, "name": "Orders", "rows": 1200},
+    ...         {"id": 2, "name": "Customers", "rows": 85},
+    ...     ],
+    ...     format_func=lambda option: f"{option['name']} ({option['rows']} rows)",
+    ...     key="table",
+    ... )
+    >>>
+    >>> st.write("You picked:", table)
+
+    **Example 4: Let users add new options**
+
+    With ``accept_new_options=True``, the user can type an entry that is not in
+    ``options``. With ``str`` options, the entry comes back as a ``str``.
+
+    >>> import streamlit as st
+    >>> from streamlit_listview import listview
+    >>>
+    >>> tags = listview(
+    ...     "Tags",
+    ...     ["bug", "docs", "feature"],
+    ...     selection_mode="multi",
+    ...     accept_new_options=True,
+    ...     key="tags",
+    ... )
+    >>>
+    >>> st.write("Your tags:", tags)
+
+    The hosted demo at https://st-listview-demo.streamlit.app/ shows every
+    parameter as a live control.
     """
     _validate_params(
         label=label,
