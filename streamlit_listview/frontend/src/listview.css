@@ -94,10 +94,16 @@
      rounds at the same two steps. Near white the first rounding decides the
      hue's saturation: Streamlit 1.67's #ffffff and #f8f8f7 mix to
      (251.5, 251.5, 251), which rounds to (252, 252, 251) and doubles it.
+     WebKit stores that half channel as 251.49998 and rounds it down to a
+     neutral grey, so each channel gains 0.001 before the rounding, which takes
+     a half up in every engine, as color2k's Math.round does. A 50/50 mix of
+     two 8-bit colours lands only on whole and half channels, so the nudge
+     changes no other value.
      Relative colour syntax is the only way to take an HSL step off a var();
      see the @supports fallback below for engines that cannot parse it. */
   --listview-bg-mix-rounded: rgb(
-    from var(--listview-bg-mix) round(r, 1) round(g, 1) round(b, 1)
+    from var(--listview-bg-mix) round(calc(r + 0.001), 1)
+      round(calc(g + 0.001), 1) round(calc(b + 0.001), 1)
   );
   --listview-hover-base: hsl(
     from var(--listview-bg-mix-rounded) round(h, 1) round(s, 1)

@@ -192,9 +192,11 @@ describe("listview.css base theming", () => {
     // leaves a pill darker than the list it sits on. Streamlit's colour library
     // rounds the mix to whole 8-bit channels and the result to whole HSL units;
     // near white the first rounding doubles the saturation, so both roundings
-    // stay.
+    // stay. The mix lands on a half channel, and WebKit stores 251.5 as
+    // 251.49998 and rounds it down; a nudge of 0.001 before the first rounding
+    // takes every engine up, as color2k's Math.round does.
     expect(css).toMatch(
-      /\[data-testid="stListview"\]\s*\{[^}]*--listview-bg-mix-rounded:\s*rgb\(\s*from\s+var\(--listview-bg-mix\)\s+round\(r,\s*1\)\s+round\(g,\s*1\)\s+round\(b,\s*1\)\s*\)/,
+      /\[data-testid="stListview"\]\s*\{[^}]*--listview-bg-mix-rounded:\s*rgb\(\s*from\s+var\(--listview-bg-mix\)\s+round\(calc\(\s*r\s*\+\s*0\.001\s*\),\s*1\)\s+round\(calc\(\s*g\s*\+\s*0\.001\s*\),\s*1\)\s+round\(calc\(\s*b\s*\+\s*0\.001\s*\),\s*1\)\s*\)/,
     );
     expect(css).toMatch(
       /\[data-testid="stListview"\]\s*\{[^}]*--listview-hover-base:\s*hsl\(\s*from\s+var\(--listview-bg-mix-rounded\)\s+round\(h,\s*1\)\s+round\(s,\s*1\)\s+round\(calc\(\s*l\s*-\s*30\s*\),\s*1\)\s*\)/,
