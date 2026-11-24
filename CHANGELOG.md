@@ -2,7 +2,7 @@
 
 Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version numbers follow [Semantic Versioning](https://semver.org/) with one exception: a release that breaks compatibility raises the minor version, not the major one, so the package stays on 1.x. Such a release says so at the top of its notes.
 
-## [Unreleased]
+## [1.2.0] - Unreleased
 
 ### Added
 
@@ -13,17 +13,13 @@ Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](h
 
 - **The bundled JavaScript libraries move to their newest releases,** among them React 19.3.1. The listview looks and behaves as before. For maintainers: the development tools move to their newest releases too, among them Playwright 1.65, pytest 9.2, ruff 0.17, ty 0.0.109 and uv 0.13.
 
-### Fixed
-
-- **`import streamlit_listview` works outside a running Streamlit app,** such as in pytest or a plain script. Before, it raised `StreamlitAPIException: Component 'streamlit_listview.listview' must be declared in pyproject.toml with asset_dir to use file-backed css.`, because the package declared its component when Python imported it. An app's tests import their modules before any `AppTest` runs, so they could not test a page with a listview. The package now declares the component on the first call of `listview()`.
-
-## [1.2.0] - 2026-11-23
-
 ### Removed
 
 - **The package requires Python 3.11 or later.** Python 3.10 reached its end of life in October 2026, and Streamlit 1.66 and later need Python 3.11. On Python 3.10, pip keeps installing `streamlit-listview` 1.1.0.
 
 ### Fixed
+
+- **`import streamlit_listview` works outside a running Streamlit app,** such as in pytest or a plain script. Before, it raised `StreamlitAPIException: Component 'streamlit_listview.listview' must be declared in pyproject.toml with asset_dir to use file-backed css.`, because the package declared its component when Python imported it. An app's tests import their modules before any `AppTest` runs, so they could not test a page with a listview. The package now declares the component on the first call of `listview()`.
 
 - **A pinned search field shrinks with a narrow listview.** With `pin_search=True`, the search field kept a width of about 230 px. In a listview narrower than about 240 px, such as one in a narrowed sidebar, the field ran out past the right border. With `select_all=True` as well, the Select all toggle left the frame below about 320 px, which includes Streamlit's default sidebar. The field now shrinks with the listview, as the unpinned search field does. In a listview narrower than about 234 px, the toggle moves to its own line below the field, so the field keeps room for text down to the sidebar's minimum width.
 - **The listview matches Streamlit 1.67's widgets.** Streamlit 1.67 brought a new palette, a sidebar with colors of its own, and a border around its input fields. A hovered row now takes the exact highlight of an open `st.selectbox` menu; with 1.67 it came out a shade grayer. The search and add fields draw the border of an `st.text_input`. A group header takes the color of an `st.dataframe` header. In the sidebar the list paints the surface of the sidebar's own `st.selectbox` menu, so it now differs from the list in the main body, as that menu does. With Streamlit 1.66 and earlier, the listview looks as before.
@@ -132,7 +128,6 @@ The first render, scrolling, and the data sent per rerun are unchanged. A rerun 
 
 First stable release.
 
-[Unreleased]: https://github.com/LelandGrunt/streamlit-listview/compare/v1.2.0...HEAD
 [1.2.0]: https://github.com/LelandGrunt/streamlit-listview/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/LelandGrunt/streamlit-listview/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/LelandGrunt/streamlit-listview/compare/v1.0.0...v1.0.1
