@@ -2,7 +2,7 @@
 
 Notable changes to `streamlit-listview`. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version numbers follow [Semantic Versioning](https://semver.org/) with one exception: a release that breaks compatibility raises the minor version, not the major one, so the package stays on 1.x. Such a release says so at the top of its notes.
 
-## [1.2.0] - Unreleased
+## [1.2.0] - 2026-11-25
 
 ### Added
 
