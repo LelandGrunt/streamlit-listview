@@ -122,6 +122,10 @@ def test_a_code_label_names_the_listbox_by_its_text(page: Page):
     expect(page.get_by_role("listbox", name="*", exact=True)).to_have_count(1)
 
 
+# The tab of Playwright's Firefox 159 (build 1572) crashes during axe-core's
+# scan of this page, with the code of v1.1.0 as well. Chromium and WebKit run
+# the scan.
+@pytest.mark.skip_browser("firefox")
 def test_a_code_label_passes_the_accessibility_scan(page: Page):
     # Without a name, axe-core reports aria-input-field-name (serious).
     root = _listview(page, "*")
