@@ -8,6 +8,7 @@ that value again, while a click returns a new one. The recipe compares the
 two; the harness runs it straight from the README.
 """
 
+import re
 from pathlib import Path
 
 from playwright.sync_api import Page, expect
@@ -46,6 +47,11 @@ def test_a_correction_is_not_counted_as_user_input(page: Page):
     # The same change made by a click counts: ['Apple', 'Banana'] to ['Apple'].
     page.get_by_text("One fruit only").click()
     expect(stext(page, "runs")).to_have_text(f"runs={runs + 3}")
+    # The frontend lifts the cap a moment after the status line updates. A
+    # click before that hits a muted row and selects nothing.
+    expect(_option(page, "Banana")).not_to_have_class(
+        re.compile(r"\blistview-item--muted\b")
+    )
     _option(page, "Banana").click()
     expect(stext(page, "user_changes")).to_have_text("user_changes=3")
     _option(page, "Banana").click()
