@@ -157,6 +157,10 @@ def test_the_select_all_toggle_moves_below_a_narrow_search_field(
     # or the list would shift under the pointer.
     root = _root(page, instance)
     toggle = root.get_by_test_id("stListviewSelectAllToggle")
+    # Measure both layouts at one scroll position. Firefox rounds a box's
+    # height by the box's place on the page, so the click that scrolled the
+    # toggle into view changed part_height by 0.00002 px.
+    toggle.scroll_into_view_if_needed()
     before = _search_layout(root)
     toggle.click()
     expect(toggle).to_have_text("Deselect all")
