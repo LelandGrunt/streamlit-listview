@@ -56,6 +56,10 @@ export default defineConfig(() => {
                 dropConsole: true,
                 dropDebugger: true,
               },
+              // Without `codegen`, rolldown 1.2.19 keeps every line break and
+              // indent, and the script grows by a third.
+              // single-file-build.test.ts checks the built script.
+              codegen: { removeWhitespace: true },
             },
           }),
         },

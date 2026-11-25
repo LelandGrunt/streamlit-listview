@@ -8,13 +8,17 @@ import { resolve } from "node:path";
 // introduce a second JS chunk.
 const buildDir = resolve(import.meta.dirname, "../../build");
 
-// The one production stylesheet; the single-file assertions below check that
-// exactly one exists.
-function builtCss(): string {
+// The one production script or stylesheet; the single-file assertions below
+// check that exactly one of each exists.
+function built(extension: "js" | "css"): string {
   const name = readdirSync(buildDir).find((f) =>
-    /^index-.*\.css$/.test(f),
+    new RegExp(`^index-.*\\.${extension}$`).test(f),
   ) as string;
   return readFileSync(resolve(buildDir, name), "utf8");
+}
+
+function builtCss(): string {
+  return built("css");
 }
 
 describe("single-file build output", () => {
@@ -38,6 +42,14 @@ describe("single-file build output", () => {
       "utf8",
     );
     expect(text).toMatch(/^## react - \d+\.\d+\.\d+ \(MIT\)$/m);
+  });
+
+  it("strips the whitespace from the production script", () => {
+    // The minifier keeps a line break only inside a template literal or a kept
+    // comment: the script has about 65 lines. rolldown keeps every line break
+    // and indent when rolldownOptions.output.minify sets no `codegen`, and the
+    // script then has about 38,600 lines and a third more bytes.
+    expect(built("js").split("\n").length).toBeLessThan(1000);
   });
 
   it("keeps the render chunks' content-visibility rule through the CSS minifier", () => {
